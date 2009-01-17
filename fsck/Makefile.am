@@ -9,3 +9,5 @@ EXTRA_DIST = $(man_MANS)
 
 reiserfsck_LDADD = $(top_srcdir)/reiserfscore/libcore.a $(top_srcdir)/lib/libmisc.a
 
+install-exec-hook:
+	$(LN_S) reiserfsck $(DESTDIR)$(sbindir)/fsck.reiserfs
