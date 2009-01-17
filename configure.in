@@ -193,5 +193,6 @@ AC_OUTPUT(
     debugreiserfs/Makefile 
     tune/Makefile)
 
-echo
-echo Type \'make\' to compile reiserfsprogs
+AC_MSG_NOTICE([
+
+Type 'make' to compile reiserfsprogs])
