@@ -384,7 +384,7 @@ void print_indirect_item (FILE * fp, struct buffer_head * bh, int item_num)
     struct item_head * ih;
     unsigned int j;
     __u32 * unp, prev = INT_MAX;
-    int num;
+    int num = 0;
 
     ih = B_N_PITEM_HEAD (bh, item_num);
     unp = (__u32 *)B_I_PITEM (bh, ih);
