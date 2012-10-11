@@ -1,5 +1,6 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "fsck.h"
@@ -31,7 +32,14 @@ reiserfs_bitmap_t * bad_unfm_bitmap;
 #define pass0_mark_bad_unfm(block) __mark (bad_unfm, block)
 #define pass0_unmark_bad_unfm(block) __unmark (bad_unfm, block)
 
-
+static int correct_direct_item_offset (__u64 offset, int format) {
+    if (format == KEY_FORMAT_2) {
+        return (offset && ((offset - 1) % 8 == 0));
+    } else {
+	return (offset);
+    }
+    return 0;
+}
 
 /* bitmaps which are built on pass 0 and are used on pass 1 */
 static void make_aux_bitmaps (reiserfs_filsys_t * fs)
@@ -110,7 +118,7 @@ static int lower_correct (struct buffer_head * bh, struct item_head * lower,
 
 
 /* return 1 if something was changed */
-static int correct_key_format (struct item_head * ih)
+static int correct_key_format (struct item_head * ih, int symlink)
 {
     int dirty = 0;
 
@@ -139,6 +147,12 @@ static int correct_key_format (struct item_head * ih)
 	die ("stat_data item of the wrong length");
     }
     
+    if (symlink && is_direct_ih(ih) && (key_format(&ih->ih_key) != KEY_FORMAT_1)) {	
+	/* All symlinks are of 3.5 format */
+	/*fsck_log ("correct_key_format: Symlink keys should be of 3.5 format. %k - fixed.\n", &ih->ih_key); */
+	set_type_and_offset(KEY_FORMAT_1, &ih->ih_key, get_offset(&ih->ih_key), get_type(&ih->ih_key));
+    }
+	
     if (key_format (&ih->ih_key) != get_ih_key_format (ih)) {
 	/*fsck_log ("correct_key_format: ih_key_format of (%H) is set to format found in the key\n",
 	  ih);*/
@@ -227,7 +241,7 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
     struct reiserfs_de_head * deh;
     char * name;
     int name_len;
-    int bad;
+    int bad, lost_found;
     int i, j;
     char buf[4096];
     int dirty;
@@ -471,7 +485,7 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
     }
 #endif
 
-    bad = 0;
+    bad = lost_found = 0;
     tmp = *ih;
 
     /* mark enries of /lost+found as bad */
@@ -491,6 +505,7 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
 	
 	/* entry in lost+found */
 //	printf ("%s - will be deleted\n", buf);
+	lost_found++;
 	mark_de_bad_offset (deh);
     }
 
@@ -509,9 +524,9 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
 	}
     }
     
-    if (bad == get_ih_entry_count (&tmp)) {
+    if (bad == get_ih_entry_count (&tmp) && lost_found != bad) {	
 	fsck_log ("%s: block %lu, item %H: All entries were deleted from the directory\n", 
-	    __FUNCTION__, bh->b_blocknr, &tmp);
+	    __FUNCTION__, bh->b_blocknr, &tmp);	
 	return -1;
     }
 
@@ -523,33 +538,81 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
 	mark_buffer_dirty (bh);
     }
     
-    if (bad)
+    if (bad > lost_found)
 	fsck_log ("pass0: block %lu, item %H: %d entries were deleted\n",
-		  bh->b_blocknr, &tmp, bad);
+		  bh->b_blocknr, &tmp, bad - lost_found);
 	
     return 0;
 
 }
 
 
-static int does_it_fit_into_dev (__u64 offset) {
+static __inline__ int does_it_fit_into_dev (__u64 offset, __u64 fs_size) {
 /* 
    Count of unformatted pointers - offset / blocksize
    Count of blocks to store them - UNFM_P_SIZE * offset / blocksize / MAX_ITEM_LEN
    Size to store it              - blocksize * UNFM_P_SIZE * offset / blocksize / MAX_ITEM_LEN
 */
-   return ( UNFM_P_SIZE * offset / MAX_ITEM_LEN(fs->fs_blocksize) < 
-	fs->fs_blocksize * get_sb_block_count (fs->fs_ondisk_sb)) ? 1 : 0;
+   return ( UNFM_P_SIZE * offset / MAX_ITEM_LEN(fs->fs_blocksize) < fs_size) ? 1 : 0;
 }
 
 
 static int is_wrong_short_key (struct key * key) {
     if (get_key_dirid (key) == 0 || get_key_objectid (key) == 0 || get_key_objectid (key) == 1 ||
-	get_key_dirid (key) == -1 || get_key_objectid (key) == -1 ||
+	get_key_dirid (key) == ~0ul || get_key_objectid (key) == ~0ul ||
 	get_key_dirid (key) == get_key_objectid (key) ||
 	(get_key_dirid (key) == 1 && get_key_objectid (key) != 2) ||
 	(get_key_dirid (key) != 1 && get_key_objectid (key) == 2) )
 	return 1;
+
+    return 0;
+}
+
+/* 1 if some of fields in the block head of bh look bad */
+int leaf_structure_check (reiserfs_filsys_t * fs, struct buffer_head * bh) {
+    struct block_head * blkh;
+    int free_space, counted;
+
+    blkh = B_BLK_HEAD (bh);
+    
+    if (!is_leaf_block_head(bh->b_data)) {
+	/* We should not get here on rebuild. */
+	fsck_log ("block %lu: The block does not look like a leaf.\n", bh->b_blocknr);
+        one_more_corruption (fs, FATAL);
+	return 1;
+    }
+
+    counted = leaf_count_ih(bh->b_data, bh->b_size);
+
+    if (counted < get_blkh_nr_items (blkh)) {
+	fsck_log ("block %lu: The number of items (%lu) is incorrect, should be (%lu)",
+		bh->b_blocknr, get_blkh_nr_items(blkh), counted);
+	if (fsck_mode(fs) == FSCK_REBUILD) {
+	    set_blkh_nr_items(blkh, counted);	    
+	    fsck_log (" - corrected\n");
+	    mark_buffer_dirty (bh);
+	} else {
+	    fsck_log ("\n");
+	    one_more_corruption (fs, FATAL);
+	    return 1;
+	}
+    }
+    
+    free_space = leaf_free_space_estimate(bh->b_data, bh->b_size);
+    if (get_blkh_free_space (blkh) != free_space) {
+	fsck_log ("block %lu: The free space (%lu) is incorrect, should be (%lu)",
+		bh->b_blocknr, get_blkh_free_space (blkh), free_space);
+	
+	if (fsck_mode(fs) != FSCK_CHECK && fsck_mode(fs) != FSCK_AUTO) {
+	    set_blkh_free_space (blkh, free_space);	    
+	    fsck_log (" - corrected\n");
+	    mark_buffer_dirty (bh);
+	} else {
+	    fsck_log ("\n");
+	    one_more_corruption (fs, FIXABLE);
+	    return 1;
+	}
+    }
 
     return 0;
 }
@@ -561,24 +624,30 @@ static int is_wrong_short_key (struct key * key) {
 static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 				struct buffer_head * bh)
 {
-    int i, j;
-    struct item_head * ih;
-    __u32 * ind_item;
-    __u64 offset;
-    unsigned long unfm_ptr;
-    int dirty = 0;
-    int nr_items;
     int file_format = KEY_FORMAT_UNDEFINED;
+    struct item_head * ih;
+    
+    __u32 * ind_item;
+    __u64 fs_size;
+    __u64 offset;
     int symlnk = 0;
     int bad_order;
+    
+    unsigned long unfm_ptr;
+//    unsigned int nr_items;
+    int i, j, nr_items;
+    int dirty = 0;
 
+    leaf_structure_check(fs, bh);
 
     /* Delete all safe links. */
     for (i = get_blkh_nr_items (B_BLK_HEAD (bh)) - 1; i >= 0; i--) {
-	if (get_key_dirid (&B_N_PITEM_HEAD (bh, i)->ih_key) == -1) {
+	if (get_key_dirid (&B_N_PITEM_HEAD (bh, i)->ih_key) == ~0ul) {
 	    delete_item (fs, bh, i);
 	}
     }
+
+    fs_size = (__u64)fs->fs_blocksize * get_sb_block_count (fs->fs_ondisk_sb);
 
  start_again:
 
@@ -604,7 +673,6 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
                 goto start_again;
             }
         }
-
 
 	if (is_wrong_short_key (&ih->ih_key)) {
 	    /* sometimes stat datas get k_objectid==0 or k_dir_id==0 */
@@ -685,7 +753,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 			"change the type of the key %k to StatData\n", bh->b_blocknr, i + 1, &(ih + 1)->ih_key);
                     set_type_and_offset (KEY_FORMAT_1, &(ih + 1)->ih_key, SD_OFFSET, TYPE_STAT_DATA);
 		    dirty = 1;
-                } else {
+                } else if (is_indirect_ih(ih)) {
                     fsck_log("pass0: vpf-10420: block %lu, item %d: Wrong order of items - "
 			"change the type of the key %k to Direct\n", bh->b_blocknr, i+1, &(ih + 1)->ih_key);
                     set_type (get_ih_key_format(ih+1), &(ih + 1)->ih_key, TYPE_DIRECT);
@@ -807,15 +875,15 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
             int err = 0;
             if (i > 1) {
                 if (comp_short_keys (&(ih - 2)->ih_key, &(ih - 1)->ih_key) != -1)
-                    set_bit (1, &err);
+                    misc_set_bit (1, &err);
                 if (comp_short_keys (&(ih - 2)->ih_key, &ih->ih_key) != -1)
-                    set_bit (2, &err);
+                    misc_set_bit (2, &err);
             }
             if (i + 1 < nr_items) {
                 if (comp_short_keys (&(ih - 1)->ih_key, &(ih + 1)->ih_key) != -1)
-                    set_bit (3, &err);
+                    misc_set_bit (3, &err);
                 if (comp_short_keys (&ih->ih_key, &(ih + 1)->ih_key) != -1)
-                    set_bit (4, &err);
+                    misc_set_bit (4, &err);
             }
 /*
             if ((test_bit (1, err) || test_bit (3, err)) &&
@@ -826,8 +894,8 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
                 goto start_again;
       	    }
 */
-            if (!test_bit (1, &err) && !test_bit (3, &err) &&
-		!test_bit (2, &err) && !test_bit (4, &err)) {
+            if (!misc_test_bit (1, &err) && !misc_test_bit (3, &err) &&
+		!misc_test_bit (2, &err) && !misc_test_bit (4, &err)) {
       		if (i <= 1) {
             	    /* take bigger */
                     if (comp_short_keys (&(ih - 1)->ih_key, &ih->ih_key) == 1) {
@@ -856,14 +924,14 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
                     }
                 }
 		dirty = 1;
-	    } else if (!test_bit (1, &err) && !test_bit (3, &err)) {
+	    } else if (!misc_test_bit (1, &err) && !misc_test_bit (3, &err)) {
       		/* take i - 1 */
 		fsck_log("pass0: vpf-10590: block %lu, item %d: Wrong order of items - "
 		    "change the object_id of the key %k to %lu\n",
                     bh->b_blocknr, i, &ih->ih_key, get_key_objectid (&(ih - 1)->ih_key));
 		set_key_objectid (&ih->ih_key, get_key_objectid (&(ih - 1)->ih_key));
 		dirty = 1;
- 	    } else if (!test_bit (2, &err) && !test_bit (4, &err)) {
+ 	    } else if (!misc_test_bit (2, &err) && !misc_test_bit (4, &err)) {
       		/* take i */
 		fsck_log("pass0: vpf-10600: block %lu, item %d: Wrong order of items - "
 		    "change the object_id of the key %k to %lu\n",
@@ -897,7 +965,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 		    if (get_ih_item_len (ih - 1) == SD_SIZE) {
 			/* stat data is new, therefore this item is new too */
 			set_offset (KEY_FORMAT_2, &(ih->ih_key), 1);
-			if (get_ih_entry_count (ih) != 0xffff)
+			if ((get_ih_entry_count (ih) != 0xffff) && (get_ih_item_len (ih) % 4 == 0))
 			    set_type (KEY_FORMAT_2, &(ih->ih_key), TYPE_INDIRECT);
 			else
 			    set_type (KEY_FORMAT_2, &(ih->ih_key), TYPE_DIRECT);
@@ -905,7 +973,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 		    } else {
 			/* stat data is old, therefore this item is old too */
 			set_offset (KEY_FORMAT_1, &(ih->ih_key), 1);
-			if (get_ih_entry_count (ih) != 0xffff && (get_ih_item_len (ih) % 4 == 0))
+			if ((get_ih_entry_count (ih) != 0xffff) && (get_ih_item_len (ih) % 4 == 0))
 			    set_type (KEY_FORMAT_1, &(ih->ih_key), TYPE_INDIRECT);
 			else {
 			    set_type (KEY_FORMAT_1, &(ih->ih_key), TYPE_DIRECT);
@@ -962,6 +1030,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
                     goto start_again;
                 }
 		
+		/* Check the lenght of the direct item; offset should be ok already. */
 		if (is_direct_ih (ih)) {
 		    if (STORE_TAIL_IN_UNFM (get_offset (&ih->ih_key) + get_ih_item_len (ih) - 1, 
 			    get_ih_item_len (ih), bh->b_size)) 
@@ -993,11 +1062,11 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 			delete_item (fs, bh, i);
 			goto start_again;
 		    }
-		}
-		
-		if (is_direct_ih (ih)) {
+		} else if (is_direct_ih (ih)) {
 		    if (!correct_direct_item_offset (get_offset (&ih->ih_key), key_format (&ih->ih_key)) ||
-          		STORE_TAIL_IN_UNFM (offset + get_ih_item_len (ih) - 1, get_ih_item_len (ih), bh->b_size)) {
+			((get_offset (&ih->ih_key) % bh->b_size - 1) + get_ih_item_len (ih) > bh->b_size) || 
+          		STORE_TAIL_IN_UNFM (offset + get_ih_item_len (ih) - 1, get_ih_item_len (ih), bh->b_size)) 
+		    {
                             fsck_log("pass0: vpf-10210: block %lu, item %d: The item with wrong offset ", 
                                 bh->b_blocknr, i);
                             fsck_log("or length found %k, len % lu - deleted\n", &ih->ih_key, get_ih_item_len (ih));
@@ -1007,7 +1076,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
   		}
 		
 		offset += get_bytes_number (ih, fs->fs_blocksize);
-		if (!does_it_fit_into_dev (offset)) {
+		if (!does_it_fit_into_dev (offset, fs_size)) {
                     fsck_log("pass0: vpf-10230: block %lu, item %d: The item offset is is too big %k - deleted\n",
                                         bh->b_blocknr, i, &ih->ih_key);
                     delete_item (fs, bh, i);
@@ -1054,6 +1123,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 
 		default:
 		    /* upper item was the first item of a node */
+		    /* to make gcc 3.2 do not sware here */;
 		}
 
 		retval = lower_correct (bh, ih, i);
@@ -1073,8 +1143,8 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 		    goto start_again;
 
 		default:
-		    /* there were only two items in a node, so we could not
-                       decide what to delete, go and ask user */
+		    /* only 2 items in the node, how to decide what to delete, go and ask user */
+		    /* to make gcc 3.2 do not sware here */;
 		}
 		fsck_log ("pass0: block %lu, items %d and %d: Which of these items looks better (the other will be deleted.)?\n"
 			  "%k\n%k\n", bh->b_blocknr, i-1, i, &(ih - 1)->ih_key, &ih->ih_key);
@@ -1094,7 +1164,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 	    goto start_again;
 	}
 
-	dirty += correct_key_format (ih);
+	dirty += correct_key_format (ih, symlnk);
 	
 	if (is_stat_data_ih (ih)) {
 	    __u16 mode;
@@ -1112,9 +1182,11 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
             fsck_log("pass0: vpf-10240: block %lu, item (%d): Item %k, which format (%d) is not equal to StatData "
 		"format (%d), is deleted\n", bh->b_blocknr, i, &ih->ih_key, get_ih_key_format(ih), file_format);
             delete_item (fs, bh, i);
-	    file_format = KEY_FORMAT_UNDEFINED;
             goto start_again;
-        }
+        } else {
+	    file_format = KEY_FORMAT_UNDEFINED;
+	    symlnk = 0;
+	}
 
 
 	if (i && is_stat_data_ih (ih - 1) && !not_of_one_file (&ih->ih_key, &(ih - 1)->ih_key)) {
@@ -1208,7 +1280,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 	}
 */
 	ind_item = (__u32 *)B_I_PITEM (bh, ih);
-	for (j = 0; j < I_UNFM_NUM (ih); j ++) {
+	for (j = 0; j < (int)I_UNFM_NUM (ih); j ++) {
 	    unfm_ptr = le32_to_cpu (ind_item [j]);
 	    if (!unfm_ptr)
 		continue;
@@ -1247,11 +1319,11 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
     for (i = 0; i < get_blkh_nr_items (B_BLK_HEAD (bh)); i ++, ih ++) {
 	struct reiserfs_de_head * deh;
 
-	mark_objectid_really_used (proper_id_map (fs), get_key_dirid (&ih->ih_key));
-	mark_objectid_really_used (proper_id_map (fs), get_key_objectid (&ih->ih_key));
+	id_map_mark(proper_id_map (fs), get_key_dirid (&ih->ih_key));
+	id_map_mark(proper_id_map (fs), get_key_objectid (&ih->ih_key));
 	if (is_direntry_ih(ih)) {
 	    for (j = 0, deh = B_I_DEH (bh, ih); j < get_ih_entry_count (ih); j ++, deh++) 
-		mark_objectid_really_used(proper_id_map (fs), get_deh_objectid(deh));	    
+		id_map_mark(proper_id_map(fs), get_deh_objectid(deh));	    
 	}
     }
 
@@ -1259,11 +1331,14 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 	/* pass 1 will skip this */
 	pass_0_stat (fs)->all_contents_removed ++;
 //	fsck_log ("pass0: block %lu: All items were deleted.\n", bh->b_blocknr);
+	dirty = 0;
+	mark_buffer_clean (bh);
     } else {
 	/* pass1 will use this bitmap */
 	pass0_mark_leaf (bh->b_blocknr);
 	/*fsck_data (fs)->rebuild.leaves ++;*/
     }
+    
     if (dirty) {
 	pass_0_stat (fs)->leaves_corrected ++;
 	mark_buffer_dirty (bh);
@@ -1318,24 +1393,23 @@ int is_bad_directory (struct item_head * ih, char * item, int dev, int blocksize
 
     for (i = 0; i < get_ih_entry_count (ih); i ++, deh ++) {
 	entrylen = entry_length(ih, deh, i);
-	if (entrylen > REISERFS_MAX_NAME_LEN (blocksize)) {
+	if (entrylen > (int)REISERFS_MAX_NAME_LEN (blocksize))
 	    return 1;
-	}
-	if (get_deh_offset (deh) <= prev_offset) {
+	
+	if (get_deh_offset (deh) <= prev_offset)
 	    return 1;
-	}
+	
 	prev_offset = get_deh_offset (deh);
 
-	if (get_deh_location(deh) + entrylen != prev_location) {
+	if (get_deh_location(deh) + entrylen != prev_location)
 	    return 1;
-	}
+	
 	prev_location = get_deh_location (deh);
 
 	namelen = name_in_entry_length (ih, deh, i);
 	name = name_in_entry (deh, i);
-	if (!is_properly_hashed (fs, name, namelen, get_deh_offset (deh))) {
+	if (!is_properly_hashed (fs, name, namelen, get_deh_offset (deh)))
 	    return 1;
-	}
     }
     return 0;
 }
@@ -1344,9 +1418,9 @@ int is_bad_directory (struct item_head * ih, char * item, int dev, int blocksize
 /* change incorrect block adresses by 0. Do not consider such item as incorrect */
 static int is_bad_indirect (struct item_head * ih, char * item, int dev, int blocksize)
 {
-    int i;
-    int bad = 0;
     unsigned long blocks;
+    unsigned int i;
+    int bad = 0;
 
     if (get_ih_item_len(ih) % UNFM_P_SIZE) {
 	fsck_log ("is_bad_indirect: indirect item of %H of invalid length\n", ih);
@@ -1445,11 +1519,18 @@ static void do_pass_0 (reiserfs_filsys_t * fs)
 	/* just to test pass0_correct_leaf */
 	bh = bread (fs->fs_dev, fsck_data (fs)->rebuild.test, fs->fs_blocksize);
 
-	/*
+	if (!bh) {
+	    /* we were reading one block at time, and failed, so mark block bad */
+	    fsck_progress ("%s: Reading of the block %lu failed\n", __FUNCTION__, 
+		fsck_data (fs)->rebuild.test);
+	    reiserfs_free (fs);
+	    exit(0);
+	}
+
 	if (is_leaf_bad (bh)) {
 	    fsck_progress ("###############  bad #################\n");
 	}
-	*/
+
 	pass0_correct_leaf (fs, bh);
 	
 	print_block (stdout, fs, bh, 3, -1, -1);
@@ -1489,7 +1570,7 @@ static void do_pass_0 (reiserfs_filsys_t * fs)
 
 	pass_0_stat (fs)->dealt_with ++;
 	what_node = who_is_this (bh->b_data, bh->b_size);
-	if ( what_node != THE_LEAF ) {
+	if ( what_node != THE_LEAF && what_node != HAS_IH_ARRAY ) {
 	    brelse (bh);
 	    continue;
 	}
@@ -1502,7 +1583,7 @@ static void do_pass_0 (reiserfs_filsys_t * fs)
 
 
     /* just in case */
-    mark_objectid_really_used (proper_id_map (fs), REISERFS_ROOT_OBJECTID);
+    id_map_mark(proper_id_map (fs), REISERFS_ROOT_OBJECTID);
 
 }
 
@@ -1572,16 +1653,16 @@ int still_bad_unfm_ptr_2 (unsigned long block)
 
 
 /* these are used to allocate blocks for tree building */
-int are_there_allocable_blocks (int amout_needed)
-{
+int are_there_allocable_blocks (unsigned int amout_needed) {
     if (reiserfs_bitmap_zeros (fsck_allocable_bitmap (fs)) < amout_needed) {
-	int zeros = 0, i;
+	unsigned int zeros = 0, i;
 	
 	fsck_progress ("Not enough allocable blocks, checking bitmap...");
-	for (i = 0; i < fsck_allocable_bitmap (fs)->bm_bit_size; i ++)
+	for (i = 0; i < fsck_allocable_bitmap (fs)->bm_bit_size; i ++) {
 	    if (!reiserfs_bitmap_test_bit (fsck_allocable_bitmap (fs), i))
 		zeros ++;
-	fsck_progress ("there are %d allocable blocks, btw\n", zeros);
+	}
+	fsck_progress ("there are %u allocable blocks, btw\n", zeros);
 	return 0;
     }
     return 1;
@@ -1609,7 +1690,7 @@ void make_allocable (unsigned long block)
 static void choose_hash_function (reiserfs_filsys_t * fs)
 {
     unsigned long max;
-    int hash_code;
+    unsigned int hash_code;
     int i;
 
     if (fsck_hash_defined (fs))
@@ -1682,7 +1763,7 @@ static void init_source_bitmap (reiserfs_filsys_t * fs)
     case EXTERN_BITMAP:
 	fp = fopen (fsck_data (fs)->rebuild.bitmap_file_name, "r");
 	if (!fp)
-	    reiserfs_panic ("Could not load bitmap: %m\n");
+	    reiserfs_panic ("Could not load bitmap: %s\n", strerror(errno));
 	fsck_source_bitmap (fs) = reiserfs_bitmap_load (fp);
 	if (!fsck_source_bitmap (fs))
 	    reiserfs_panic ("Could not load fitmap from \"%s\"", 
@@ -1778,7 +1859,7 @@ static void before_pass_0 (reiserfs_filsys_t * fs)
     make_aux_bitmaps (fs);
 
     /* on pass0 all objectids will be marked here as used */
-    proper_id_map (fs) = init_id_map ();
+    proper_id_map (fs) = id_map_init();
 
     /* pass0 gathers statistics about hash hits */
     hash_hits_init (fs);
@@ -1802,7 +1883,6 @@ static void save_pass_0_result (reiserfs_filsys_t * fs)
     reiserfs_bitmap_save (file,  bad_unfm_bitmap);
     reiserfs_end_stage_info_save (file);
     close_file (file);
-    retval = unlink (state_dump_file (fs));
     retval = rename ("temp_fsck_file.deleteme", state_dump_file (fs));
     if (retval != 0)
 	fsck_progress ("%s: Could not rename the temporary file temp_fsck_file.deleteme to %s",
@@ -1837,7 +1917,7 @@ static void after_pass_0 (reiserfs_filsys_t * fs)
 
     /* update super block: hash, objectid map, fsck state */
     choose_hash_function (fs);
-    flush_objectid_map (proper_id_map (fs), fs);
+    id_map_flush(proper_id_map (fs), fs);
     set_sb_fs_state (fs->fs_ondisk_sb, PASS_0_DONE);
     mark_buffer_dirty (fs->fs_super_bh);
 
@@ -1862,7 +1942,7 @@ static void after_pass_0 (reiserfs_filsys_t * fs)
     } else
 	save_pass_0_result (fs);
 
-    free_id_map (proper_id_map (fs));
+    id_map_free(proper_id_map (fs));
     proper_id_map (fs) = 0;
     
     time (&t);

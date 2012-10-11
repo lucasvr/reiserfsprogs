@@ -1,7 +1,8 @@
 /* 
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
-  
+
 /*
  * 2000/10/26 - Initial version.
  */
@@ -47,6 +48,9 @@ int reiserfs_expand_bitmap (reiserfs_bitmap_t * bm, unsigned int bit_count)
     bm->bm_map = new_map;
     bm->bm_byte_size = byte_count;
     bm->bm_bit_size = bit_count;
+
+    bm->bm_dirty = 1;
+
     return 0;
 }
 
@@ -56,6 +60,8 @@ void reiserfs_shrink_bitmap (reiserfs_bitmap_t * bm, unsigned int bit_count)
 
     bm->bm_byte_size = (bit_count + 7) / 8;
     bm->bm_bit_size = bit_count;
+
+    bm->bm_dirty = 1;
 }
 
 /* bitmap destructor */
@@ -80,8 +86,8 @@ void reiserfs_bitmap_copy (reiserfs_bitmap_t * to, reiserfs_bitmap_t * from)
 
 int reiserfs_bitmap_compare (reiserfs_bitmap_t * bm1, reiserfs_bitmap_t * bm2)
 {
-    int bytes, bits;
-    long unsigned i, diff;
+    unsigned long i, diff;
+    unsigned long int bytes, bits;
 
     assert (bm1->bm_byte_size == bm2->bm_byte_size &&
 	    bm1->bm_bit_size == bm2->bm_bit_size);
@@ -119,16 +125,17 @@ int reiserfs_bitmap_compare (reiserfs_bitmap_t * bm1, reiserfs_bitmap_t * bm2)
     Y - `from` bitmap. 
     Save result in the `to` bitmap.
 */
-void reiserfs_bitmap_disjunction (reiserfs_bitmap_t * to, reiserfs_bitmap_t * from)
+void reiserfs_bitmap_disjunction (reiserfs_bitmap_t * to, 
+    reiserfs_bitmap_t * from) 
 {
-    int i;
+    unsigned int i;
 
     assert (to->bm_byte_size == from->bm_byte_size &&
 	    to->bm_bit_size == from->bm_bit_size);
 
     for (i = 0; i < to->bm_bit_size; i++) {
-	if (test_bit(i, from->bm_map) && !test_bit(i, to->bm_map)) {
-	    set_bit(i, to->bm_map);
+	if (misc_test_bit(i, from->bm_map) && !misc_test_bit(i, to->bm_map)) {
+	    misc_set_bit(i, to->bm_map);
 	    to->bm_set_bits ++;
 	    to->bm_dirty = 1;	
 	}
@@ -142,14 +149,14 @@ void reiserfs_bitmap_disjunction (reiserfs_bitmap_t * to, reiserfs_bitmap_t * fr
     Save result in the `base` bitmap.
 */
 void reiserfs_bitmap_delta (reiserfs_bitmap_t * base, reiserfs_bitmap_t * exclude) {
-   int i;
+   unsigned int i;
 
     assert (base->bm_byte_size == exclude->bm_byte_size &&
 	    base->bm_bit_size == exclude->bm_bit_size);
 
     for (i = 0; i < base->bm_bit_size; i++) {
-	if (test_bit(i, exclude->bm_map) && test_bit(i, base->bm_map)) {
-	    clear_bit(i, base->bm_map);
+	if (misc_test_bit(i, exclude->bm_map) && misc_test_bit(i, base->bm_map)) {
+	    misc_clear_bit(i, base->bm_map);
 	    base->bm_set_bits --;
 	    base->bm_dirty = 1;
 	}
@@ -159,9 +166,9 @@ void reiserfs_bitmap_delta (reiserfs_bitmap_t * base, reiserfs_bitmap_t * exclud
 void reiserfs_bitmap_set_bit (reiserfs_bitmap_t * bm, unsigned int bit_number)
 {
     assert(bit_number < bm->bm_bit_size);
-    if (test_bit (bit_number, bm->bm_map))
+    if (misc_test_bit (bit_number, bm->bm_map))
 	return;
-    set_bit(bit_number, bm->bm_map);
+    misc_set_bit(bit_number, bm->bm_map);
     bm->bm_set_bits ++;
     bm->bm_dirty = 1;
 }
@@ -170,9 +177,9 @@ void reiserfs_bitmap_set_bit (reiserfs_bitmap_t * bm, unsigned int bit_number)
 void reiserfs_bitmap_clear_bit (reiserfs_bitmap_t * bm, unsigned int bit_number)
 {
     assert(bit_number < bm->bm_bit_size);
-    if (!test_bit (bit_number, bm->bm_map))
+    if (!misc_test_bit (bit_number, bm->bm_map))
 	return;
-    clear_bit (bit_number, bm->bm_map);
+    misc_clear_bit (bit_number, bm->bm_map);
     bm->bm_set_bits --;
     bm->bm_dirty = 1;
 }
@@ -183,34 +190,32 @@ int reiserfs_bitmap_test_bit (reiserfs_bitmap_t * bm, unsigned int bit_number)
     if (bit_number >= bm->bm_bit_size)
 	printf ("bit %u, bitsize %lu\n", bit_number, bm->bm_bit_size);
     assert(bit_number < bm->bm_bit_size);
-    return test_bit(bit_number, bm->bm_map);
+    return misc_test_bit(bit_number, bm->bm_map);
 }
 
 
-int reiserfs_bitmap_zeros (reiserfs_bitmap_t * bm)
-{
+unsigned int reiserfs_bitmap_zeros (reiserfs_bitmap_t * bm) {
     return bm->bm_bit_size - bm->bm_set_bits;
 }
 
 
-int reiserfs_bitmap_ones (reiserfs_bitmap_t * bm)
-{
+unsigned int reiserfs_bitmap_ones (reiserfs_bitmap_t * bm) {
     return bm->bm_set_bits;
 }
 
 
-int reiserfs_bitmap_find_zero_bit (reiserfs_bitmap_t * bm, unsigned long * start)
+int reiserfs_bitmap_find_zero_bit (reiserfs_bitmap_t * bm, unsigned long * first)
 {
-    unsigned int  bit_nr = *start;
-    assert(*start < bm->bm_bit_size);
+    unsigned long bit_nr = *first;
+    assert(*first < bm->bm_bit_size);
 
-    bit_nr = find_next_zero_bit(bm->bm_map, bm->bm_bit_size, *start);
+    bit_nr = misc_find_next_zero_bit(bm->bm_map, bm->bm_bit_size, *first);
 
     if (bit_nr >= bm->bm_bit_size) { /* search failed */	
 	return 1;
     }
 
-    *start = bit_nr;
+    *first = bit_nr;
     return 0;
 }
 
@@ -218,14 +223,13 @@ int reiserfs_bitmap_find_zero_bit (reiserfs_bitmap_t * bm, unsigned long * start
 /* read every bitmap block and copy their content into bitmap 'bm' */
 static int reiserfs_fetch_ondisk_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys_t * fs)
 {
-    unsigned long to_copy;
-    int copied;
-    int i;
-    char * p;
-    int last_byte_unused_bits;
-    unsigned long block;
+    unsigned int last_byte_unused_bits;
+    unsigned long block, to_copy;
     struct buffer_head * bh;
-
+    unsigned int i;
+    int copied;
+    int ret = 0;
+    char * p;
 
     to_copy = (get_sb_block_count (fs->fs_ondisk_sb) + 7) / 8;
 
@@ -248,8 +252,16 @@ static int reiserfs_fetch_ondisk_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys
 	    mark_buffer_uptodate (bh, 1);
 	}
 
-	if (to_copy < fs->fs_blocksize)
+	if (to_copy < fs->fs_blocksize) {
+	    for (i = to_copy; i < fs->fs_blocksize; i++) {
+		if (bh->b_data[i] != (char)0xff) {
+		    ret = 1;
+		    break;
+		}
+	    }
+	    
 	    copied = to_copy;
+	}
 	memcpy (p, bh->b_data, copied); 
 	brelse (bh);
 	p += copied;
@@ -265,8 +277,13 @@ static int reiserfs_fetch_ondisk_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys
     /* on disk bitmap has bits out of SB_BLOCK_COUNT set to 1, where as
        reiserfs_bitmap_t has those bits set to 0 */
     last_byte_unused_bits = bm->bm_byte_size * 8 - bm->bm_bit_size;
-    for (i = 0; i < last_byte_unused_bits; i ++)
-	clear_bit (bm->bm_bit_size + i, bm->bm_map);
+
+    for (i = 0; i < last_byte_unused_bits; i ++) {
+	if (misc_test_bit (bm->bm_bit_size + i, bm->bm_map) == 0)
+	    ret = 1;
+	else	    
+	    misc_clear_bit (bm->bm_bit_size + i, bm->bm_map);
+    }
 
     bm->bm_set_bits = 0;
     /* FIXME: optimize that */
@@ -275,7 +292,8 @@ static int reiserfs_fetch_ondisk_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys
 	    bm->bm_set_bits ++;
     
     bm->bm_dirty = 0;
-    return 0;
+
+    return ret;
 }
 
 
@@ -283,14 +301,10 @@ static int reiserfs_fetch_ondisk_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys
    changed and return 1. Otherwise - return 0 */
 int reiserfs_flush_to_ondisk_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys_t * fs)
 {
-    unsigned long to_copy;
-    int copied;
-    int i;
-    char * p;
-    int last_byte_unused_bits;
-    unsigned long block;
+    unsigned int last_byte_unused_bits, i;
+    unsigned long to_copy, copied, block;
     struct buffer_head * bh;
-
+    char * p;
 
     /* make sure that the device is big enough */
     bh = bread (fs->fs_dev, bm->bm_bit_size - 1, fs->fs_blocksize);
@@ -331,8 +345,9 @@ int reiserfs_flush_to_ondisk_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys_t *
 	if (copied == to_copy) {
 	    /* set unused bits of last byte of a bitmap to 1 */
 	    last_byte_unused_bits = bm->bm_byte_size * 8 - bm->bm_bit_size;
+
 	    for (i = 0; i < last_byte_unused_bits; i ++)
-		set_bit ((bm->bm_bit_size % (fs->fs_blocksize * 8)) + i, bh->b_data);
+		misc_set_bit ((bm->bm_bit_size % (fs->fs_blocksize * 8)) + i, bh->b_data);
 	}
 	mark_buffer_dirty (bh);
 	brelse (bh);
@@ -403,14 +418,14 @@ void reiserfs_bitmap_save (FILE * fp, reiserfs_bitmap_t * bm)
     __u32 v;
     int zeros;
     int count;
-    int i;
+    unsigned int i;
     int extents;
     long position;
 
   /*  fp = fopen (filename, "w+");
     if (!fp) {
-	reiserfs_warning (stderr, "reiserfs_bitmap_save: could not save bitmap in %s: %m",
-			  filename);
+	reiserfs_warning (stderr, "reiserfs_bitmap_save: could not save bitmap in %s: %s",
+			  filename, strerror(errno));
 	return;
     }*/
 
@@ -430,7 +445,7 @@ void reiserfs_bitmap_save (FILE * fp, reiserfs_bitmap_t * bm)
     position = ftell(fp);
 
     if (fseek (fp, 4, SEEK_CUR)) {
-	reiserfs_warning (stderr, "reiserfs_bitmap_save: fseek failed: %m\n");
+	reiserfs_warning (stderr, "reiserfs_bitmap_save: fseek failed: %s\n", strerror(errno));
 //	fclose (fp);
 	return;
     }
@@ -481,14 +496,14 @@ void reiserfs_bitmap_save (FILE * fp, reiserfs_bitmap_t * bm)
     fwrite (&v, 4, 1, fp);
 
     if (fseek (fp, position, SEEK_SET)) {
-	reiserfs_warning (stderr, "reiserfs_bitmap_save: fseek failed: %m");
+	reiserfs_warning (stderr, "reiserfs_bitmap_save: fseek failed: %s", strerror(errno));
 	return;
     }
 
     fwrite (&extents, 4, 1, fp);
 
     if (fseek (fp, 0, SEEK_END)) {
-	reiserfs_warning (stderr, "reiserfs_bitmap_save: fseek failed: %m");
+	reiserfs_warning (stderr, "reiserfs_bitmap_save: fseek failed: %s", strerror(errno));
 	return;
     }
 }
@@ -528,7 +543,8 @@ int is_stage_magic_correct (FILE * fp)
     __u32 v;
 
     if (fseek (fp, -4, SEEK_END)) {
-	reiserfs_warning (stderr, "is_stage_magic_correct: fseek failed: %m\n");
+	reiserfs_warning (stderr, "is_stage_magic_correct: fseek failed: %s\n", 
+	    strerror(errno));
 	return -1;
     }
 
@@ -539,7 +555,8 @@ int is_stage_magic_correct (FILE * fp)
     }
 
     if (fseek (fp, 0, SEEK_SET)) {
-	reiserfs_warning (stderr, "is_stage_magic_correct: fseek failed: %m\n");
+	reiserfs_warning (stderr, "is_stage_magic_correct: fseek failed: %s\n", 
+	    strerror(errno));
 	return -1;
     }
 
@@ -571,7 +588,7 @@ reiserfs_bitmap_t * reiserfs_bitmap_load (FILE * fp)
     
 /*    fp = fopen (filename, "r");
     if (!fp) {
-	reiserfs_warning (stderr, "reiserfs_bitmap_load: fopen failed: %m\n");
+	reiserfs_warning (stderr, "reiserfs_bitmap_load: fopen failed: %s\n", strerror(errno));
 	return 0;
     }*/
 
@@ -633,7 +650,7 @@ reiserfs_bitmap_t * reiserfs_bitmap_load (FILE * fp)
 
 void reiserfs_bitmap_invert (reiserfs_bitmap_t * bm)
 {
-    int i;
+    unsigned int i;
 
     /*reiserfs_warning (stderr, "Bitmap inverting..");fflush (stderr);*/
     for (i = 0; i < bm->bm_bit_size; i ++) {
@@ -659,33 +676,22 @@ void reiserfs_free_ondisk_bitmap (reiserfs_filsys_t * fs)
 /* read bitmap blocks */
 int reiserfs_open_ondisk_bitmap (reiserfs_filsys_t * fs)
 {
-    struct buffer_head * bh;
-
     if (fs->fs_bitmap2)
 	reiserfs_panic ("%s: bitmap is initiaized already", __FUNCTION__);
     fs->fs_bitmap2 = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
     if (!fs->fs_bitmap2)
-	return 0;
+	return -1;
 
-    if ( (get_sb_block_count (fs->fs_ondisk_sb) + fs->fs_blocksize * 8 - 1) / (fs->fs_blocksize * 8) !=
-    	get_sb_bmap_nr (fs->fs_ondisk_sb)) {
+    if ((get_sb_block_count (fs->fs_ondisk_sb) + fs->fs_blocksize * 8 - 1) / 
+	(fs->fs_blocksize * 8) != get_sb_bmap_nr (fs->fs_ondisk_sb)) 
+    {
 	reiserfs_warning (stderr, "%s: wrong either bitmaps number,\n", __FUNCTION__);
-	reiserfs_warning (stderr, "count of blocks or blocksize, run with --rebuild-sb to fix it\n");
-	return 0;
+	reiserfs_warning (stderr, "count of blocks or blocksize, run with --rebuild-sb "
+	    "to fix it\n");
+	return -1;
     }    	
 
-    bh = bread (fs->fs_dev, fs->fs_bitmap2->bm_bit_size - 1, fs->fs_blocksize);
-    if (!bh) {
-	reiserfs_warning (stderr, "%s: bread failed for block %lu\n", __FUNCTION__,  fs->fs_bitmap2->bm_bit_size - 1);
-	reiserfs_warning (stderr, "\tYour partition is not big enough. Enlarge your partition or\n");
-	reiserfs_warning (stderr, "\trun reiserfsck with --rebuild-sb to fix super block.\n");
-	return 0;
-    }	
-
-    brelse (bh);
-    	
-    reiserfs_fetch_ondisk_bitmap (fs->fs_bitmap2, fs);
-    return 1;
+    return reiserfs_fetch_ondisk_bitmap (fs->fs_bitmap2, fs);
 }
 
 int reiserfs_create_ondisk_bitmap (reiserfs_filsys_t * fs)

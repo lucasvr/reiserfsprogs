@@ -1,23 +1,94 @@
 /*
- *  Copyright 2000, 2001, 2002 by Hans Reiser, licensing governed by
- *  reiserfs/README
+ *  Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ *  reiserfsprogs/README
  */
-
 
 #include "includes.h"
 
-int correct_direct_item_offset (__u64 offset, int format) {
-    if (format == KEY_FORMAT_2) {
-        return (offset && ((offset - 1) % 8 == 0));
-    } else {
-	return (offset);
+int leaf_count_ih(char * buf, int blocksize) {
+    struct item_head * ih;
+    int prev_location;
+    int nr;
+
+    /* look at the table of item head */
+    prev_location = blocksize;
+    ih = (struct item_head *)(buf + BLKH_SIZE);
+    nr = 0;
+    while (1) {
+	if (get_ih_location (ih) + get_ih_item_len (ih) != prev_location)
+	    break;
+	if (get_ih_location (ih) < IH_SIZE * (nr + 1) + BLKH_SIZE)
+	    break;
+	if (get_ih_item_len (ih) > MAX_ITEM_LEN (blocksize))
+	    break;
+	prev_location = get_ih_location (ih);
+	ih ++;
+	nr ++;
     }
-    return 0;
+    
+    return nr;
 }
 
+int leaf_free_space_estimate(char * buf, int blocksize) {
+    struct block_head * blkh;
+    struct item_head * ih;
+    int nr;
+    
+    blkh = (struct block_head *)buf;
+    nr = get_blkh_nr_items(blkh);    
+    ih = (struct item_head *)(buf + BLKH_SIZE) + nr - 1;
+    
+    return (nr ? get_ih_location (ih) : blocksize) - BLKH_SIZE - IH_SIZE * nr;
+}
+
+static int leaf_blkh_correct(char * buf, int blocksize) {
+    struct block_head * blkh;
+    unsigned int nr;
+
+    blkh = (struct block_head *)buf;
+    if (!is_leaf_block_head (buf))
+	return 0;
+
+    nr = get_blkh_nr_items(blkh);
+    if (nr > ((blocksize - BLKH_SIZE) / (IH_SIZE + MIN_ITEM_LEN)))
+	/* item number is too big or too small */
+	return 0;
+
+    return leaf_free_space_estimate(buf, blocksize) == get_blkh_free_space (blkh);
+}
+
+int is_a_leaf(char * buf, int blocksize) {
+    struct block_head * blkh;
+    int counted;
+    
+    blkh = (struct block_head *)buf;
+    if (!is_leaf_block_head (buf))
+	return 0;
+
+    counted = leaf_count_ih(buf, blocksize);
+    
+    /* if leaf block header is ok, check item count also. */
+    if (leaf_blkh_correct(buf, blocksize))
+	return counted >= get_blkh_nr_items (blkh) ? THE_LEAF : HAS_IH_ARRAY;
+    
+    /* leaf block header is corrupted, it is ih_array if some items were detected.*/
+    return counted ? HAS_IH_ARRAY : 0;
+}
+
+int leaf_item_number_estimate(struct buffer_head * bh) {
+    struct block_head * blkh;
+    int nr;
+    
+    nr = leaf_count_ih(bh->b_data, bh->b_size);
+    blkh = (struct block_head *)bh->b_data;
+
+    return nr >= get_blkh_nr_items (blkh) ? get_blkh_nr_items (blkh) : nr;
+}
+
+#if 0
 /* this only checks block header and item head array (ih_location-s
    and ih_item_len-s). Item internals are not checked */
-static int does_node_look_like_a_leaf (char * buf, int blocksize)
+int does_node_look_like_a_leaf (char * buf, int blocksize)
 {
     struct block_head * blkh;
     struct item_head * ih;
@@ -37,6 +108,7 @@ static int does_node_look_like_a_leaf (char * buf, int blocksize)
 
     ih = (struct item_head *)(buf + BLKH_SIZE) + nr - 1;
     used_space = BLKH_SIZE + IH_SIZE * nr + (blocksize - (nr ? get_ih_location (ih) : blocksize));
+
     if (used_space != blocksize - get_blkh_free_space (blkh))
 	/* free space does not match to calculated amount of use space */
 	return 0;
@@ -63,10 +135,9 @@ static int does_node_look_like_a_leaf (char * buf, int blocksize)
     return 1;
 }
 
-
 /* check ih_item_len and ih_location. Should be useful when block head is
    corrupted */
-int does_node_have_ih_array (char * buf, int blocksize)
+static int does_node_have_ih_array (char * buf, int blocksize)
 {
     struct item_head * ih;
     int prev_location;
@@ -88,13 +159,13 @@ int does_node_have_ih_array (char * buf, int blocksize)
 	return 0;
     return nr;
 }
-
+#endif
 
 /* returns 1 if buf looks like an internal node, 0 otherwise */
 static int is_correct_internal (char * buf, int blocksize)
 {
     struct block_head * blkh;
-    int nr;
+    unsigned int nr;
     int used_space;
 
     blkh = (struct block_head *)buf;
@@ -123,7 +194,7 @@ int is_tree_node (struct buffer_head * bh, int level)
     if (B_LEVEL (bh) != level)
 	return 0;
     if (is_leaf_node (bh))
-	return does_node_look_like_a_leaf (bh->b_data, bh->b_size);
+	return is_a_leaf(bh->b_data, bh->b_size);
 
     return is_correct_internal (bh->b_data, bh->b_size);
 }
@@ -203,30 +274,6 @@ int reiserfs_super_block_size (struct reiserfs_super_block * sb)
     return 0;
 }
 
-
-
-#if 0
-/* returns code of             0 -  here means 3.5 format,
-                               2 - either pure 3.6 or converted 3.5
-                               3 - journal-relocated 3.6*/
-int magic_2_version (struct reiserfs_super_block * rs)
-{
-    int ret;
-
-    ret = 0;
-    if (is_reiser2fs_magic_string (rs)) 
-	ret = REISERFS_VERSION_2 ;
-    else if (is_reiser2fs_jr_magic_string (rs))
-	ret = REISERFS_VERSION_3;
-    else if (is_reiserfs_magic_string (rs))
-	ret = REISERFS_VERSION_1;
-    else
-	reiserfs_panic ("magic_2_version: unknown magic string found");
-    return ret;
-}
-#endif
-
-
 /* this one had signature in different place of the super_block
    structure */
 int is_prejournaled_reiserfs (struct reiserfs_super_block * rs)
@@ -251,19 +298,17 @@ int does_look_like_super_block (struct reiserfs_super_block * sb) {
    block, journal descriptor), unformatted */
 int who_is_this (char * buf, int blocksize)
 {
+    int res;
+    
     /* super block? */
     if (does_look_like_super_block ((void *)buf))
 	return THE_SUPER;
 
-    if (does_node_look_like_a_leaf (buf, blocksize))
-	/* block head and item head array seem matching (node level, free
-           space, item number, item locations and length) */
-	return THE_LEAF;
-
-    if (does_node_have_ih_array (buf, blocksize)) {
-	/* item header array found */
-	return HAS_IH_ARRAY;
-    }
+    if ((res = is_a_leaf(buf, blocksize)))
+	/* if block head and item head array seem matching (node level, free
+           space, item number, item locations and length), then it is THE_LEAF,
+	  otherwise, it is HAS_IH_ARRAY */
+	return res;
 
     if (is_correct_internal (buf, blocksize))
 	return THE_INTERNAL;
@@ -282,7 +327,7 @@ int who_is_this (char * buf, int blocksize)
 char * which_block (int code)
 {
     static char * leaf = "leaf";
-    static char * broken_leaf = "leaf w/o block head";
+    static char * broken_leaf = "broken leaf";
     static char * internal = "internal";
     static char * other = "unknown";
 
@@ -299,8 +344,7 @@ char * which_block (int code)
 
 
 /** */
-int block_of_journal (reiserfs_filsys_t * fs, unsigned long block)
-{
+int block_of_journal (reiserfs_filsys_t * fs, unsigned long block) {
     if (!is_reiserfs_jr_magic_string (fs->fs_ondisk_sb)) {
 	/* standard journal */
 	if (block >= get_journal_start_must (fs) &&
@@ -328,9 +372,7 @@ int block_of_bitmap (reiserfs_filsys_t * fs, unsigned long block)
 	return (block == (REISERFS_DISK_OFFSET_IN_BYTES / fs->fs_blocksize + 1)) ;
     } else {
 	/* bitmap in */
-	if (block > 2 && block < 3 + get_sb_bmap_nr (fs->fs_ondisk_sb))
-	    return 1;
-	return 0;
+	return (block > 2ul && block < 3ul + get_sb_bmap_nr(fs->fs_ondisk_sb)) ? 1 : 0;
     }
     return 0;
 }
@@ -342,9 +384,6 @@ int not_data_block (reiserfs_filsys_t * fs, unsigned long block)
     if (block_of_bitmap (fs, block))
 	/* it is one of bitmap blocks */
 	return 1;
-
-    if (block > 32768)
-	return 0;
 
     if (block_of_journal (fs, block))
 	/* block of journal area */
@@ -377,26 +416,24 @@ int not_journalable (reiserfs_filsys_t * fs, unsigned long block)
 
 // in reiserfs version 0 (undistributed bitmap)
 // FIXME: what if number of bitmaps is 15?
-int get_journal_old_start_must (reiserfs_filsys_t * fs)
-{
-    return (REISERFS_OLD_DISK_OFFSET_IN_BYTES / fs->fs_blocksize) + 1 + get_sb_bmap_nr (fs->fs_ondisk_sb);
+unsigned int get_journal_old_start_must (reiserfs_filsys_t * fs) {
+    return (REISERFS_OLD_DISK_OFFSET_IN_BYTES / fs->fs_blocksize) + 1 + 
+	get_sb_bmap_nr (fs->fs_ondisk_sb);
 }
 
-int get_journal_new_start_must (reiserfs_filsys_t * fs)
+unsigned int get_journal_new_start_must (reiserfs_filsys_t * fs)
 {
     return (REISERFS_DISK_OFFSET_IN_BYTES / fs->fs_blocksize) + 2;
 }
 
-int get_journal_start_must (reiserfs_filsys_t * fs) {
-//    if (fs->fs_super_bh->b_size == 4096 && fs->fs_super_bh->b_blocknr == 2)
-    if (is_old_sb_location (fs->fs_super_bh->b_blocknr, fs->fs_blocksize))
+unsigned int get_journal_start_must(reiserfs_filsys_t * fs) {
+    if (is_old_sb_location(fs->fs_super_bh->b_blocknr, fs->fs_blocksize))
     	return get_journal_old_start_must (fs);
 
-    return get_journal_new_start_must (fs);
+    return get_journal_new_start_must(fs);
 }
 
-__u64 get_bytes_number (struct item_head * ih, int blocksize)
-{
+__u32 get_bytes_number (struct item_head * ih, int blocksize) {
     switch (get_type (&ih->ih_key)) {
     case TYPE_DIRECT:
 	return get_ih_item_len (ih);
@@ -413,79 +450,6 @@ __u64 get_bytes_number (struct item_head * ih, int blocksize)
 
 int check_item_f (reiserfs_filsys_t * fs, struct item_head * ih, char * item);
 
-#if 0
-/* look at the 16 byte and try to find: does it look like a reiserfs
-   key. Returns 0 if something looks broken in the key, 1 otherwise */
-static int does_key_look_correct (reiserfs_filsys_t * fs, struct key * key)
-{
-    int type;
-
-    if (key->k_dir_id == key->k_objectid ||
-	!key->k_dir_id || key->k_objectid < 2)
-	/* k_dir_id and k_objectid must be different, and > 0 */
-	return 0;
-
-    if (key->u.k_offset_v1.k_offset == 0 &&
-	key->u.k_offset_v1.k_uniqueness == 0)
-	/* looks like a stat data */
-	return 1;
-
-    if (!key->u.k_offset_v1.k_offset ||
-	!key->u.k_offset_v1.k_uniqueness)
-	/* these should be either both 0 or both !0 */
-	return 0;
-
-    type = key->u.k_offset_v2.k_type;
-
-    if (key->u.k_offset_v1.k_uniqueness == 500)
-	/* looks like a key of directory entry */
-	return (type == 0) ? 1 : 0;
-
-    if (type == 15) {
-	/* looks like old key of */
-	if (key->u.k_offset_v1.k_uniqueness == 0xffffffff) {
-	    /* direct item. Check offset */
-	    if (key->u.k_offset_v1.k_offset >= fs->s_blocksize * 4 + 1)
-		/* fixme: this could be more accurate */
-		return 0;
-	    return 1;
-	}
-
-	if (key->u.k_offset_v1.k_uniqueness == 0xfffffffe) {
-	    /* indirect item. Check offset */
-	    if (key->u.k_offset_v1.k_offset % fs->s_blocksize != 1)
-		return 0;
-	    return 1;
-	}
-
-	return 0;
-    }
-
-    /* there should be a new key of indirect or direct item */
-
-    if (type == TYPE_DIRECT) {
-	/* check offset */
-	if (key->u.k_offset_v2.k_offset >= fs->s_blocksize * 4 + 1) /* fixme*/
-	    /* fixme: this could be more accurate */
-	    return 0;
-
-	if ((key->u.k_offset_v2.k_offset - 1) % 8 != 0)
-	    /* "new" direct items get split on the boundary of 8 byte */
-	    return 0;
-	
-	return 1;
-    }
-
-    if (type == TYPE_INDIRECT) {
-	/* check offset */
-	if ((key->u.k_offset_v2.k_offset % fs->s_blocksize) != 1)
-	    return 0;
-	return 1;
-    }
-
-    return 0;
-}
-#endif
 /* ih_key, ih_location and ih_item_len seem correct, check other fields */
 static int does_ih_look_correct (struct item_head * ih)
 {
@@ -522,7 +486,7 @@ static int does_ih_look_correct (struct item_head * ih)
 static int is_bad_indirect (reiserfs_filsys_t * fs, struct item_head * ih, char * item,
 			    check_unfm_func_t check_unfm_func)
 {
-    int i;
+    unsigned int i;
     __u32 * ind = (__u32 *)item;
 
     if (get_ih_item_len (ih) % UNFM_P_SIZE)
@@ -571,7 +535,7 @@ int known_hashes (void)
 int is_properly_hashed (reiserfs_filsys_t * fs,
 			char * name, int namelen, __u32 offset)
 {
-    int i;
+    unsigned int i;
 
     if (namelen == 1 && name[0] == '.') {
 	if (offset == DOT_OFFSET)
@@ -610,30 +574,14 @@ int is_properly_hashed (reiserfs_filsys_t * fs,
 
     if (good_name (reiserfs_hash(fs), name, namelen, offset))
 	return 1;
-#if 0
-    fprintf (stderr, "is_properly_hashed: namelen %d, name \"%s\", offset %u, hash %u\n",
-	    namelen, name_from_entry (name, namelen), GET_HASH_VALUE (offset),
-	    GET_HASH_VALUE (reiserfs_hash(fs) (name, namelen)));
 
-    /* we could also check whether more than one hash function match on the
-       name */
-    for (i = 1; i < sizeof (hashes) / sizeof (hashes [0]); i ++) {
-	if (i == g_real_hash)
-	    continue;
-	if (good_name (hashes[i], name, namelen, deh_offset)) {
-	    die ("bad_hash: at least two hashes got screwed up with this name: \"%s\"",
-		 bad_name (name, namelen));
-	}
-    }
-#endif
     return 0;
 }
 
 
-int find_hash_in_use (char * name, int namelen, __u32 hash_value_masked, int code_to_try_first)
+int find_hash_in_use (char * name, int namelen, __u32 hash_value_masked, unsigned int code_to_try_first)
 {
-    int i;
-
+    unsigned int i;
 
     if (!namelen || !name[0])
 	return UNSET_HASH;
@@ -642,6 +590,7 @@ int find_hash_in_use (char * name, int namelen, __u32 hash_value_masked, int cod
 	if (hash_value_masked == GET_HASH_VALUE (hashes [code_to_try_first].func (name, namelen)))
 	    return code_to_try_first;
     }
+    
     for (i = 1; i < HASH_AMOUNT; i ++) {
 	if (i == code_to_try_first)
 	    continue;
@@ -654,8 +603,7 @@ int find_hash_in_use (char * name, int namelen, __u32 hash_value_masked, int cod
 }
 
 
-char * code2name (int code)
-{
+char * code2name(unsigned int code) {
     if (code >= HASH_AMOUNT || code < 0)
         return 0;
     return hashes [code].name;
@@ -664,7 +612,7 @@ char * code2name (int code)
 
 int func2code (hashf_t func)
 {
-    int i;
+    unsigned int i;
     
     for (i = 0; i < HASH_AMOUNT; i ++)
 	if (func == hashes [i].func)
@@ -675,8 +623,7 @@ int func2code (hashf_t func)
 }
 
 
-hashf_t code2func (int code)
-{
+hashf_t code2func(unsigned int code) {
     if (code >= HASH_AMOUNT) {
 	reiserfs_warning (stderr, "code2func: wrong hash code %d.\n"
 			  "Using default %s hash function\n", code,
@@ -687,9 +634,8 @@ hashf_t code2func (int code)
 }
 
 
-hashf_t name2func (char * hash)
-{
-    int i;
+hashf_t name2func (char * hash) {
+    unsigned int i;
  
     for (i = 0; i < HASH_AMOUNT; i ++)
 	if (!strcmp (hash, hashes [i].name))
@@ -730,9 +676,9 @@ static int is_bad_directory (reiserfs_filsys_t * fs, struct item_head * ih, char
 	prev_location = get_deh_location (deh);
 	    
 	namelen = name_in_entry_length (ih, deh, i);
-	if (namelen > REISERFS_MAX_NAME_LEN (fs->fs_blocksize)) {
+	if (namelen > (int)REISERFS_MAX_NAME_LEN(fs->fs_blocksize))
 	    return 1;
-	}
+	
 	if (get_deh_offset (deh) <= prev_offset)
 	    return 1;
 	prev_offset = get_deh_offset (deh);
@@ -980,8 +926,7 @@ int key_format (const struct key * key)
 }
 
 
-loff_t get_offset (const struct key * key)
-{
+unsigned long long get_offset (const struct key * key) {
     if (key_format (key) == KEY_FORMAT_1)
 	return get_key_offset_v1 (key);
 
@@ -1352,8 +1297,9 @@ void mark_objectid_used (reiserfs_filsys_t * fs, __u32 objectid)
 }
 
 
-int is_blocksize_correct (int blocksize)
+int is_blocksize_correct (unsigned int blocksize)
 {
-    return ((blocksize == 0) || (blocksize % 1024) ? 0 : 1);
+    return ((blocksize == 0) || (((blocksize & -blocksize) == blocksize) 
+	&& (blocksize >=512) && (blocksize <= 8192)));
 }
 

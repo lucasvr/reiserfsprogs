@@ -20,7 +20,7 @@ VPATH = @srcdir@
 pkgdatadir = $(datadir)/@PACKAGE@
 pkglibdir = $(libdir)/@PACKAGE@
 pkgincludedir = $(includedir)/@PACKAGE@
-top_builddir = ..
+top_builddir = ../..
 
 am__cd = CDPATH="$${ZSH_VERSION+.}$(PATH_SEPARATOR)" && cd
 INSTALL = @INSTALL@
@@ -104,43 +104,35 @@ sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 sysconfdir = @sysconfdir@
 target_alias = @target_alias@
-sbin_PROGRAMS = resize_reiserfs
+sbin_PROGRAMS = reiserfs_corrupter
 
-resize_reiserfs_SOURCES = fe.c resize_reiserfs.c do_shrink.c resize.h
-man_MANS = resize_reiserfs.8
-EXTRA_DIST = $(man_MANS)
-
+SOURCES = corrupter.c 
 LDADD = $(top_srcdir)/lib/libmisc.a $(top_srcdir)/reiserfscore/libcore.a
-subdir = resize_reiserfs
+subdir = tests/PROGS
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
 CONFIG_HEADER = $(top_builddir)/include/config.h
 CONFIG_CLEAN_FILES =
-sbin_PROGRAMS = resize_reiserfs$(EXEEXT)
+sbin_PROGRAMS = reiserfs_corrupter$(EXEEXT)
 PROGRAMS = $(sbin_PROGRAMS)
 
-am_resize_reiserfs_OBJECTS = fe.$(OBJEXT) resize_reiserfs.$(OBJEXT) \
-	do_shrink.$(OBJEXT)
-resize_reiserfs_OBJECTS = $(am_resize_reiserfs_OBJECTS)
-resize_reiserfs_LDADD = $(LDADD)
-resize_reiserfs_DEPENDENCIES = $(top_srcdir)/lib/libmisc.a \
+reiserfs_corrupter_SOURCES = reiserfs_corrupter.c
+reiserfs_corrupter_OBJECTS = reiserfs_corrupter.$(OBJEXT)
+reiserfs_corrupter_LDADD = $(LDADD)
+reiserfs_corrupter_DEPENDENCIES = $(top_srcdir)/lib/libmisc.a \
 	$(top_srcdir)/reiserfscore/libcore.a
-resize_reiserfs_LDFLAGS =
+reiserfs_corrupter_LDFLAGS =
 
 DEFAULT_INCLUDES =  -I. -I$(srcdir) -I$(top_builddir)/include
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
-@AMDEP_TRUE@DEP_FILES = ./$(DEPDIR)/do_shrink.Po ./$(DEPDIR)/fe.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/resize_reiserfs.Po
+@AMDEP_TRUE@DEP_FILES = ./$(DEPDIR)/reiserfs_corrupter.Po
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 CCLD = $(CC)
 LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
-DIST_SOURCES = $(resize_reiserfs_SOURCES)
-
-NROFF = nroff
-MANS = $(man_MANS)
+DIST_SOURCES = reiserfs_corrupter.c
 DIST_COMMON = Makefile.am Makefile.in
-SOURCES = $(resize_reiserfs_SOURCES)
+SOURCES = corrupter.c 
 
 all: all-am
 
@@ -148,7 +140,7 @@ all: all-am
 .SUFFIXES: .c .o .obj
 $(srcdir)/Makefile.in:  Makefile.am  $(top_srcdir)/configure.in $(ACLOCAL_M4)
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  resize_reiserfs/Makefile
+	  $(AUTOMAKE) --gnu  tests/PROGS/Makefile
 Makefile:  $(srcdir)/Makefile.in  $(top_builddir)/config.status
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe)
 sbinPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
@@ -175,9 +167,9 @@ uninstall-sbinPROGRAMS:
 
 clean-sbinPROGRAMS:
 	-test -z "$(sbin_PROGRAMS)" || rm -f $(sbin_PROGRAMS)
-resize_reiserfs$(EXEEXT): $(resize_reiserfs_OBJECTS) $(resize_reiserfs_DEPENDENCIES) 
-	@rm -f resize_reiserfs$(EXEEXT)
-	$(LINK) $(resize_reiserfs_LDFLAGS) $(resize_reiserfs_OBJECTS) $(resize_reiserfs_LDADD) $(LIBS)
+reiserfs_corrupter$(EXEEXT): $(reiserfs_corrupter_OBJECTS) $(reiserfs_corrupter_DEPENDENCIES) 
+	@rm -f reiserfs_corrupter$(EXEEXT)
+	$(LINK) $(reiserfs_corrupter_LDFLAGS) $(reiserfs_corrupter_OBJECTS) $(reiserfs_corrupter_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT) core *.core
@@ -185,9 +177,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/do_shrink.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fe.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/resize_reiserfs.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/reiserfs_corrupter.Po@am__quote@
 
 distclean-depend:
 	-rm -rf ./$(DEPDIR)
@@ -214,53 +204,6 @@ distclean-depend:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(COMPILE) -c `if test -f '$<'; then $(CYGPATH_W) '$<'; else $(CYGPATH_W) '$(srcdir)/$<'; fi`
 uninstall-info-am:
-
-man8dir = $(mandir)/man8
-install-man8: $(man8_MANS) $(man_MANS)
-	@$(NORMAL_INSTALL)
-	$(mkinstalldirs) $(DESTDIR)$(man8dir)
-	@list='$(man8_MANS) $(dist_man8_MANS) $(nodist_man8_MANS)'; \
-	l2='$(man_MANS) $(dist_man_MANS) $(nodist_man_MANS)'; \
-	for i in $$l2; do \
-	  case "$$i" in \
-	    *.8*) list="$$list $$i" ;; \
-	  esac; \
-	done; \
-	for i in $$list; do \
-	  if test -f $(srcdir)/$$i; then file=$(srcdir)/$$i; \
-	  else file=$$i; fi; \
-	  ext=`echo $$i | sed -e 's/^.*\\.//'`; \
-	  case "$$ext" in \
-	    8*) ;; \
-	    *) ext='8' ;; \
-	  esac; \
-	  inst=`echo $$i | sed -e 's/\\.[0-9a-z]*$$//'`; \
-	  inst=`echo $$inst | sed -e 's/^.*\///'`; \
-	  inst=`echo $$inst | sed '$(transform)'`.$$ext; \
-	  echo " $(INSTALL_DATA) $$file $(DESTDIR)$(man8dir)/$$inst"; \
-	  $(INSTALL_DATA) $$file $(DESTDIR)$(man8dir)/$$inst; \
-	done
-uninstall-man8:
-	@$(NORMAL_UNINSTALL)
-	@list='$(man8_MANS) $(dist_man8_MANS) $(nodist_man8_MANS)'; \
-	l2='$(man_MANS) $(dist_man_MANS) $(nodist_man_MANS)'; \
-	for i in $$l2; do \
-	  case "$$i" in \
-	    *.8*) list="$$list $$i" ;; \
-	  esac; \
-	done; \
-	for i in $$list; do \
-	  ext=`echo $$i | sed -e 's/^.*\\.//'`; \
-	  case "$$ext" in \
-	    8*) ;; \
-	    *) ext='8' ;; \
-	  esac; \
-	  inst=`echo $$i | sed -e 's/\\.[0-9a-z]*$$//'`; \
-	  inst=`echo $$inst | sed -e 's/^.*\///'`; \
-	  inst=`echo $$inst | sed '$(transform)'`.$$ext; \
-	  echo " rm -f $(DESTDIR)$(man8dir)/$$inst"; \
-	  rm -f $(DESTDIR)$(man8dir)/$$inst; \
-	done
 
 ETAGS = etags
 ETAGSFLAGS =
@@ -317,7 +260,7 @@ distclean-tags:
 	-rm -f TAGS ID GTAGS GRTAGS GSYMS GPATH tags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 
-top_distdir = ..
+top_distdir = ../..
 distdir = $(top_distdir)/$(PACKAGE)-$(VERSION)
 
 distdir: $(DISTFILES)
@@ -349,10 +292,10 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-am
-all-am: Makefile $(PROGRAMS) $(MANS)
+all-am: Makefile $(PROGRAMS)
 
 installdirs:
-	$(mkinstalldirs) $(DESTDIR)$(sbindir) $(DESTDIR)$(man8dir)
+	$(mkinstalldirs) $(DESTDIR)$(sbindir)
 
 install: install-am
 install-exec: install-exec-am
@@ -395,13 +338,13 @@ info: info-am
 
 info-am:
 
-install-data-am: install-man
+install-data-am:
 
 install-exec-am: install-sbinPROGRAMS
 
 install-info: install-info-am
 
-install-man: install-man8
+install-man:
 
 installcheck-am:
 
@@ -421,21 +364,18 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-info-am uninstall-man uninstall-sbinPROGRAMS
-
-uninstall-man: uninstall-man8
+uninstall-am: uninstall-info-am uninstall-sbinPROGRAMS
 
 .PHONY: CTAGS GTAGS all all-am check check-am clean clean-generic \
 	clean-sbinPROGRAMS ctags distclean distclean-compile \
 	distclean-depend distclean-generic distclean-tags distdir dvi \
 	dvi-am info info-am install install-am install-data \
 	install-data-am install-exec install-exec-am install-info \
-	install-info-am install-man install-man8 install-sbinPROGRAMS \
-	install-strip installcheck installcheck-am installdirs \
-	maintainer-clean maintainer-clean-generic mostlyclean \
-	mostlyclean-compile mostlyclean-generic pdf pdf-am ps ps-am \
-	tags uninstall uninstall-am uninstall-info-am uninstall-man \
-	uninstall-man8 uninstall-sbinPROGRAMS
+	install-info-am install-man install-sbinPROGRAMS install-strip \
+	installcheck installcheck-am installdirs maintainer-clean \
+	maintainer-clean-generic mostlyclean mostlyclean-compile \
+	mostlyclean-generic pdf pdf-am ps ps-am tags uninstall \
+	uninstall-am uninstall-info-am uninstall-sbinPROGRAMS
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

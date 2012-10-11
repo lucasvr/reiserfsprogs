@@ -1,6 +1,8 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
+
 #include "fsck.h"
 
 void pass_4_check_unaccessed_items (void)
@@ -58,6 +60,7 @@ void pass_4_check_unaccessed_items (void)
 	pathrelse (&path);
 
     cont:
+	/* to make gcc 3.2 do not sware here */;
     }
 
     pathrelse (&path);
@@ -77,7 +80,7 @@ void pass_4_check_unaccessed_items (void)
     /* write all dirty blocks */
     fsck_progress ("Flushing..");
     fs->fs_dirt = 1;
-    flush_objectid_map (proper_id_map (fs), fs);
+    id_map_flush(proper_id_map (fs), fs);
     reiserfs_flush_to_ondisk_bitmap (fs->fs_bitmap2, fs);
     reiserfs_flush (fs);
     fsck_progress ("finished\n");

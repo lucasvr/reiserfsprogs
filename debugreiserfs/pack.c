@@ -1,6 +1,6 @@
-
 /*
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "debugreiserfs.h"
@@ -147,7 +147,7 @@ static int should_pack_indirect (__u32 * ind_item, int unfm_num)
 static void pack_indirect (struct packed_item * pi, struct buffer_head * bh, 
 			   struct item_head * ih)
 {
-    int i;
+    unsigned int i;
     __u32 * ind_item;
     __u16 len;
 
@@ -305,14 +305,14 @@ static void pack_stat_data (struct packed_item * pi, struct buffer_head * bh,
             set_pi_mask (pi, get_pi_mask (pi) | NLINK_BITS_32);
 	    nlink32 = sd->sd_nlink;
 	} else {
-            /* This is required to deal w/ big endian systems */
+            /* This is required to deal with big endian systems */
 	    nlink16 = cpu_to_le16 ((__u16)sd_v2_nlink (sd));
 	}
 	if (sd_v2_size (sd) > 0xffffffff) {
             set_pi_mask (pi, get_pi_mask (pi) | SIZE_BITS_64);
 	    size64 = sd->sd_size;
 	} else {
-            /* This is required to deal w/ big endian systems */
+            /* This is required to deal with big endian systems */
 	    size32 = cpu_to_le32 ((__u32)sd_v2_size (sd));
 	}
 
@@ -561,11 +561,11 @@ static void send_block (reiserfs_filsys_t * fs, struct buffer_head * bh, int sen
 /* super block, journal, bitmaps */
 static void pack_frozen_data (reiserfs_filsys_t * fs)
 {
-    int i;
     struct buffer_head * bh;
     unsigned long block;
     __u16 magic16;
     int sent_journal_start_magic = 0;
+    unsigned int i;
     
     if (is_reiserfs_jr_magic_string(fs->fs_ondisk_sb) &&
 	get_jp_journal_dev(sb_jp(fs->fs_ondisk_sb)) &&
@@ -646,12 +646,12 @@ static void pack_frozen_data (reiserfs_filsys_t * fs)
 /* pack all "not data blocks" and correct leaf */
 void pack_partition (reiserfs_filsys_t * fs)
 {
-    int i;
     struct buffer_head * bh;
     __u32 magic32;
     __u16 blocksize;
     __u16 magic16;
     unsigned long done = 0, total;
+    unsigned int i;
     
 
     magic32 = REISERFS_SUPER_MAGIC;
@@ -724,6 +724,9 @@ void pack_one_block (reiserfs_filsys_t * fs, unsigned long block)
     
     bh = bread (fs->fs_dev, block, fs->fs_blocksize);
 
+    if (!bh) 
+	return;
+
     if (who_is_this (bh->b_data, bh->b_size) == THE_LEAF)
 	pack_leaf (fs, bh);
     else
@@ -737,94 +740,4 @@ void pack_one_block (reiserfs_filsys_t * fs, unsigned long block)
 
     fprintf (stderr, "Done\n");
 }
-
-
-#if 0
-//
-// this test program has two modes: 'pack file blocknr'
-// and 'unpack file'
-// in the first mode blocknr-th 4k block of the 'file' will be packed out to stdout
-// the the second mode standard input will be converted to the reiserfs leaf on 'file'
-//
-static int do_unpack (char * file)
-{
-    char * buf;
-    int fd;
-
-    fd = open (file, O_RDONLY);
-    if (fd == -1) {
-	perror ("open failed");
-	return 0;
-    }
-    
-    buf = malloc (4096);
-    if (!buf) {
-	perror ("malloc failed");
-	return 0;
-    }
-
-    fread (buf, 4096, 1, stdin);
-    if (!feof (stdin)) {
-	printf ("fread returned not eof\n");
-	return 0;
-    }
-
-    unpack_leaf (buf, fd);
-
-    free (buf);
-    close (fd);
-    return 0;
-}
-
-static int do_pack (char * file, unsigned long block)
-{
-    int fd;
-    struct buffer_head * bh;
-    char * buf;
-    int len;
-
-    fprintf (stderr, "dumping block %d of the \"%s\"\n", block, file);
-
-    fd = open (file, O_RDONLY);
-    if (fd == -1) {
-	perror ("open failed");
-	return 0;
-    }
-    
-    bh = bread (fd, block, 4096);
-    if (!bh) {
-	fprintf (stderr, "bread failed\n");
-	return 0;
-    }
-
-    if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF) {
-	fprintf (stderr, "block %d is not a leaf\n", block);
-	return 0;
-    }
-
-    len = pack_leaf (bh, buf);
-    fwrite (buf, len, 1, stdout);
-
-    free (buf);
-    close (fd);
-    return 0;
-}
-
-
-int main (int argc, char ** argv)
-{
-    if (argc == 3 && !strcmp (argv[1], "unpack"))
-	return do_unpack (argv[2]);
-
-    if (argc == 4 && !strcmp (argv[1], "pack"))
-	return do_pack (argv[2], atoi (argv[3]));
-
-    fprintf (stderr, "Usage: \n\t%s pack filename block\nor\n"
-	     "\t%s unpack filename\n", argv[0], argv[0]);
-    return 0;
-}
-
-#endif /* 0 */
-
-
 

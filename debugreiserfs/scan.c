@@ -1,5 +1,6 @@
 /*
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "debugreiserfs.h"
@@ -169,7 +170,7 @@ static void add_name (struct saved_name * name, struct saved_name * name_in)
 /* take each name matching to a given pattern, */
 static void scan_for_name (struct buffer_head * bh)
 {
-    int i, j;
+    int i, j, i_num;
     struct item_head * ih;
     struct reiserfs_de_head * deh;
     int namelen;
@@ -181,7 +182,8 @@ static void scan_for_name (struct buffer_head * bh)
     int ih_entry_count = 0;
 
     ih = B_N_PITEM_HEAD (bh, 0);
-    for (i = 0; i < B_NR_ITEMS (bh); i ++, ih ++) {
+    i_num = leaf_item_number_estimate(bh);
+    for (i = 0; i < i_num; i ++, ih ++) {
 	if (!is_direntry_ih (ih))
 	    continue;
 	if (is_it_bad_item (fs, ih, B_I_PITEM (bh, ih), 0, 1))
@@ -254,14 +256,15 @@ static void scan_for_name (struct buffer_head * bh)
    item in the sorted list of items of a file */
 static void scan_items (struct buffer_head * bh)
 {
-    int i;
+    int i, i_num;
     struct item_head * ih;
     struct saved_name * name_in_store;
     void * res;
 
 
     ih = B_N_PITEM_HEAD (bh, 0);
-    for (i = 0; i < B_NR_ITEMS (bh); i ++, ih ++) {
+    i_num = leaf_item_number_estimate(bh);
+    for (i = 0; i < i_num; i ++, ih ++) {
 	res = tfind (&ih->ih_key, &key_index, comp_pointed);
 	if (!res)
 	    /* there were no names pointing to this key */
@@ -340,7 +343,7 @@ static void do_append (struct item_head * ih, void * data)
 {
     int i;
     int padd;
-    loff_t off = get_offset (&ih->ih_key);
+    unsigned long long off = get_offset (&ih->ih_key);
 
     if (is_indirect_ih (ih)) {
 
@@ -354,8 +357,7 @@ static void do_append (struct item_head * ih, void * data)
 	map.head_len += (padd + I_UNFM_NUM (ih));
 
     } else if (is_direct_ih (ih)) {
-	int tail_start;
-	int skip;
+	unsigned int tail_start, skip;
 	
 	// find correct tail first 
 	tail_start = (off & ~(fs->fs_blocksize - 1)) + 1;
@@ -391,18 +393,18 @@ static void do_append (struct item_head * ih, void * data)
 // map contains 
 static void do_overwrite (struct item_head * ih, void * data)
 {
-    int skip; // now may bytes/pointers to skip 
-    int to_compare;
-    int to_append;
-    loff_t off = get_offset (&ih->ih_key);
-    char * p;
+    unsigned long long off, skip;
+    int to_compare, to_append;
     struct item_head tmp_ih;
+    char * p;
+    
+    off = get_offset (&ih->ih_key);
     
     if (is_indirect_ih (ih)) {
 
 	skip = (off - 1) / fs->fs_blocksize;
-	to_compare = (map.head_len - skip > I_UNFM_NUM (ih)) ? I_UNFM_NUM (ih) :
-	    (map.head_len - skip);
+	to_compare = (map.head_len - skip > I_UNFM_NUM (ih)) ? 
+	    I_UNFM_NUM (ih) : (map.head_len - skip);
 	to_append = I_UNFM_NUM (ih) - to_compare;
 	
 	p = (char *)map.head + skip * 4;
@@ -418,7 +420,7 @@ static void do_overwrite (struct item_head * ih, void * data)
 	}
 
     } else if (is_direct_ih (ih)) {
-	int tail_start;
+	unsigned int tail_start;
 	int i;
 
 	// find correct tail first 
@@ -652,12 +654,16 @@ void print_map(reiserfs_filsys_t * fs) {
 
     print_items(fp, fs);
     
-    if (fp != stdin)
+    if (fp != stdin) {
 	fclose (fp); 
+	fp = NULL;
+    }
 }
 
 
 static FILE *fp = 0;
+FILE * log_to;
+
 static void save_items(const void *nodep, VISIT value, int level) {
     struct saved_item *item;
     
@@ -683,7 +689,7 @@ static void make_map(const void *nodep, VISIT value, int level) {
     if (value == leaf || value == postorder) {
 	while (name) {
 	    asprintf(&file_name, "%s.%d", map_file(fs), ++nr);
-	    reiserfs_warning (stdout, "%d - (%d): [%K]:\"%s\": stored in the %s\n", 
+	    reiserfs_warning (log_to, "%d - (%d): [%K]:\"%s\": stored in the %s\n", 
 		nr, name->count, &name->parent_dirid, name->name, file_name);
 	    
 	    if (fp == 0) {
@@ -697,6 +703,7 @@ static void make_map(const void *nodep, VISIT value, int level) {
 
 	    name = name->name_next;
 	    fclose(fp);
+	    fp = NULL;
 	    free(file_name);
 	}
     }
@@ -800,25 +807,23 @@ static void look_for_name (reiserfs_filsys_t * fs)
     }
 }
 
-
-FILE * log;
-
 static void scan_for_key (struct buffer_head * bh, struct key * key)
 {
-    int i, j;
+    int i, j, i_num;
     struct item_head * ih;
     struct reiserfs_de_head * deh;
     int min_entry_size = 1;
     int ih_entry_count = 0;
 
-
     ih = B_N_PITEM_HEAD (bh, 0);
-    for (i = 0; i < B_NR_ITEMS (bh); i ++, ih ++) {
-	if ((get_key_dirid (&ih->ih_key) == get_key_dirid (key) || 
-	     (int)get_key_dirid (key) == -1) &&
-	    (get_key_objectid (&ih->ih_key) == get_key_objectid (key) || 
-	     (int)get_key_objectid (key) == -1)) {
-	    reiserfs_warning (log, "%d-th item of block %lu is item of file %K: %H\n",
+    i_num = leaf_item_number_estimate(bh);
+    for (i = 0; i < i_num; i ++, ih ++) {
+	if ((get_key_dirid(&ih->ih_key) == get_key_dirid(key) || 
+	     get_key_dirid(key) == ~0ul) &&
+	    (get_key_objectid(&ih->ih_key) == get_key_objectid(key) || 
+	     get_key_objectid(key) == ~0ul)) 
+	{
+	    reiserfs_warning(log_to, "%d-th item of block %lu is item of file %K: %H\n",
 			      i, bh->b_blocknr, key, ih);
 	}
 	if (!is_direntry_ih (ih))
@@ -835,7 +840,7 @@ static void scan_for_key (struct buffer_head * bh, struct key * key)
 	for (j = 0; j < ih_entry_count; j ++, deh ++) {
 	    if ((get_deh_dirid (deh) == get_key_dirid (key) || (int)get_key_dirid (key) == -1) &&
 		(get_deh_objectid (deh) == get_key_objectid (key) || (int)get_key_objectid (key) == -1)) {
-		reiserfs_warning (log, "dir item %d (%H) of block %lu has "
+		reiserfs_warning (log_to, "dir item %d (%H) of block %lu has "
 				  "entry (%d-th) %.*s pointing to %K\n",
 				  i, ih, bh->b_blocknr, j,
 				  name_in_entry_length (ih, deh, j), name_in_entry (deh, j), key);
@@ -857,12 +862,6 @@ void do_scan (reiserfs_filsys_t * fs)
     struct key key = {0, 0, };
     unsigned long done, total;
 
-
-    if (debug_mode (fs) == DO_SCAN_JOURNAL) {
-	scan_journal (fs);
-	return;
-    }
-
     if (debug_mode (fs) == DO_LOOK_FOR_NAME) {
 	/* look for a file in using tree algorithms */
 	look_for_name (fs);
@@ -879,7 +878,7 @@ void do_scan (reiserfs_filsys_t * fs)
 
     total = reiserfs_bitmap_ones (input_bitmap (fs));
 
-    log = fopen ("scan.log", "w+");
+    log_to = fopen ("scan.log", "w+");
     printf ("Log file 'scan.log' is opened\n");
 
     if (debug_mode (fs) == DO_SCAN_FOR_NAME) {
@@ -928,6 +927,7 @@ void do_scan (reiserfs_filsys_t * fs)
 	    reiserfs_bitmap_clear_bit (input_bitmap (fs), i);
 	    break;
 	case THE_LEAF:
+	case HAS_IH_ARRAY:
 	    if (debug_mode (fs) == DO_SCAN_FOR_NAME) {
 		scan_for_name (bh);
 	    } else if (get_key_dirid (&key)) {
@@ -959,6 +959,8 @@ void do_scan (reiserfs_filsys_t * fs)
     total = reiserfs_bitmap_ones (input_bitmap (fs));
     printf ("%ld bits set in bitmap\n", total);
     for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
+	int type;
+	
 	if (!reiserfs_bitmap_test_bit (input_bitmap (fs), i))
 	    continue;
 	bh = bread (fs->fs_dev, i, fs->fs_blocksize);
@@ -966,7 +968,8 @@ void do_scan (reiserfs_filsys_t * fs)
 	    printf ("could not read block %lu\n", i);
 	    continue;
 	}
-	if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF) {
+	type = who_is_this (bh->b_data, bh->b_size);
+	if (type != THE_LEAF && type != HAS_IH_ARRAY) {
 	    brelse (bh);
 	    continue;
 	}

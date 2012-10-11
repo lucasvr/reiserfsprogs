@@ -7,5 +7,5 @@ ufile.c check_tree.c info.c super.c fsck.h
 man_MANS = reiserfsck.8
 EXTRA_DIST = $(man_MANS)
 
-LDADD = $(top_srcdir)/lib/libmisc.a $(top_srcdir)/reiserfscore/libcore.a
+LDADD = $(LDFLAGS) $(top_srcdir)/lib/libmisc.a $(top_srcdir)/reiserfscore/libcore.a
 

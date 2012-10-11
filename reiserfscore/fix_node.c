@@ -1,6 +1,6 @@
 /*
- * Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Hans Reiser, see
- * reiserfs/README for licensing and copyright details
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 /**
@@ -138,11 +138,7 @@ static void create_virtual_node (struct tree_balance * tb, int h)
     int new_num;
     struct buffer_head * Sh;	/* this comes from tb->S[h] */
 
-    struct item_head * temp_ih;
-
     Sh = PATH_H_PBUFFER (tb->tb_path, h);
-
-    temp_ih = B_N_PITEM_HEAD (PATH_PLAST_BUFFER (tb->tb_path), B_NR_ITEMS (PATH_PLAST_BUFFER (tb->tb_path)) - 1);
 
     /* size of changed node */
     vn->vn_size = MAX_CHILD_SIZE (Sh->b_size) - get_blkh_free_space (B_BLK_HEAD (Sh)) + tb->insert_size[h];
@@ -1030,7 +1026,7 @@ static int are_leaves_removable (struct tree_balance * tb, int lfree, int rfree)
     
     }
 
-    if (MAX_CHILD_SIZE (S0->b_size) + vn->vn_size <= rfree + lfree + ih_size) {
+    if ((int)MAX_CHILD_SIZE(S0->b_size) + vn->vn_size <= rfree + lfree + ih_size) {
 	set_parameters (tb, 0, -1, -1, -1, NULL, -1, -1);
 	return 1;  
     }
@@ -1422,19 +1418,16 @@ static inline int can_node_be_removed (int mode, int lfree, int sfree, int rfree
 {
     struct buffer_head * Sh = PATH_H_PBUFFER (tb->tb_path, h);
     int levbytes = tb->insert_size[h];
-    struct item_head * ih;
     struct item_head * r_ih = NULL;
   
-    ih = B_N_PITEM_HEAD (Sh, 0);
     if ( tb->CFR[h] )
 	r_ih = (struct item_head *)B_N_PDELIM_KEY(tb->CFR[h],tb->rkey[h]);
   
-    if (
-	lfree + rfree + sfree < MAX_CHILD_SIZE(Sh->b_size) + levbytes
+    if (lfree + rfree + sfree < (int)(MAX_CHILD_SIZE(Sh->b_size) + levbytes
 	/* shifting may merge items which might save space */
 	- (( ! h && is_left_mergeable (tb->tb_fs, tb->tb_path) == 1 ) ? IH_SIZE : 0)
 	- (( ! h && r_ih && is_right_mergeable (tb->tb_fs, tb->tb_path) == 1 ) ? IH_SIZE : 0)
-	+ (( h ) ? KEY_SIZE : 0))
+	+ (( h ) ? KEY_SIZE : 0)))
     {
 	/* node can not be removed */
 	if (sfree >= levbytes ) /* new item fits into node S[h] without any shifting */
@@ -1777,14 +1770,11 @@ static int dc_check_balance_internal (struct tree_balance * tb, int h)
   /* Sh is the node whose balance is currently being checked,
      and Fh is its father.  */
     struct buffer_head * Sh, * Fh;
-    int maxsize,
-	n_ret_value;
+    int n_ret_value;
     int lfree, rfree /* free space in L and R */;
 
     Sh = PATH_H_PBUFFER (tb->tb_path, h); 
     Fh = PATH_H_PPARENT (tb->tb_path, h); 
-
-    maxsize = MAX_CHILD_SIZE(Sh->b_size); 
 
     /* using tb->insert_size[h], which is negative in this case,
        create_virtual_node calculates: new_nr_item = number of items node
@@ -1934,19 +1924,14 @@ static int dc_check_balance_leaf (struct tree_balance * tb, int h)
        bytes. */
     int levbytes;
     /* the maximal item size */
-    int maxsize,
-	n_ret_value;
-    /* S0 is the node whose balance is currently being checked, and F0 is its
-       father.  */
-    struct buffer_head * S0, * F0;
+    int n_ret_value;
+    /* F0 is the parent of the node whose balance is currently being checked */
+    struct buffer_head * F0;
     int lfree, rfree /* free space in L and R */;
     
-    S0 = PATH_H_PBUFFER (tb->tb_path, 0);
     F0 = PATH_H_PPARENT (tb->tb_path, 0);
 
     levbytes = tb->insert_size[h];
-
-    maxsize = MAX_CHILD_SIZE(S0->b_size); 	/* maximal possible size of an item */
 
     if ( ! F0 ) {
 	/* S[0] is the root now. */

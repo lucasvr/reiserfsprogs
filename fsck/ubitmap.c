@@ -1,5 +1,6 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "fsck.h"

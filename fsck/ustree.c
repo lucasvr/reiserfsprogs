@@ -1,6 +1,8 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
+
 #include "fsck.h"
 
 
@@ -50,7 +52,7 @@ void reiserfsck_insert_item (struct path * path, struct item_head * ih, const ch
 static void free_unformatted_nodes (struct item_head * ih, struct buffer_head * bh)
 {
     __u32 * punfm = (__u32 *)B_I_PITEM (bh, ih);
-    int i;
+    unsigned int i;
 
     for (i = 0; i < I_UNFM_NUM (ih); i ++, punfm ++)
 	if (*punfm != 0) {
@@ -66,7 +68,6 @@ static void free_unformatted_nodes (struct item_head * ih, struct buffer_head * 
 	    reiserfs_free_block (fs, le32_to_cpu (*punfm));
 	}
 }
-
 
 void reiserfsck_delete_item (struct path * path, int temporary)
 {
@@ -201,7 +202,7 @@ static void erase (void)
 }
 
 void pass_through_tree (reiserfs_filsys_t * fs, do_after_read_t action1,
-			do_on_full_path_t action2)
+			do_on_full_path_t action2, int depth)
 {
     struct buffer_head * path[MAX_HEIGHT] = {0,};
     int total[MAX_HEIGHT] = {0,};
@@ -227,7 +228,7 @@ void pass_through_tree (reiserfs_filsys_t * fs, do_after_read_t action1,
 	    fsck_log ("%s: block %lu specified in badblock list found in tree, whole subtree skipped\n",
 		__FUNCTION__, block);
 	    fsck_data (fs)->check.bad_nodes++;
-	    one_more_corruption (fs, fatal);
+	    one_more_corruption (fs, FATAL);
 
 	    if (h == 0) {
 		brelse (path[h]);
@@ -255,6 +256,10 @@ void pass_through_tree (reiserfs_filsys_t * fs, do_after_read_t action1,
 		    }
 		}
 	}
+
+	/* Time to stop. */
+	if (h == depth)
+	    problem ++;
 
         if (problem || is_leaf_node (path[h])) {
             if (!problem && action2)

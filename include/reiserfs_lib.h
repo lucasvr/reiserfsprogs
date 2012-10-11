@@ -1,5 +1,6 @@
 /*
- *  Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ *  Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ *  reiserfsprogs/README
  */
 
 #ifndef REISERFS_LIB_H
@@ -24,7 +25,7 @@ typedef struct _bitmap reiserfs_bitmap_t;
 typedef __u32 (*hashf_t) (const char *, int);
 
 struct reiserfs_filsys {
-    int fs_blocksize;
+    unsigned int fs_blocksize;
     int fs_format;	      /* on-disk format version */
     hashf_t fs_hash_function; /* pointer to function which is used to sort
 				 names in directory. It is set by
@@ -76,7 +77,7 @@ typedef struct _transaction reiserfs_trans_t;
 
 void init_tb_struct (struct tree_balance * tb, reiserfs_filsys_t *, struct path * path, int size);
 
-reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int * error, void * vp);
+reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int * error, void * vp, int skip_check);
 reiserfs_filsys_t * reiserfs_create (char * filename, int version, unsigned long block_count,
 				     int block_size, int default_journal, int new_format);
 void reiserfs_flush (reiserfs_filsys_t *);
@@ -92,7 +93,7 @@ void reiserfs_read_bitmap_blocks (reiserfs_filsys_t *);
 void reiserfs_free_bitmap_blocks (reiserfs_filsys_t *);
 */
 int no_reiserfs_found (reiserfs_filsys_t *);
-int is_block_count_correct (unsigned long block_of_super_block, int block_size,
+int is_block_count_correct (unsigned long block_of_super_block, unsigned int block_size,
 	unsigned long block_count, unsigned long journal_size);
 //unsigned long min_block_amount (int block_size, unsigned long journal_size);
 unsigned long get_size_of_journal_or_reserved_area (struct reiserfs_super_block * sb);
@@ -113,9 +114,9 @@ void reiserfs_insert_item (reiserfs_filsys_t *, struct path * path,
 int reiserfs_locate_entry (reiserfs_filsys_t *, struct key * dir, char * name,
 			   struct path * path);
 int reiserfs_find_entry (reiserfs_filsys_t *, struct key * dir, char * name,
-			 int * min_gen_counter, struct key * key);
+			 unsigned int * min_gen_counter, struct key * key);
 int reiserfs_add_entry (reiserfs_filsys_t *, struct key * dir, char * name, int name_len,
-			struct key * key, int fsck_need);
+			struct key * key, __u16 fsck_need);
 
 
 /*int reiserfs_bin_search (void * key, void * base, int num, int width,
@@ -180,8 +181,8 @@ int reiserfs_bitmap_find_zero_bit (reiserfs_bitmap_t * bm, unsigned long * start
 /*int reiserfs_flush_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys_t *);*/
 void reiserfs_bitmap_zero (reiserfs_bitmap_t * bm);
 void reiserfs_bitmap_fill (reiserfs_bitmap_t * bm);
-int reiserfs_bitmap_ones (reiserfs_bitmap_t * bm);
-int reiserfs_bitmap_zeros (reiserfs_bitmap_t * bm);
+unsigned int reiserfs_bitmap_ones (reiserfs_bitmap_t * bm);
+unsigned int reiserfs_bitmap_zeros (reiserfs_bitmap_t * bm);
 
 FILE * open_file(char * filename, char * option);
 void close_file(FILE * fp);
@@ -210,8 +211,7 @@ int reiserfs_remove_entry (reiserfs_filsys_t *, struct key * key);
 #define HAS_IH_ARRAY 5
 #define THE_UNKNOWN 6
 
-int correct_direct_item_offset (__u64 offset, int format);
-int is_blocksize_correct (int blocksize);
+int is_blocksize_correct (unsigned int blocksize);
 int is_reiserfs_3_5_magic_string (struct reiserfs_super_block * rs);
 int is_reiserfs_3_6_magic_string (struct reiserfs_super_block * rs);
 int is_reiserfs_jr_magic_string (struct reiserfs_super_block * rs);
@@ -222,6 +222,12 @@ int reiserfs_super_block_size (struct reiserfs_super_block * rs);
 /*int magic_2_version (struct reiserfs_super_block * rs);*/
 int is_prejournaled_reiserfs (struct reiserfs_super_block * rs);
 int who_is_this (char * buf, int blocksize);
+
+int leaf_count_ih(char * buf, int blocksize);
+int leaf_free_space_estimate(char * buf, int blocksize);
+int is_a_leaf(char * buf, int blocksize);
+int leaf_item_number_estimate(struct buffer_head * bh);
+
 char * which_block (int code);
 int get_journal_size (reiserfs_filsys_t *);
 int not_data_block (reiserfs_filsys_t *, unsigned long block);
@@ -249,7 +255,7 @@ typedef void (*item_head_action_t) (struct item_head * ih);
 void for_every_item (struct buffer_head * bh, item_head_action_t action,
 		     item_action_t * actions);
 int key_format (const struct key * key);
-loff_t get_offset (const struct key * key);
+unsigned long long get_offset (const struct key * key);
 int uniqueness2type (__u32 uniqueness);
 __u32 type2uniqueness (int type);
 int get_type (const struct key * key);
@@ -263,19 +269,16 @@ void set_type_and_offset (int format, struct key * key, loff_t offset, int type)
 typedef int (*check_unfm_func_t) (reiserfs_filsys_t *, __u32);
 int is_it_bad_item (reiserfs_filsys_t *, struct item_head *, char *,
 		    check_unfm_func_t, int bad_dir);
-int does_node_have_ih_array (char * buf, int blocksize);
-
-
 
 #define hash_func_is_unknown(fs) ((fs)->fs_hash_function == 0)
 #define reiserfs_hash(fs) ((fs)->fs_hash_function)
 
 int known_hashes (void);
-char * code2name (int code);
+char *code2name (unsigned int code);
 int func2code (hashf_t func);
-hashf_t code2func (int code);
+hashf_t code2func (unsigned int code);
 hashf_t name2func (char * hash);
-int find_hash_in_use (char * name, int namelen, __u32 hash_value_masked, int code_to_try_first);
+int find_hash_in_use (char * name, int namelen, __u32 hash_value_masked, unsigned int code_to_try_first);
 
 int entry_length (struct item_head * ih, struct reiserfs_de_head * deh,
 		  int pos_in_item);
@@ -330,14 +333,14 @@ typedef void (*action_on_trans_t) (reiserfs_filsys_t *, reiserfs_trans_t *);
 void for_each_transaction (reiserfs_filsys_t *, action_on_trans_t);
 
 typedef void (*action_on_block_t) (reiserfs_filsys_t *, reiserfs_trans_t *,
-				   int index,
+				   unsigned int index,
 				   unsigned long in_journal,
 				   unsigned long in_place);
 void for_each_block (reiserfs_filsys_t * fs, reiserfs_trans_t * trans,
 		     action_on_block_t action);
 
-void reiserfs_only_reopen (reiserfs_filsys_t * fs, int flag);
 int reiserfs_open_journal (reiserfs_filsys_t *, char *, int flags);
+int reiserfs_journal_params_check(reiserfs_filsys_t *fs);
 int reiserfs_create_journal (reiserfs_filsys_t * fs, char * j_filename,
 			     unsigned long offset, unsigned long len, 
 			     int transaction_max_size);
@@ -349,7 +352,7 @@ void reiserfs_reopen_journal (reiserfs_filsys_t * fs, int flag);
 __u32 advise_journal_max_trans_age (void);
 __u32 advise_journal_max_commit_age (void);
 __u32 advise_journal_max_batch (unsigned long journal_trans_max);
-__u32 advise_journal_max_trans_len (__u32 desired, __u32 journal_size, int blocksize);
+__u32 advise_journal_max_trans_len (__u32 desired, __u32 journal_size, int blocksize, int verbose);
 
 
 

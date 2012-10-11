@@ -1,380 +1,269 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
+
 #include "fsck.h"
 
 
 /* when --check fsck builds a map of objectids of files it finds in the tree
-   when --rebuild-tree - fsck builds map of objectids it inserts into tree
-   FIXME: objectid gets into map when stat data item
-*/
+   when --rebuild-tree - fsck builds map of objectids it inserts into tree */
 
+#define ALLOC_SIZE			1024
+#define MAX_ID				(~0ul)
 
-#if 0
-/* is it marked used in super block's objectid map. fixme: binary search could
-   be used here */
-int is_objectid_used (reiserfs_filsys_t * fs, __u32 objectid)
-{
-    __u32 * objectid_map;
-    int i = 0;
+/* 2 bytes for the counter */
+#define BM_SIZE				(ALLOC_SIZE - sizeof(__u16))
+#define BM_INTERVAL			(BM_SIZE * 8)
+#define INDEX_COUNT			(MAX_ID / BM_INTERVAL)
 
+#define id_map_interval(map, id)	(map->index + (id / BM_INTERVAL))
 
-    objectid_map = (__u32 *)((char *)(fs->fs_ondisk_sb) + (sb_size(fs)));
-  
-    while (i < get_sb_oid_cursize (fs->fs_ondisk_sb)) {
-	if (objectid == le32_to_cpu (objectid_map[i])) {
-	    return 1;      /* objectid is used */
-	}
-	
-	if (objectid > le32_to_cpu(objectid_map[i]) &&
-             objectid < le32_to_cpu(objectid_map[i+1])) {
-	    return 1;	/* objectid is used */
-	}
-	
-	if (objectid < le32_to_cpu(objectid_map[i]))
-	    break;
+#define id_map_local_count(interval)	(interval + BM_SIZE)
 
-	i += 2;
+typedef struct sb_id_map {
+    __u32 * m_begin;
+    __u32 m_size, m_used_slot_count;
+} sb_id_map_t;
+
+id_map_t *id_map_init() {
+    id_map_t *map;
+    __u32 i;
+ 
+    map = getmem(sizeof(id_map_t));
+    map->index = mem_alloc(INDEX_COUNT * sizeof(void *));
+
+    for (i = 0; i < INDEX_COUNT; i++) {
+	if (map->index[i] != (void *)0)
+	    map->index[i] = (void *)0;
     }
+
+    id_map_mark(map, 0);
+    id_map_mark(map, 1);
+
+    /* id == 0 should not be there, just for convinient usage */
+    map->count--;
     
-    /* objectid is free */
-    return 0;
-}
-#endif
-
-
-
-/* true objectid map */
-
-
-/* increase area by MAP_SIZE bytes */
-static void grow_id_map (struct id_map * map)
-{
-/*
-    if (map->m_page_count && ((map->m_page_count % 5) == 0)) {
-	fsck_log ("grow_id_map: objectid map expanded: used %lu, %d blocks\n",
-		  map->m_used_slots_count, map->m_page_count);
-    }
-*/
-    map->m_begin = expandmem (map->m_begin, map->m_page_count * MAP_SIZE, MAP_SIZE);
-    map->m_page_count ++;
-}
-
-
-static void try_to_shrink_id_map (struct id_map * map)
-{
-    if (map->m_used_slots_count * sizeof(__u32) <= (map->m_page_count - 1) * MAP_SIZE) {
-	/*
-	if (map->m_page_count && ((map->m_page_count % 5) == 0))
-	    fsck_log ("shrink_id_map: objectid map shrinked: used %lu, %d blocks\n",
-		      map->m_used_slots_count, map->m_page_count);
-	*/
-	map->m_begin = expandmem (map->m_begin, map->m_page_count * MAP_SIZE,
-				  -MAP_SIZE);
-        map->m_page_count--;
-    }
-}
-
-
-/* ubin_search_id is used to find id in the map (or proper place to
-   insert the new id).  if smth goes wrong or ubin_search_id stops
-   working properly check_id_search_result should help to find raised
-   problems */
-static void check_id_search_result(struct id_map * map, int res, __u32 pos,
-				   __u32 id)
-{
-    if (res != POSITION_FOUND && res != POSITION_NOT_FOUND)
-        die("check_id_search_result: get wrong result from ubin_search (%d)", res);
-
-    if (res == 1 && le32_to_cpu (map->m_begin[pos]) != id)
-        die("check_id_search_result: wrong id found %u %u", id, le32_to_cpu(map->m_begin[pos]));
-
-    if (res == 1)
-    {
-        if (pos > map->m_used_slots_count)
-            die("check_id_search_result: get bad position (%u), used %u",
-		pos, map->m_used_slots_count);
-        if (pos >= 0 && pos <= map->m_used_slots_count && le32_to_cpu(map->m_begin[pos - 1]) >= id)
-            die("check_id_search_result: previous id (%u) not less than (%u)",
-		le32_to_cpu(map->m_begin[pos - 1]), id);
-        if (pos >= 0 && pos < map->m_used_slots_count && le32_to_cpu(map->m_begin[pos]) < id)
-            die("check_id_search_result: found id (%u) not much than (%u)",
-		le32_to_cpu(map->m_begin[pos]), id);
-    }
-}
-
-/* */
-struct id_map * init_id_map (void)
-{
-    struct id_map * map;
-
-    map = getmem (sizeof (struct id_map));
-    map->m_begin = NULL;
-    map->m_used_slots_count = 0;
-    map->m_page_count = 0;
-    mark_objectid_really_used (map, 1);
     return map;
 }
 
-
-/* free whole map */
-void free_id_map (struct id_map * map)
-{
-    freemem (map->m_begin);
-    freemem (map);
-}
-
-
-/* return 1 if id is marked used, 0 otherwise */
-int is_objectid_really_used (struct id_map * map, __u32 id, __u32 * ppos)
-{
-    int res;
-    __u32 le_id = cpu_to_le32 (id);
-
-    *ppos = 0;
-
-    if (map->m_begin == NULL)
-        return 0;
-
-    /* smth exists in the map, find proper place to insert or this id */
-    res = reiserfs_bin_search (&le_id, map->m_begin, map->m_used_slots_count,
-			       sizeof (__u32), ppos, comp_ids);
-#if 1
-    check_id_search_result (map, res, *ppos, id);
-#endif
-    /* *ppos is position in objectid map of the element which is equal id
-       or position of an element which is smallest and greater than id */
-    if (res == POSITION_NOT_FOUND)
-	/* id is not found in the map. if returned position is odd -
-	   id is marked used */
-	return (*ppos % 2);
-
-    /* if returned position is odd - id is marked free */
-    return !(*ppos % 2);
-}
-
-static void check_objectid_map (struct id_map * map, int pos)
-{
-    /* check only previous id, current and 2 next ones,
-       if not specified to check evth */
-    int count = 3;
-    int i;
-    int first = pos;
-
-    if (first == 0) {
-    	first = 1;    	
-    } else if (first == -1) {
-	count = map->m_used_slots_count - 1;
-    	first = 1;
-    }
-
-    if (first + count > map->m_used_slots_count)
-        count = map->m_used_slots_count - first;
-
-    for (i = first; i < first + count; i ++)
-	if (le32_to_cpu(map->m_begin [i - 1]) >= le32_to_cpu(map->m_begin [i]))
-	    die ("check_objectid_map: map corrupted");
-}
-
-int __mark_objectid_really_used(struct id_map *map, __u32 id, __u32 pos) {
-
-    map->objectids_marked ++;
-    if (pos % 2 == 0){
-        /* id not found in the map. why? is_id_used() knows */
-
-        if (map->m_begin == NULL)
-	    /* map is empty */
-            grow_id_map (map);
-
-        /* id + 1 is used, change id + 1 to id and exit */
-        if ( id + 1 == le32_to_cpu (map->m_begin[pos]) ) {
-	    /* we can mark id as used w/o expanding of id map */
-	    map->m_begin[pos] = cpu_to_le32 (id);
-
-	    check_objectid_map (map, pos);
-	    return 0;
-        }
-
-        if (map->m_page_count * MAP_SIZE == map->m_used_slots_count * sizeof(__u32))
-	    /* fixme: do not grow too much */
-            grow_id_map (map);
-
-        if (map->m_used_slots_count - pos > 0)
-            memmove (map->m_begin + pos + 2, map->m_begin + pos, (map->m_used_slots_count - pos) * sizeof (__u32));
-
-        map->m_used_slots_count += 2;
-        map->m_begin[pos] = cpu_to_le32 (id);
-        map->m_begin[pos+1] = cpu_to_le32 (id + 1);
-
-	check_objectid_map (map, pos);
-
-        return 0;
-    }
-
-    /* id found in the map. pos is odd position () */
-    map->m_begin[pos] = cpu_to_le32 (id + 1);
-    
-    /* if end id of current interval == start id of next interval we
-       eliminated a sequence of unused objectids */
-    if (pos + 1 < map->m_used_slots_count &&
-	map->m_begin[pos + 1] == map->m_begin[pos]) { /* safe, both are le */
-	memmove (map->m_begin + pos, map->m_begin + pos + 2, (map->m_used_slots_count - pos - 2) * sizeof (__u32));
-	map->m_used_slots_count -= 2;
-	try_to_shrink_id_map (map);
-    }
-
-    check_objectid_map (map, pos);
-
-    return 0;
-}
-
-/* returns 1 objectid is marked used already, 0 otherwise */
-int mark_objectid_really_used (struct id_map * map, __u32 id)
-{
-    __u32 pos;
-
-    /* check whether id is used and get place if used or place to insert if not */
-    if (is_objectid_really_used (map, id, &pos) == 1)
-        return 1;
-
-    return __mark_objectid_really_used(map, id, pos) ;
-}
-
-
-static __u32 get_free_id (reiserfs_filsys_t * fs)
-{
-    struct id_map * map;
-
-    map = proper_id_map (fs);
-
-    /* If map is not NULL return the second element (first position in
-       the map).  This allocates the first unused objectid. That is to
-       say, the first entry on the objectid map is the first unused
-       objectid. */
-    if (map->m_begin == NULL) {
-	fprintf (stderr, "get_free_id: hmm, 1 is allocated as objectid\n");
-	return 1;
-    }
-    return (le32_to_cpu (map->m_begin[1]));
-}
-
-
-__u32 get_unused_objectid (reiserfs_filsys_t * fs)
-{
-    __u32 objectid;
-
-    objectid = get_free_id (fs);
-    if (mark_objectid_really_used (proper_id_map (fs), objectid))
-	die ("get_unused_objectid: could not mark %lu used", 
-	     ( long unsigned ) objectid);
-
-    return objectid;
-}
-
-
-#define objectid_map(fs) ((char *)((char *)((fs)->s_rs) + sb_size (fs)))
-
-
-#if 0
-/* returns 0 if on-disk objectid map matches to the correct one, 1
-   otherwise */
-int compare_id_maps (reiserfs_filsys_t * fs)
-{
-    struct id_map * map;
-    int disk_size;
-  
-    map = proper_id_map (fs);
-    
-    disk_size = rs_objectid_map_size (fs->s_rs);
-    if (disk_size != map->m_used_slots_count ||
-	memcmp ((char *)((char *)((fs)->s_rs) + sb_size (fs)), map->m_begin, sizeof(__u32) * disk_size)) {
-	fprintf (stderr, "Objectid maps mismatch\n");
-	return 1;
-    }
-
-    return 0;
-}
-
-
-/* copy objectid map into buffer containing super block */
-void correct_objectid_map (reiserfs_filsys_t * fs)
-{
-    struct id_map * map;
-    int size, disk_max;
+void id_map_free(id_map_t *map) {
+    __u32 i;
  
-    map = proper_id_map (fs);
-    
-    size = map->m_used_slots_count;
-    disk_max = rs_objectid_map_max_size (fs->s_rs);
-    if (disk_max < size) {
-	size = disk_max;
-    } else {
-	memset (fu_objectid_map (fs) + size, 0, (disk_max - size) * sizeof (__u32));
+    for (i = 0; i < INDEX_COUNT; i++) {
+	if (map->index[i] != (void *)0 && map->index[i] != (void *)1)
+	    freemem(map->index[i]);
     }
     
-    memcpy (fu_objectid_map (fs), map->m_begin, size * sizeof (__u32));
-    set_objectid_map_size (fs->s_rs, size);
-    mark_buffer_dirty (SB_BUFFER_WITH_SB (fs));
+    freemem(map->index);
+    freemem(map);
+}
 
+int id_map_test(id_map_t *map, __u32 id) {
+    void **interval = id_map_interval(map, id);
+
+    if (*interval == (void *)0)
+	return 0;
+    
+    if (*interval == (void *)1)
+	return 1;
+    
+    return misc_test_bit(id % BM_INTERVAL, *interval);
+}
+
+int id_map_mark(id_map_t *map, __u32 id) {
+    void **interval = id_map_interval(map, id);
+
+    if (*interval == (void *)0)
+	*interval = getmem(ALLOC_SIZE);
+
+    if (*interval == (void *)1)
+	return 1;
+
+    if (misc_test_bit(id % BM_INTERVAL, *interval))
+	return 1;
+	
+    misc_set_bit(id % BM_INTERVAL, *interval);
+    
+    (*(__u16 *)id_map_local_count(*interval))++;
+    map->count++;
+
+    if ((*(__u16 *)id_map_local_count(*interval)) == BM_INTERVAL) {
+	/* Dealloc fully used bitmap */
+	freemem(*interval);
+	*interval = (void *)1;
+    }
+
+    if (map->last_used < (id / BM_INTERVAL))
+	map->last_used = id / BM_INTERVAL;
+    
+    return 0;
+}
+
+/* call this for proper_id_map only!! */
+__u32 id_map_alloc(id_map_t *map) {
+    __u32 i, zero_count;
+    __u32 id = 0, first = ~0ul;
+
+    for (i = 0, zero_count = 0; zero_count < 10 && i < INDEX_COUNT - 1; i++) {
+	if (map->index[i] == (void *)0) {
+	    if (zero_count == 0)
+		first = i;
+	    
+	    zero_count++;
+	} else if (map->index[i] != (void *)1)
+	    break;
+    }
+
+    if (map->index[i] != (void *)1 && map->index[i] != (void *)0) {
+	id = misc_find_first_zero_bit(map->index[i], BM_INTERVAL);
+	if (id >= BM_INTERVAL)
+	    die ("Id is out of interval size, interval looks corrupted.");
+	
+	id += i * BM_INTERVAL;
+    } else if (first != ~0ul) {
+	id = first * BM_INTERVAL;
+	if (id == 0) 
+	    id = 2;
+    } else 
+	die ("%s: No more free objectid is available.", __FUNCTION__);
+
+    id_map_mark(map, id);
+
+    return id;
+}
+
+/* this could be used if some more sofisticated flushing will be needed. */
 /*
-    if (fs->fu_job->verbose)
-	fprintf (stderr, "Objectid map corrected\n");
-*/
+static void sb_id_map_pack(sb_id_map_t *map) {
+    map->m_begin[1] = map->m_begin[map->m_used_slot_count - 1];
+    memset(map->m_begin + 2, 0, map->m_used_slot_count - 2);
+    map->m_used_slot_count = 2;
+}*/
+
+static __u32 id_map_next_bound(id_map_t *map, __u32 start) {
+    __u32 index = start / BM_INTERVAL;
+    __u32 offset = start % BM_INTERVAL;
+    int look_for;
+    
+    if (map->index[index] == (void *)0)
+	look_for = 1;
+    else if (map->index[index] == (void *)1)
+	look_for = 0;
+    else 
+	look_for = !misc_test_bit(offset, map->index[index]);
+
+    offset++;
+
+start_again:
+    
+    if (look_for) {	
+	while (index < INDEX_COUNT && map->index[index] == (void *)0)
+	    index++;
+	
+	if (index == INDEX_COUNT)
+	    return 0;
+	
+	if (map->index[index] == (void *)1)
+	    return index * BM_INTERVAL;
+	
+	offset = misc_find_next_set_bit(map->index[index], BM_INTERVAL, offset);
+
+	if (offset >= BM_INTERVAL) {
+	    offset = 0;
+	    index++;
+	    goto start_again;
+	}
+	
+	return index * BM_INTERVAL + offset;
+    } else {
+	while (index < INDEX_COUNT && map->index[index] == (void *)1)
+	    index++;
+	
+	if (index == INDEX_COUNT)
+	    return 0;
+	
+	if (map->index[index] == (void *)0)
+	    return index * BM_INTERVAL;
+
+	offset = misc_find_next_zero_bit(map->index[index], BM_INTERVAL, offset);
+	
+	if (offset >= BM_INTERVAL) {
+	    offset = 0;
+	    index++;
+	    goto start_again;
+	}
+	
+	return index * BM_INTERVAL + offset;
+    }
 }
-#endif
 
-
-/* print the map of objectids */
-void print_objectid_list (__u32 *map, int count)
-{
-    int i;
-    for (i = 0; i < count ; i += 2)
-           printf ("\n[%u-%u]", le32_to_cpu(map[i]),le32_to_cpu(map[i+1]));
-}
-
-#if 0
-/* print on-disk map of objectids */
-void print_disk_objectid_list (void)
-{
-    int i;
-    __u32 * objectid_map = (__u32 *)((char *)SB_DISK_SUPER_BLOCK (&g_sb) + (sb_size(&g_sb)));
-    printf ("\n on-disk id map. used:%lu", SB_OBJECTID_MAP_SIZE(&g_sb));
-
-    for (i = 0; i < SB_OBJECTID_MAP_SIZE(&g_sb); i += 2)
-	printf ("\n[%u-%u]", objectid_map[i], objectid_map[i + 1] - 1);
-}
-#endif
-
-
-void flush_objectid_map (struct id_map * map, reiserfs_filsys_t * fs)
-{
-    int size, max;
-    int sb_size;
+void id_map_flush(struct id_map * map, reiserfs_filsys_t * fs) {
+    int size, max, i;
+    __u32 id, prev_id;
     __u32 * sb_objectid_map;
 
-    sb_size = reiserfs_super_block_size (fs->fs_ondisk_sb);
-    sb_objectid_map = (__u32 *)((char *)(fs->fs_ondisk_sb) + sb_size);
+    size = reiserfs_super_block_size (fs->fs_ondisk_sb);
+    sb_objectid_map = (__u32 *)((char *)(fs->fs_ondisk_sb) + size);
 
-    max = ((fs->fs_blocksize - sb_size) >> 3 << 1);
+    max = ((fs->fs_blocksize - size) >> 3 << 1);
     set_sb_oid_maxsize (fs->fs_ondisk_sb, max);
-    if (map->m_used_slots_count > max)
-	size = max;
-    else
-	size = map->m_used_slots_count;
+    
+    sb_objectid_map[0] = id = 1;
 
-    check_objectid_map (map, -1);
+    for (i = 1; i < max - 1; i++) {	
+	sb_objectid_map[i] = id = id_map_next_bound(map, id);
+	if (id == 0) {
+	    if (i % 2)
+		die ("%s: Used interval is not closed on flushing.", __FUNCTION__);
+	    break;
+	}
+    }
 
-    memcpy (sb_objectid_map, map->m_begin, size * sizeof (__u32));
-    memset (sb_objectid_map + size, 0, (max - size) * sizeof (__u32));
+    if (map->index[map->last_used] == (void *)0)
+	die ("Object id map looks corrupted - last used interval cannot be zeroed.");
+    
+    i++;
+    
+    if (i == max) {
+	if (id == 0)
+	    die ("Objectid interval does not contain any set bit what is expected.");
+	
+	if (map->index[map->last_used] == (void *)1) {
+	    prev_id = BM_INTERVAL - 1;
+	} else {	    
+	    prev_id = ~0ul;
+	    
+	    if (id < map->last_used * BM_INTERVAL)
+		id = 0;
+	    else 
+		id %= BM_INTERVAL;
+	    
+	    if (misc_test_bit(id, map->index[map->last_used]))
+		prev_id = id;
+	    
+	    while ((id = misc_find_next_set_bit(map->index[map->last_used], 
+		BM_INTERVAL, (id + 1))) != BM_INTERVAL) 
+	    {
+		prev_id = id;
+	    }
 
-    set_sb_oid_cursize (fs->fs_ondisk_sb, size);
-    if (size == max)
-	sb_objectid_map [max - 1] = map->m_begin [map->m_used_slots_count - 1];
+	    if (prev_id == ~0ul)
+		die ("Objectid interval does not contain any set bit what is expected.");
 
-//    check_objectid_map (map);
+	    prev_id++;
+	}
+	
+	sb_objectid_map[max - 1] = prev_id + map->last_used * BM_INTERVAL;
+    } else { 
+	i--;
+	memset(sb_objectid_map + i, 0, (max - i) * sizeof (__u32));
+    }
 
+    set_sb_oid_cursize (fs->fs_ondisk_sb, i);
 }
 
+/* FIXME: these 3 methods must be implemented also.
 
 void fetch_objectid_map (struct id_map * map, reiserfs_filsys_t * fs)
 {
@@ -386,9 +275,10 @@ void fetch_objectid_map (struct id_map * map, reiserfs_filsys_t * fs)
 
     if (map->m_page_count != 1)
 	die ("fetch_objectid_map: can not fetch long map");
-    grow_id_map (map);
+    
+    make_id_space(map, 0);
     memcpy (map->m_begin, sb_objectid_map, get_sb_oid_cursize (fs->fs_ondisk_sb) * sizeof (__u32));
-    map->m_used_slots_count = get_sb_oid_cursize (fs->fs_ondisk_sb);
+    map->m_used_slot_count = get_sb_oid_cursize (fs->fs_ondisk_sb);
 }
 
 #define OBJMAP_START_MAGIC 375331
@@ -402,14 +292,14 @@ void reiserfs_objectid_map_save (FILE * fp, struct id_map * id_map)
     v = OBJMAP_START_MAGIC;
     fwrite (&v, 4, 1, fp);
 
-    v = id_map->m_used_slots_count;
+    v = id_map->m_used_slot_count;
     fwrite (&v, 4, 1, fp);
 
     for (i = 0; i < id_map->m_page_count - 1; i++) {
 	fwrite ((char *)id_map->m_begin + MAP_SIZE * i, 4, 1, fp);
     }
 
-    for (i = 0; i < id_map->m_used_slots_count * sizeof(__u32) - (id_map->m_page_count - 1) * MAP_SIZE; i++) {
+    for (i = 0; i < id_map->m_used_slot_count * sizeof(__u32) - (id_map->m_page_count - 1) * MAP_SIZE; i++) {
 	fwrite ((char *)id_map->m_begin + MAP_SIZE * (id_map->m_page_count - 1) + i, 4, 1, fp);
     }
 
@@ -429,12 +319,12 @@ struct id_map * reiserfs_objectid_map_load (FILE * fp)
 	return 0;
     }
 	
-    /* read bit size of objectid map */
+    // read bit size of objectid map 
     fread (&v, 4, 1, fp);
 
-    id_map = init_id_map ();
+    id_map = init_id_map (MAP_NOT_PACKED);
 
-    id_map->m_used_slots_count = v;
+    id_map->m_used_slot_count = v;
     id_map->m_page_count = v / MAP_SIZE + 1;
 
     id_map->m_begin = expandmem (id_map->m_begin, 0, id_map->m_page_count * MAP_SIZE);
@@ -443,7 +333,7 @@ struct id_map * reiserfs_objectid_map_load (FILE * fp)
 	fread ((char *)id_map->m_begin + MAP_SIZE * i, 4, 1, fp);
     }
 
-    for (i = 0; i < id_map->m_used_slots_count * sizeof(__u32) - (id_map->m_page_count - 1) * MAP_SIZE; i++) {
+    for (i = 0; i < id_map->m_used_slot_count * sizeof(__u32) - (id_map->m_page_count - 1) * MAP_SIZE; i++) {
 	fread ((char *)id_map->m_begin + MAP_SIZE * (id_map->m_page_count - 1) + i, 4, 1, fp);
     }
 
@@ -457,4 +347,4 @@ struct id_map * reiserfs_objectid_map_load (FILE * fp)
     fflush (stderr);
     return id_map;
 }
-
+*/

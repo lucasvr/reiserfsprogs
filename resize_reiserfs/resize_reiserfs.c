@@ -1,7 +1,8 @@
 /* 
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
- 
+
 /*  
  * Written by Alexander Zarochentcev.
  * 
@@ -83,17 +84,17 @@ static int bwrite_cond (struct buffer_head * bh)
 /* the first one of the most important functions */
 static int expand_fs (reiserfs_filsys_t * fs, unsigned long block_count_new) {
     unsigned int bmap_nr_new, bmap_nr_old;
-    int i;
     struct reiserfs_super_block * sb;
+    unsigned int i;
 
 
     reiserfs_reopen(fs, O_RDWR);
-    if (!reiserfs_open_ondisk_bitmap (fs))
+    if (reiserfs_open_ondisk_bitmap (fs))
 	DIE("cannot open ondisk bitmap");
 
     sb = fs->fs_ondisk_sb;
 
-    set_sb_fs_state (fs->fs_ondisk_sb, REISERFS_CORRUPTED);
+    set_sb_fs_state (fs->fs_ondisk_sb, FS_ERROR);
 
     bwrite_cond(fs->fs_super_bh);
 
@@ -187,12 +188,18 @@ int main(int argc, char *argv[]) {
 	print_usage_and_exit();
     devname = argv[optind];
 
-    fs = reiserfs_open(devname, O_RDONLY, &error, 0);
+    fs = reiserfs_open(devname, O_RDONLY, &error, 0, 1);
     if (!fs)
 	DIE ("cannot open '%s': %s", devname, strerror(error));
-    if (!reiserfs_open_journal (fs, jdevice_name, O_RDONLY)) {
+
+    if (reiserfs_open_journal (fs, jdevice_name, O_RDWR | O_LARGEFILE))
+	DIE ("Failed to open the journal device (%s).", jdevice_name);
+    
+    if (reiserfs_journal_params_check(fs)) {
 	if (!opt_skipj)
-	    DIE ("can not open journal of '%s'", devname);
+	    DIE ("Wrong journal parameters detected on (%s)", jdevice_name);
+	else
+	    reiserfs_close_journal(fs);
     }
 
     /* forced to continue without journal available/specified */
@@ -205,61 +212,78 @@ int main(int argc, char *argv[]) {
     }
 
     sb = fs->fs_ondisk_sb;
-	
+    
     if(bytes_count_str) {	/* new fs size is specified by user */
-	block_count_new = calc_new_fs_size(get_sb_block_count(sb), fs->fs_blocksize, bytes_count_str);
+	block_count_new = calc_new_fs_size(get_sb_block_count(sb), 
+	    fs->fs_blocksize, bytes_count_str);
     } else {		/* use whole device */
 	block_count_new = count_blocks(devname, fs->fs_blocksize);
     }
 
     if (is_mounted (devname)) {
 	reiserfs_close(fs);
-	return resize_fs_online(devname, block_count_new);
+	if ((error = resize_fs_online(devname, block_count_new)))
+	    reiserfs_warning(stderr, "\n\nresize_reiserfs: On-line resizing "
+		"failed.\n\n ");
+	else
+	    reiserfs_warning(stderr, "\n\nresize_reiserfs: On-line resizing "
+		"finished successfully.\n\n ");
+	return error;
     }
 
     if (!reiserfs_is_fs_consistent (fs)) {
-	reiserfs_warning (stderr, "\n\nresize_reiserfs: run reiserfsck --check first\n\n");
+	reiserfs_warning (stderr, "\n\nresize_reiserfs: run reiserfsck --check "
+	    "first\n\n");
 	reiserfs_close (fs);
 	return 1;
     }
 
-    if (get_sb_umount_state(sb) != REISERFS_CLEANLY_UMOUNTED)
+    if (get_sb_umount_state(sb) != FS_CLEANLY_UMOUNTED)
 	/* fixme: shouldn't we check for something like: fsck guarantees: fs is ok */
 	DIE ("the file system isn't in valid state.");
 		
     if (block_count_new >= get_sb_block_count(sb)) {
 	if (block_count_new == get_sb_block_count(sb)) {
-	    reiserfs_warning (stderr, "%s already is of the needed size. Nothing to be done\n\n", devname);
+	    reiserfs_warning (stderr, "%s already is of the needed size. "
+		"Nothing to be done\n\n", devname);
 	    exit (1);
 	}
 	
-	if(!valid_offset(fs->fs_dev, (loff_t) block_count_new * fs->fs_blocksize - 1)) {
-	    reiserfs_warning (stderr, "%s is of %lu blocks size only with reiserfs of %d blocks\nsize on it. "\
-		"You are trying to expant reiserfs up to %lu blocks size.\nYou probably forgot to expand your "\
-		"partition size.\n\n", devname, count_blocks (devname, fs->fs_blocksize),
+	if(!valid_offset(fs->fs_dev, 
+	    (loff_t)block_count_new * fs->fs_blocksize - 1)) 
+	{
+	    reiserfs_warning (stderr, "%s is of %lu blocks size only with "
+		"reiserfs of %d blocks\nsize on it. You are trying to expand "
+		"reiserfs up to %lu blocks size.\nYou probably forgot to "
+		"expand your partition size.\n\n", devname, 
+		count_blocks(devname, fs->fs_blocksize),
 		get_sb_block_count(sb), block_count_new);
 	    exit (1);
 	}
     }
 
-
-    sb_old = 0;		/* Needed to keep idiot compiler from issuing false warning */
+    /* Needed to keep idiot compiler from issuing false warning */
+    sb_old = 0;		
+    
     /* save SB for reporting */
     if(opt_verbose) {
 	sb_old = getmem(SB_SIZE);
 	memcpy(sb_old, fs->fs_ondisk_sb, SB_SIZE);
     }
 
-    error = (block_count_new > get_sb_block_count(fs->fs_ondisk_sb)) ? expand_fs(fs, block_count_new) : shrink_fs(fs, block_count_new);
-    if (error)
+    error = (block_count_new > get_sb_block_count(fs->fs_ondisk_sb)) ? 
+	expand_fs(fs, block_count_new) : shrink_fs(fs, block_count_new);
+    if (error) {
+	reiserfs_warning(stderr, "\n\nresize_reiserfs: Resizing failed.\n\n ");
 	return error;
+    }
 
     if(opt_verbose) {
 	sb_report(fs->fs_ondisk_sb, sb_old);
 	freemem(sb_old);
     }
 
-    set_sb_fs_state (fs->fs_ondisk_sb, REISERFS_CONSISTENT);
+    set_sb_fs_state (fs->fs_ondisk_sb, FS_CONSISTENT);
     bwrite_cond(fs->fs_super_bh);
 	
     if (opt_verbose) {
@@ -270,5 +294,8 @@ int main(int argc, char *argv[]) {
     if (opt_verbose)
 	printf("done\n");
 	
+    reiserfs_warning(stderr, "\n\nresize_reiserfs: Resizing finished "
+	"successfully.\n\n ");
+    
     return 0;
 }

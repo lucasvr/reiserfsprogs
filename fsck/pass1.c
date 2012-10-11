@@ -1,6 +1,8 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README 
  */
+
 #include "fsck.h"
 #include <stdlib.h>
 
@@ -20,17 +22,16 @@ struct buffer_head * make_buffer (int dev, unsigned long blocknr, int size, char
 	return bh;
 //    die ("make_buffer: uptodate buffer found");
     memcpy (bh->b_data, data, size);
-    set_bit (BH_Uptodate, (char *)&bh->b_state);
+    misc_set_bit (BH_Uptodate, (char *)&bh->b_state);
     return bh;
 }
 
 
-int find_not_of_one_file(struct key * to_find, struct key * key)
-{
-    if ((get_key_objectid (to_find) != -1) &&
+int find_not_of_one_file(struct key * to_find, struct key * key) {
+    if ((get_key_objectid (to_find) != ~0ul) &&
         (get_key_objectid (to_find) != get_key_objectid (key)))
         return 1;
-    if ((get_key_dirid (to_find) != -1) &&
+    if ((get_key_dirid (to_find) != ~0ul) &&
         (get_key_dirid (to_find) != get_key_dirid (key)))
         return 1;
     return 0;
@@ -97,9 +98,10 @@ static char *still_bad_unfm_ptr_to_string (int val) {
 static void indirect_in_tree (struct buffer_head * bh,
 			      struct item_head * ih)
 {
-    int i, ret;
+    unsigned int i;
     __u32 * unp;
     __u32 unfm_ptr;
+    int ret;
 
     unp = (__u32 *)B_I_PITEM (bh, ih);
     
@@ -244,7 +246,7 @@ static void get_max_buffer_key (struct buffer_head * bh, struct key * key)
 
 int tree_is_empty (void)
 {
-    return (get_sb_root_block (fs->fs_ondisk_sb) == ~0) ? 1 : 0;
+    return (get_sb_root_block (fs->fs_ondisk_sb) == ~0ul || get_sb_root_block (fs->fs_ondisk_sb) == 0) ? 1 : 0;
 }
 
 
@@ -336,7 +338,7 @@ static void try_to_insert_pointer_to_leaf (struct buffer_head * new_bh)
 static void pass1_correct_leaf (reiserfs_filsys_t * fs,
 				struct buffer_head * bh)
 {
-    int i, j;
+    unsigned int i, j;
     struct item_head * ih;
     __u32 * ind_item;
     __u32 unfm_ptr;
@@ -349,7 +351,7 @@ static void pass1_correct_leaf (reiserfs_filsys_t * fs,
 	    struct reiserfs_de_head * deh;
 	    char * name;
 	    int name_len;
-	    int hash_code;
+	    unsigned int hash_code;
 
 	    deh = B_I_DEH (bh, ih);
 	    for (j = 0; j < get_ih_entry_count (ih); j ++) {
@@ -448,7 +450,7 @@ struct si * remove_saved_item (struct si * si)
    on-disk bitmap */
 static void init_new_bitmap (reiserfs_filsys_t * fs)
 {
-    int i;
+    unsigned int i;
     unsigned long block;
     unsigned long reserved;
     
@@ -549,7 +551,7 @@ static void find_allocable_blocks (reiserfs_filsys_t * fs)
 	    pass_1_stat (fs)->allocable_blocks ++;
 	}
     }
-    fsck_progress ("fininshed\n");
+    fsck_progress ("finished\n");
 
     fs->block_allocator = reiserfsck_reiserfs_new_blocknrs;
     fs->block_deallocator = reiserfsck_reiserfs_free_block;
@@ -586,7 +588,7 @@ static void save_pass_1_result (reiserfs_filsys_t * fs)
 	return;
 
     /* to be able to get a new bitmap on pass2 we should flush it on disk
-       new_bitmap should not be flushed on disk if run w/out -d option, as
+       new_bitmap should not be flushed on disk if run without -d option, as
        if fsck fails on pass1 we get wrong bitmap on the next fsck start */
     reiserfs_flush_to_ondisk_bitmap (fsck_new_bitmap (fs), fs);
     
@@ -597,7 +599,6 @@ static void save_pass_1_result (reiserfs_filsys_t * fs)
     reiserfs_bitmap_save (file,  fsck_allocable_bitmap(fs));
     reiserfs_end_stage_info_save (file);
     close_file (file);
-    retval = unlink (state_dump_file (fs));
     retval = rename ("temp_fsck_file.deleteme", state_dump_file (fs));
     if (retval != 0)
 	fsck_progress ("pass 1: Could not rename the temporary file temp_fsck_file.deleteme to %s",
@@ -622,8 +623,10 @@ void load_pass_1_result (FILE * fp, reiserfs_filsys_t * fs)
 
 
     /* we need objectid map on pass 2 to be able to relocate files */
-    proper_id_map (fs) = init_id_map ();
+    proper_id_map (fs) = id_map_init();
+    /* Not implemented yet.
     fetch_objectid_map (proper_id_map (fs), fs);
+    */
 
     fsck_progress ("Pass 1 result loaded. %d blocks used, %d allocable, "
 		   "still to be inserted %d\n",
@@ -666,11 +669,9 @@ static void do_pass_1 (reiserfs_filsys_t * fs)
 
 	what_node = who_is_this (bh->b_data, bh->b_size);
 	if ( what_node != THE_LEAF ) {
-	    fsck_progress ("build_the_tree: Nothing but leaves are expected. "
-			   "Block %lu - %s\n", i,
-			   (what_node == THE_INTERNAL) ? "internal" : "??");
-	    brelse (bh);
-	    continue;
+	    check_memory_msg();
+	    die ("build_the_tree: Nothing but leaves are expected. Block %lu - %s\n", 
+		i, which_block(what_node));
 	}
 	
 	if (is_block_used (i) && !(block_of_journal (fs, i) &&
@@ -770,7 +771,7 @@ static void after_pass_1 (reiserfs_filsys_t * fs)
 
     if (proper_id_map (fs)) {
 	/* when we run pass 1 only - we do not have proper_id_map */
-	free_id_map (proper_id_map (fs));
+	id_map_free(proper_id_map (fs));
 	proper_id_map (fs) = 0;
     }
     

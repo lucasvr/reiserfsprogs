@@ -1,5 +1,6 @@
 /*
- *  Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ *  Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ *  reiserfsprogs/README
  */
 
 #include "includes.h"
@@ -26,13 +27,13 @@ static void make_const_keys (void)
 /* reiserfs needs at least: enough blocks for journal, 64 k at the beginning,
    one block for super block, bitmap block and root block. Note that first
    bitmap block must point to all of them */
-int is_block_count_correct (unsigned long block_of_super_block, int block_size,
-	unsigned long block_count, unsigned long journal_size)
+int is_block_count_correct (unsigned long journal_offset, unsigned int block_size,
+    unsigned long block_count, unsigned long journal_size)
 {
     unsigned long blocks;
 
-    /* RESERVED, MD RAID SBs, super block, bitmap, root, journal size w/ journal header */
-    blocks = block_of_super_block + 1 + 1 + 1 + journal_size;
+    /* RESERVED, MD RAID SBs, super block, bitmap, root, journal size with journal header */
+    blocks = journal_offset + journal_size;
 
     /* we have a limit: skipped area, super block, journal and root block
     all have to be addressed by one first bitmap */
@@ -46,14 +47,14 @@ int is_block_count_correct (unsigned long block_of_super_block, int block_size,
 }
 
 /* read super block. fixme: only 4k blocks, pre-journaled format
-   is refused. Journal and bitmap are to be opened separately */
-reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void * vp)
+   is refused. Journal and bitmap are to be opened separately.
+   skip_check is set to 1 if checks of openned SB should be omitted.*/
+reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void * vp, int check)
 {
     reiserfs_filsys_t * fs;
     struct buffer_head * bh;
     struct reiserfs_super_block * sb;
     int fd, i;
-
 
     /* convert root dir key and parent root dir key to little endian format */
     make_const_keys ();
@@ -80,7 +81,7 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
 	} else {
 	    sb = (struct reiserfs_super_block *)bh->b_data;
 	    
-	    if (does_look_like_super_block (sb))
+	    if (is_any_reiserfs_magic_string(sb))
 		goto found;
 
 	    /* reiserfs signature is not found at the i-th 4k block */
@@ -88,9 +89,9 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
 	}
     }
 
-    reiserfs_warning (stderr, "reiserfs_open: neither new nor old reiserfs format "
-		      "found on %s\n", filename);
-
+    reiserfs_warning(stderr, 
+	"\nreiserfs_open: the reiserfs superblock cannot be found on %s.\n", filename);
+    
     if (error)
 	*error = 0;
     freemem (fs);
@@ -99,6 +100,35 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
     return fs;
 
  found:
+
+    if (check) {
+	/* A few checks of found super block. */
+	struct buffer_head *tmp_bh;
+	
+	if (!is_blocksize_correct(get_sb_block_size(sb))) {
+	    reiserfs_warning(stderr, "reiserfs_open: a superblock with wrong parameters "
+		"was found in the block (%d).\n", i);
+	    freemem (fs);
+	    close (fd);
+	    brelse(bh);
+	    return NULL;
+	}
+    
+	tmp_bh = bread (fd, get_sb_block_count(sb) - 1, get_sb_block_size(sb));
+	
+	if (!tmp_bh) {
+	    reiserfs_warning (stderr, "\n%s: Your partition is not big enough to contain the \n"
+		    "filesystem of (%lu) blocks as was specified in the found super block.\n", 
+		    __FUNCTION__,  get_sb_block_count(sb) - 1);
+	    
+	    freemem (fs);
+	    close (fd);
+	    brelse(bh);
+	    return NULL;
+	}
+	
+	brelse(tmp_bh);
+    }
    
     fs->fs_blocksize = get_sb_block_size (sb);
     
@@ -137,7 +167,10 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
    constant for given size and version of a filesystem */
 reiserfs_filsys_t * reiserfs_create (char * filename,
 				     int version,
-				     unsigned long block_count, int block_size, int default_journal, int new_format)
+				     unsigned long block_count, 
+				     int block_size, 
+				     int default_journal, 
+				     int new_format)
 {
     reiserfs_filsys_t * fs;
 
@@ -151,11 +184,11 @@ reiserfs_filsys_t * reiserfs_create (char * filename,
 	return 0;
     }
 
-    if (!is_block_count_correct (REISERFS_DISK_OFFSET_IN_BYTES / block_size, block_size, block_count, 0)) {
-//    if (block_count < min_block_amount (block_size, 0)) {
-	reiserfs_warning (stderr, "reiserfs_create: "
-			  "can not create that small (%d blocks) filesystem\n",
-			  block_count);
+    if (!is_block_count_correct (REISERFS_DISK_OFFSET_IN_BYTES / block_size, 
+	block_size, block_count, 0)) 
+    {
+	reiserfs_warning (stderr, "reiserfs_create: can not create that small "
+	    "(%d blocks) filesystem\n", block_count);
 	return 0;
     }
 
@@ -167,8 +200,8 @@ reiserfs_filsys_t * reiserfs_create (char * filename,
 
     fs->fs_dev = open (filename, O_RDWR | O_LARGEFILE);
     if (fs->fs_dev == -1) {
-	reiserfs_warning (stderr, "reiserfs_create: could not open %s: %m\n",
-			  filename);
+	reiserfs_warning (stderr, "reiserfs_create: could not open %s: %s\n",
+			  filename, strerror(errno));
 	freemem (fs);
 	return 0;
     }
@@ -178,9 +211,11 @@ reiserfs_filsys_t * reiserfs_create (char * filename,
     fs->fs_format = version;
 
     if (new_format)
-        fs->fs_super_bh = getblk (fs->fs_dev, REISERFS_DISK_OFFSET_IN_BYTES / block_size, block_size);
+        fs->fs_super_bh = getblk (fs->fs_dev, 
+	    REISERFS_DISK_OFFSET_IN_BYTES / block_size, block_size);
     else 
-        fs->fs_super_bh = getblk (fs->fs_dev, REISERFS_OLD_DISK_OFFSET_IN_BYTES / block_size, block_size);
+        fs->fs_super_bh = getblk (fs->fs_dev, 
+	    REISERFS_OLD_DISK_OFFSET_IN_BYTES / block_size, block_size);
     
     if (!fs->fs_super_bh) {
 	reiserfs_warning (stderr, "reiserfs_create: getblk failed\n");
@@ -207,7 +242,8 @@ reiserfs_filsys_t * reiserfs_create (char * filename,
     set_sb_block_size (fs->fs_ondisk_sb, block_size);
     switch (version) {
     case REISERFS_FORMAT_3_5:
-	set_sb_oid_maxsize (fs->fs_ondisk_sb, (block_size - SB_SIZE_V1) / sizeof(__u32) / 2 * 2);
+	set_sb_oid_maxsize (fs->fs_ondisk_sb, 
+	    (block_size - SB_SIZE_V1) / sizeof(__u32) / 2 * 2);
 	/* sb_oid_cursize */
 	/* sb_state */
 	memcpy (fs->fs_ondisk_sb->s_v1.s_magic, REISERFS_3_5_SUPER_MAGIC_STRING,
@@ -215,7 +251,8 @@ reiserfs_filsys_t * reiserfs_create (char * filename,
 	break;
 
     case REISERFS_FORMAT_3_6:
-	set_sb_oid_maxsize (fs->fs_ondisk_sb, (block_size - SB_SIZE) / sizeof(__u32) / 2 * 2);
+	set_sb_oid_maxsize (fs->fs_ondisk_sb, 
+	    (block_size - SB_SIZE) / sizeof(__u32) / 2 * 2);
 	/* sb_oid_cursize */
 	/* sb_state */
         memcpy (fs->fs_ondisk_sb->s_v1.s_magic, REISERFS_3_6_SUPER_MAGIC_STRING,
@@ -262,24 +299,15 @@ int spread_bitmaps (reiserfs_filsys_t * fs)
 /* 0 means: do not guarantee that fs is consistent */
 int reiserfs_is_fs_consistent (reiserfs_filsys_t * fs)
 {
-    if (get_sb_umount_state (fs->fs_ondisk_sb) == REISERFS_CLEANLY_UMOUNTED &&
-	get_sb_fs_state (fs->fs_ondisk_sb) == REISERFS_CONSISTENT)
+    if (get_sb_umount_state (fs->fs_ondisk_sb) == FS_CLEANLY_UMOUNTED &&
+	get_sb_fs_state (fs->fs_ondisk_sb) == FS_CONSISTENT)
 	return 1;
     return 0;
 }
 
-
-void reiserfs_reopen (reiserfs_filsys_t * fs, int flag)
-{
-    reiserfs_only_reopen (fs, flag);
-    reiserfs_reopen_journal (fs, flag);
-
-}
-
-
 /* flush bitmap, brelse super block, flush all dirty buffers, close and open
    again the device, read super block */
-void reiserfs_only_reopen (reiserfs_filsys_t * fs, int flag)
+static void reiserfs_only_reopen (reiserfs_filsys_t * fs, int flag)
 {
     unsigned long super_block;
 
@@ -291,11 +319,11 @@ void reiserfs_only_reopen (reiserfs_filsys_t * fs, int flag)
     
     invalidate_buffers (fs->fs_dev);
     if (close (fs->fs_dev))
-	die ("reiserfs_reopen: closed failed: %m");
+	die ("reiserfs_reopen: closed failed: %s", strerror(errno));
     
     fs->fs_dev = open (fs->fs_file_name, flag | O_LARGEFILE);
     if (fs->fs_dev == -1)
-	die ("reiserfs_reopen: could not reopen device: %m");
+	die ("reiserfs_reopen: could not reopen device: %s", strerror(errno));
 
     fs->fs_super_bh = bread (fs->fs_dev, super_block, fs->fs_blocksize);
     if (!fs->fs_super_bh)
@@ -309,6 +337,11 @@ void reiserfs_only_reopen (reiserfs_filsys_t * fs, int flag)
 	fs->fs_dirt = 0;
 }
 
+void reiserfs_reopen (reiserfs_filsys_t * fs, int flag)
+{
+    reiserfs_only_reopen (fs, flag);
+    reiserfs_reopen_journal (fs, flag);
+}
 
 int is_opened_rw (reiserfs_filsys_t * fs)
 {
@@ -858,7 +891,7 @@ int reiserfs_locate_entry (reiserfs_filsys_t * fs, struct key * dir, char * name
 	    }
 
 	    /* the name in directory has the same hash as the given name */
-	    if ((name_in_entry_length (ih, deh, i) == strlen (name)) &&
+	    if ((name_in_entry_length (ih, deh, i) == (int)strlen (name)) &&
 		!memcmp (name_in_entry (deh, i), name, strlen (name))) {
 		path->pos_in_item = i;
 		return 1;
@@ -900,7 +933,7 @@ int reiserfs_locate_entry (reiserfs_filsys_t * fs, struct key * dir, char * name
    generation counter in 'min_gen_counter'. dies if found object is not a
    directory. */
 int reiserfs_find_entry (reiserfs_filsys_t * fs, struct key * dir, char * name, 
-			 int * min_gen_counter, struct key * key)
+			 unsigned int * min_gen_counter, struct key * key)
 {
     struct key entry_key;
     int retval;
@@ -938,7 +971,7 @@ int reiserfs_find_entry (reiserfs_filsys_t * fs, struct key * dir, char * name,
 	    if (GET_GENERATION_NUMBER (get_deh_offset (deh)) == *min_gen_counter)
 		(*min_gen_counter) ++;
 			
-	    if ((name_in_entry_length (ih, deh, i) == strlen (name)) &&
+	    if ((name_in_entry_length (ih, deh, i) == (int)strlen (name)) &&
 	        (!memcmp (name_in_entry (deh, i), name, strlen (name)))) {
 		/* entry found in the directory */
 		if (key) {
@@ -1009,13 +1042,13 @@ char * make_entry (char * entry, char * name, struct key * key, __u32 offset)
 /* add new name into a directory. If it exists in a directory - do
    nothing */
 int reiserfs_add_entry (reiserfs_filsys_t * fs, struct key * dir, char * name, int name_len,
-			struct key * key, int fsck_need)
+			struct key * key, __u16 fsck_need)
 {
     struct item_head entry_ih = {{0,}, };
     char * entry;
     int retval;
     INITIALIZE_PATH(path);
-    int gen_counter;
+    unsigned int gen_counter;
     int item_len;
     __u32 hash;
 
@@ -1217,7 +1250,8 @@ int create_badblock_bitmap (reiserfs_filsys_t * fs, char * badblocks_file) {
 	if (blocknr < get_sb_block_count (fs->fs_ondisk_sb) && !not_data_block (fs, blocknr)) {
 	    reiserfs_bitmap_set_bit (fs->fs_badblocks_bm, blocknr);
 	} else {
-	    fprintf (stderr, "%s: bad block number %u in badblocks file\n", __FUNCTION__, blocknr);
+	    fprintf (stderr, "%s: block number %u belongs to internal reiserfs structures.\n", 
+		__FUNCTION__, blocknr);
 	}
     }
 

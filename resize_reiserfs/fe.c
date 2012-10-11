@@ -1,9 +1,9 @@
 /*
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "resize.h"
-
 
 /* the front-end for kernel on-line resizer */
 int resize_fs_online(char * devname, unsigned long blocks)

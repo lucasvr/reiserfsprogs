@@ -1,7 +1,8 @@
 /*
- * Copyright 2000, 2001, 2002 by Hans Reiser, licensing governed by
- * reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
@@ -18,3 +19,5 @@
 #include "io.h"
 #include "misc.h"
 #include "reiserfs_lib.h"
+#include "swab.h"
+

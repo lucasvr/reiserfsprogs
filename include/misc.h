@@ -1,5 +1,6 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 /* nothing abount reiserfs here */
@@ -19,14 +20,17 @@
 void check_memory_msg(void);
 void die (char * fmt, ...) __attribute__ ((format (printf, 1, 2)));
 void * getmem (int size);
+void *mem_alloc(int size);
 void freemem (void * p);
 void checkmem (char * p, int size);
 void * expandmem (void * p, int size, int by);
-int get_mem_size (char * p);
+unsigned int get_mem_size (char * p);
 int is_mounted (char * device_name);
 int is_mounted_read_only (char * device_name);
 void check_and_free_mem (void);
 char * kdevname (int dev);
+
+void misc_print_credit(FILE *out);
 
 typedef struct dma_info {
     int fd;
@@ -40,7 +44,7 @@ int prepare_dma_check(dma_info_t *dma_info);
 int get_dma_info(dma_info_t *dma_info);
 void clean_after_dma_check(int fd, dma_info_t *dma_info);
 
-void print_how_far (FILE * fp, unsigned long * passed, unsigned long total, int inc, int quiet);
+void print_how_far (FILE * fp, unsigned long *passed, unsigned long total, unsigned int inc, int quiet);
 void print_how_fast (unsigned long total, 
 		     unsigned long passed, int cursor_pos, int reset_time);
 __u32 get_random (void);
@@ -49,27 +53,34 @@ int generate_random_uuid (unsigned char * uuid);
 int uuid_is_correct (unsigned char * uuid);
 int set_uuid (const unsigned char * text, unsigned char * UUID);
 
-#include <asm/bitops.h>
+//#include <asm/bitops.h>
+
+extern inline int misc_set_bit (unsigned long long nr, void * addr);
+extern inline int misc_clear_bit (unsigned long long nr, void * addr);
+extern inline int misc_test_bit(unsigned long long nr, const void * addr);
+extern inline unsigned long long misc_find_first_zero_bit (const void *vaddr, unsigned long long size);
+extern inline unsigned long long misc_find_next_zero_bit (const void *vaddr, unsigned long long size, unsigned long long offset);
+extern inline unsigned long long misc_find_next_set_bit(const void *vaddr, unsigned long long size, unsigned long long offset);
+extern inline unsigned long long misc_find_first_set_bit (const void *vaddr, unsigned long long size);
+ 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-int le_set_bit (int nr, void * addr);
-int le_clear_bit (int nr, void * addr);
-int le_test_bit(int nr, const void * addr);
-int le_find_first_zero_bit (const void *vaddr, unsigned size);
-int le_find_next_zero_bit (const void *vaddr, unsigned size, unsigned offset);
+
 # define cpu_to_le16(val)                 (val)
 # define le16_to_cpu(val)                 (val)
 # define cpu_to_le32(val)                 (val)
 # define le32_to_cpu(val)                 (val)
 # define cpu_to_le64(val)                 (val)
 # define le64_to_cpu(val)                 (val)
+
 #elif __BYTE_ORDER == __BIG_ENDIAN
 
-# define cpu_to_le16(val)                 swab16(val)
-# define le16_to_cpu(val)                 swab16(val)
-# define cpu_to_le32(val)                 swab32(val)
-# define le32_to_cpu(val)                 swab32(val)
-# define cpu_to_le64(val)                 swab64(val)
-# define le64_to_cpu(val)                 swab64(val)
+# define cpu_to_le16(val)                 __swab16(val)
+# define le16_to_cpu(val)                 __swab16(val)
+# define cpu_to_le32(val)                 __swab32(val)
+# define le32_to_cpu(val)                 __swab32(val)
+# define cpu_to_le64(val)                 __swab64(val)
+# define le64_to_cpu(val)                 __swab64(val)
+
 #else
 # error "nuxi/pdp-endian archs are not supported"
 #endif

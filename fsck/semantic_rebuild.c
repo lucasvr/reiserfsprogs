@@ -1,6 +1,8 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
+
 #include "fsck.h"
 
 int screen_width;
@@ -93,14 +95,14 @@ void erase_name (int len)
 
 
 /* *size is "real" file size, sd_size - size from stat data */
-int wrong_st_size (struct key * key, loff_t max_file_size, int blocksize,
-		   __u64 * size, __u64 sd_size, int is_dir)
+int wrong_st_size (struct key * key, unsigned long long max_file_size, 
+    int blocksize, __u64 * size, __u64 sd_size, int type)
 {
     if (sd_size <= max_file_size) {
 	if (sd_size == *size)
 	    return 0;
 
-	if (is_dir) {
+	if (type == TYPE_DIRENTRY) {
 	    /* directory size must match to the sum of length of its entries */
 	    fsck_log ("vpf-10650: The directory %K has the wrong size in the StatData "
 		"(%Ld)%s(%Ld)\n", key, sd_size, fsck_mode(fs) == FSCK_CHECK ? 
@@ -110,10 +112,11 @@ int wrong_st_size (struct key * key, loff_t max_file_size, int blocksize,
 	
 	if (sd_size > *size) {
 	    /* size in stat data can be bigger than size calculated by items */
-	    if (fsck_adjust_file_size (fs)) {
+	    if (fsck_adjust_file_size (fs) || type == TYPE_SYMLINK) {
 		/* but it -o is given - fix that */
-		fsck_log ("vpf-10660: The file %K has too big size in the StatData (%Ld) "
-		    "- corrected to (%Ld)\n", key, sd_size, *size);
+		fsck_log ("vpf-10660: The file %K has too big size in the StatData "
+		    "(%Ld)%s(%Ld)\n", key, sd_size, fsck_mode(fs) == FSCK_CHECK ? 
+		    ", should be " : " - corrected to ", *size);
 		sem_pass_stat (fs)->fixed_sizes ++;
 		return 1;
 	    }
@@ -142,7 +145,7 @@ int wrong_st_size (struct key * key, loff_t max_file_size, int blocksize,
 	}
     }
 
-    fsck_log ("vpf-10670: The file %K has wrong size in StatData (%Ld)%s(%Ld)\n", key, 
+    fsck_log ("vpf-10670: The file %K has the wrong size in the StatData (%Ld)%s(%Ld)\n", key, 
 	sd_size, fsck_mode(fs) == FSCK_CHECK ? ", should be " : " - corrected to ", 
 	*size);
     sem_pass_stat (fs)->fixed_sizes ++;
@@ -404,6 +407,7 @@ int rebuild_check_regular_file (struct path * path, void * sd,
 	*new_ih = *ih;
 	pathrelse (path);
 	rewrite_file (new_ih, 1, 1);
+	linked_already(&new_ih->ih_key);
 	sem_pass_stat (fs)->oid_sharing_files_relocated ++;
 	retval = RELOCATED;
 	if (reiserfs_search_by_key_4 (fs, &(new_ih->ih_key), path) == ITEM_NOT_FOUND)
@@ -414,7 +418,10 @@ int rebuild_check_regular_file (struct path * path, void * sd,
 	bh = get_bh (path);
 	mark_item_reachable (ih, bh);
 	sd = get_item (path);
+	
     }
+	
+    id_map_mark(semantic_id_map(fs), get_key_objectid (&ih->ih_key));
 
     /* check and set nlink first */
     get_sd_nlink (ih, sd, &nlink);
@@ -423,7 +430,7 @@ int rebuild_check_regular_file (struct path * path, void * sd,
     mark_buffer_dirty (bh);
 
     if (nlink > 1)
-	return OK;
+	return retval;
 
     /* firts name of a file found */
     if (get_ih_item_len (ih) == SD_SIZE)
@@ -452,7 +459,9 @@ int rebuild_check_regular_file (struct path * path, void * sd,
 //    sd_key = sd_ih.ih_key;
     pathrelse (path);
     
-    if (are_file_items_correct (&sd_ih, sd, &real_size, &blocks, 1/*mark items reachable*/, &symlnk) != 1) {
+    if (are_file_items_correct (&sd_ih, sd, &real_size, &blocks, 1/*mark items reachable*/, 
+	&symlnk) != 1) 
+    {
 	/* unpassed items will be deleted in pass 4 as they left unaccessed */
 	sem_pass_stat (fs)->broken_files ++;
     }
@@ -463,10 +472,11 @@ int rebuild_check_regular_file (struct path * path, void * sd,
 
     if (!is_new_file)
 	fix_sd += wrong_first_direct_byte (&sd_ih.ih_key, fs->fs_blocksize,
-					   &first_direct_byte, saved_first_direct_byte, real_size);
+	    &first_direct_byte, saved_first_direct_byte, real_size);
 
-    fix_sd += wrong_st_size (/*&sd_key,*/ &sd_ih.ih_key, is_new_file ? MAX_FILE_SIZE_V2 : MAX_FILE_SIZE_V1,
-			     fs->fs_blocksize, &real_size, saved_size, 0/*not dir*/);
+    fix_sd += wrong_st_size (/*&sd_key,*/ &sd_ih.ih_key, 
+	is_new_file ? MAX_FILE_SIZE_V2 : MAX_FILE_SIZE_V1,
+	fs->fs_blocksize, &real_size, saved_size, symlnk ? TYPE_SYMLINK : 0);
 
     fix_sd += wrong_st_blocks (&sd_ih.ih_key, &blocks, saved_blocks, mode, is_new_file);
 
@@ -474,7 +484,8 @@ int rebuild_check_regular_file (struct path * path, void * sd,
 	/* find stat data and correct it */
 	set_type_and_offset (KEY_FORMAT_1, &sd_ih.ih_key, SD_OFFSET, TYPE_STAT_DATA);
 	if (reiserfs_search_by_key_4 (fs, &sd_ih.ih_key, path) != ITEM_FOUND)
-	    reiserfs_panic ("%s: The StatData of the file %k could not be found", __FUNCTION__, &sd_ih.ih_key);
+	    reiserfs_panic ("%s: The StatData of the file %k could not be found", 
+		__FUNCTION__, &sd_ih.ih_key);
 	
 	bh = get_bh (path);
 	ih = get_ih (path);
@@ -517,7 +528,8 @@ static char * get_next_directory_item (struct key * key, /* on return this will
 
 
     if ((retval = reiserfs_search_by_entry_key (fs, key, &path)) != POSITION_FOUND)
-	reiserfs_panic ("get_next_directory_item: The current directory %k cannot be found", key);
+	reiserfs_panic ("get_next_directory_item: The current directory %k cannot be "
+	    "found", key);
 
     /* leaf containing directory item */
     bh = PATH_PLAST_BUFFER (&path);
@@ -590,7 +602,7 @@ static char * get_next_directory_item (struct key * key, /* on return this will
 	set_key_objectid (key, 0);
     }
 
-    if (fsck_mode (fs) != FSCK_CHECK && fsck_mode (fs) != FSCK_FIX_FIXABLE)
+    if (fsck_mode (fs) == FSCK_REBUILD)
         mark_item_reachable (get_ih (&path), bh);
     pathrelse (&path);
 
@@ -640,8 +652,8 @@ int fix_obviously_wrong_sd_mode (struct path * path) {
 	    mark_buffer_dirty (get_bh(path));
 	} else {
 	    fsck_log ("\n");
+	    retval = 1;
 	}
-	retval = 1;
     } else if (!not_a_directory (get_item (path)) && !is_direntry_key (next_key)) {
         /* make SD mode SD of regular file */
 	get_sd_mode (get_ih (path), get_item (path), &mode);
@@ -654,9 +666,9 @@ int fix_obviously_wrong_sd_mode (struct path * path) {
 	    mark_buffer_dirty (get_bh(path));
 	} else {
 	    fsck_log ("\n");
+	    retval = 1;
 	}
 	    
-	retval = 1;
     }
 
     return retval;
@@ -719,15 +731,14 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
     relocate = 0;
     if (!nlink) {
 	/* we reached the stat data for the first time */
-	if (is_objectid_really_used (semantic_id_map (fs), get_key_objectid (&ih->ih_key), &pos_in_item)) {
+	if (id_map_mark(semantic_id_map(fs), get_key_objectid (&ih->ih_key))) {
 	    /* calculate number of found files/dirs who are using objectid
 	       which is used by another file */
 	    sem_pass_stat (fs)->oid_sharing ++;
 	    if (1/*fsck_adjust_file_size (fs)*/)
 		/* this works for files only */
 		relocate = 1;
-	} else
-	    __mark_objectid_really_used (semantic_id_map (fs), get_key_objectid (&ih->ih_key), pos_in_item);
+	} 
 
 	mark_item_reachable (ih, bh);
     }
@@ -742,13 +753,16 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
 
     if (relocate) {
 	if (!new_ih)
-	    reiserfs_panic ("rebuild_semantic_pass: Memory is not prepared for relocation of %K", &ih->ih_key);
+	    reiserfs_panic ("rebuild_semantic_pass: Memory is not prepared for relocation of %K",
+		   &ih->ih_key);
 	*new_ih = *ih;
 	pathrelse (&path);
 	sem_pass_stat (fs)->oid_sharing_dirs_relocated ++;
 	relocate_dir (new_ih, 1);
-	*key = new_ih->ih_key;
+	linked_already(&new_ih->ih_key);
+	*key = new_ih->ih_key;	
 	retval = RELOCATED;
+	
 	goto start_again;
     }
 
@@ -859,7 +873,7 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
 	
 	    if ((dir_format == KEY_FORMAT_2) && (entry_len % 8 != 0)) {
 	    	/* not alighed directory of new format - delete it */
-		fsck_log ("Entry %K (\"%.*s\") in the directory %K is not formated properly - deleted\n",
+		fsck_log ("Entry %K (\"%.*s\") in the directory %K is not formated properly - fixed.\n",
 			  (struct key *)&(deh->deh2_dir_id), namelen, name, &tmp_ih.ih_key);
 		reiserfs_remove_entry (fs, &entry_key);
 		entry_len = name_length (name, dir_format);
@@ -957,7 +971,7 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
     fix_sd = 0;
     fix_sd += wrong_st_blocks (key, &blocks, saved_blocks, mode, is_new_dir);
     fix_sd += wrong_st_size (key, is_new_dir ? MAX_FILE_SIZE_V2 : MAX_FILE_SIZE_V1,
-			     fs->fs_blocksize, &dir_size, saved_size, 1/*dir*/);
+			     fs->fs_blocksize, &dir_size, saved_size, TYPE_DIRENTRY);
 
     if (fix_sd) {
 	/* we have to fix either sd_size or sd_blocks, so look for stat data again */
@@ -1042,7 +1056,7 @@ static void make_sure_lost_found_exists (reiserfs_filsys_t * fs)
 {
     int retval;
     INITIALIZE_PATH (path);
-    int gen_counter;
+    unsigned int gen_counter;
     __u32 objectid;
     __u64 sd_size;
     __u32 sd_blocks;
@@ -1057,7 +1071,7 @@ static void make_sure_lost_found_exists (reiserfs_filsys_t * fs)
 				  "lost+found", &gen_counter,
 				  &lost_found_dir_key);
     if (!retval) {
-	objectid = get_unused_objectid (fs);
+	objectid = id_map_alloc(proper_id_map(fs));
 	if (!objectid) {
 	    fsck_progress ("Could not allocate an objectid for \"/lost+found\", \
 		lost files will not be linked\n");
@@ -1133,10 +1147,11 @@ static void save_rebuild_semantic_result (reiserfs_filsys_t * fs) {
 	return;
 
     reiserfs_begin_stage_info_save (file, SEMANTIC_DONE);
+    /*  Method not implemented yet.
     reiserfs_objectid_map_save (file, semantic_id_map (fs));
+    */
     reiserfs_end_stage_info_save (file);
     close_file (file);
-    retval = unlink (state_dump_file (fs));
     retval = rename ("temp_fsck_file.deleteme", state_dump_file (fs));
     if (retval != 0)
 	fsck_progress ("%s: Could not rename the temporary file temp_fsck_file.deleteme to %s",
@@ -1158,14 +1173,16 @@ void load_semantic_result (FILE * file, reiserfs_filsys_t * fs)
     fs->block_deallocator = reiserfsck_reiserfs_free_block;
 
     /* we need objectid map on semantic pass to be able to relocate files */
-    proper_id_map (fs) = init_id_map ();
+    proper_id_map (fs) = id_map_init();
+    /* Not implemented yet.    
     fetch_objectid_map (proper_id_map (fs), fs);
     semantic_id_map (fs) = reiserfs_objectid_map_load (file);
+    */
 }
 
 static void before_pass_3 (reiserfs_filsys_t * fs)
 {
-    semantic_id_map (fs) = init_id_map ();
+    semantic_id_map (fs) = id_map_init();
 }
 
 static void after_pass_3 (reiserfs_filsys_t * fs)
@@ -1176,7 +1193,7 @@ static void after_pass_3 (reiserfs_filsys_t * fs)
 
     /* write all dirty blocks */
     fsck_progress ("Flushing..");
-    flush_objectid_map (proper_id_map (fs), fs);
+    id_map_flush(proper_id_map (fs), fs);
     fs->fs_dirt = 1;
     reiserfs_flush_to_ondisk_bitmap (fsck_new_bitmap(fs), fs);
     reiserfs_flush (fs);
@@ -1192,7 +1209,7 @@ static void after_pass_3 (reiserfs_filsys_t * fs)
 
     save_rebuild_semantic_result (fs);
 
-    free_id_map (proper_id_map (fs));
+    id_map_free(proper_id_map (fs));
     proper_id_map (fs) = 0;
 
     fs->fs_dirt = 1;
@@ -1207,7 +1224,7 @@ void pass_3_semantic (reiserfs_filsys_t * fs)
 
     fsck_progress ("Pass 3 (semantic):\n");
 
-    /* when warnings go not to stderr - separate then in the log */
+    /* when warnings go not to stderr - separate them in the log */
     if (fsck_log_file (fs) != stderr)
 	fsck_log ("####### Pass 3 #########\n");
 
@@ -1218,8 +1235,8 @@ void pass_3_semantic (reiserfs_filsys_t * fs)
     make_sure_root_dir_exists (fs, modify_item, 1 << IH_Unreachable);
     make_sure_lost_found_exists (fs);
 
-    mark_objectid_really_used (proper_id_map (fs), get_key_objectid (&root_dir_key));
-    mark_objectid_really_used (proper_id_map (fs), get_key_objectid (&lost_found_dir_key));
+    id_map_mark(proper_id_map(fs), get_key_objectid(&root_dir_key));
+    id_map_mark(proper_id_map(fs), get_key_objectid(&lost_found_dir_key));
     
     /* link all relocated files into /lost+found directory */
     link_relocated_files ();

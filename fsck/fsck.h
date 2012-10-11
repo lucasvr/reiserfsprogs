@@ -1,5 +1,6 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #define _GNU_SOURCE
@@ -26,18 +27,25 @@
 extern reiserfs_filsys_t * fs;
 int main (int argc, char * argv []);
 
+/* Exit codes. */
+#define EXIT_OK		0
+#define EXIT_FIXED	1
+#define EXIT_FATAL	4
+#define EXIT_FIXABLE	6
+#define EXIT_OPER	8   /* Some operation returns error. */
+#define EXIT_USER	16
 
 /*
  * modes
  */
-#define DO_NOTHING              0 /* -a specified */
+#define DO_NOTHING              0
 #define FSCK_CHECK              1
 #define FSCK_FIX_FIXABLE        2
 #define FSCK_SB                 3
 #define FSCK_REBUILD            4
 #define FSCK_ROLLBACK_CHANGES   5
 #define FSCK_CLEAN_ATTRIBUTES	7
-#define AUTO                    8 /* -p specified */
+#define FSCK_AUTO               8 /* -a || -p specified */
 
 /* temporary */
 #define DO_TEST                 9
@@ -45,30 +53,32 @@ int main (int argc, char * argv []);
 /*
  * options
  */
-#define OPT_INTERACTIVE                 0x1
-//#define OPT_FIX_FIXABLE               0x2 /* not default yet */
-#define OPT_ADJUST_FILE_SIZE            0x4   /* not default yet */
-#define OPT_QUIET                       0x8	  /* no "speed" info */
-/*#define OPT_SAVE_EXTERN_BITMAP        0x10*/
-#define OPT_SILENT                      0x20	  /* no complains about found corruptions */
-#define OPT_BACKGROUND                  0x40
-#define OPT_SKIP_JOURNAL                0x80
-#define OPT_HASH_DEFINED                0x100
-#define OPT_SAVE_PASSES_DUMP            0x200
-#define BADBLOCKS_FILE               	0x400
-#define OPT_SAVE_ROLLBACK               0x800
+
+#define OPT_INTERACTIVE                 1 << 0
+#define OPT_ADJUST_FILE_SIZE            1 << 1	/* not default yet */
+#define OPT_QUIET                       1 << 2	/* no "speed" info */
+#define OPT_SILENT                      1 << 3	/* no complains about found corruptions */
+#define OPT_BACKGROUND                  1 << 4
+#define OPT_SKIP_JOURNAL                1 << 5
+#define OPT_HASH_DEFINED                1 << 6
+#define OPT_SAVE_PASSES_DUMP            1 << 7
+#define OPT_SAVE_ROLLBACK               1 << 8
+#define OPT_YES				1 << 9
+#define BADBLOCKS_FILE               	1 << 10
 
 
 /* pass0.c */
 void pass_0 (reiserfs_filsys_t *);
 void load_pass_0_result (FILE *, reiserfs_filsys_t *);
 
+int leaf_structure_check(reiserfs_filsys_t * fs, struct buffer_head * bh);
+
 int is_used_leaf (unsigned long block);
 int is_good_unformatted (unsigned long block);
 void mark_good_unformatted (unsigned long block);
 int is_bad_unformatted (unsigned long block);
 
-int are_there_allocable_blocks (int amout_needed);
+int are_there_allocable_blocks (unsigned int amout_needed);
 unsigned long alloc_block (void);
 void make_allocable (unsigned long block);
 void register_uninsertable (unsigned long block);
@@ -117,11 +127,11 @@ void rewrite_object (struct item_head * ih, int do_remap);
 void pass_2_take_bad_blocks_put_into_tree (void);
 /*int is_remapped (struct item_head * ih);*/
 void link_relocated_files (void);
-//void relocate_file (struct item_head * ih, int change_ih);
 int should_relocate (struct item_head * ih);
 void relocate_dir (struct item_head * ih, int change_ih);
-__u32 objectid_for_relocation (struct key * key);
-int should_be_relocated (struct key * key);
+
+extern __u32 objectid_for_relocation (struct key * key);
+extern void linked_already(struct key *new_key);
 
 /* file.c */
 struct si {
@@ -134,7 +144,7 @@ struct si {
     struct si * last_known;
 };
 void put_saved_items_into_tree (struct si *);
-int reiserfsck_file_write (struct item_head * ih, char * item, int);
+int reiserfsck_file_write (struct item_head * ih, char * item, int was_in_tree);
 int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, __u32 * blocks, int mark_passed_items, int * symlink);
 int delete_N_items_after_key(struct key * start_key, struct si ** save_here, int skip_dir_items, int n_to_delete);
 void rewrite_file (struct item_head * ih, int should_relocate, int should_change_ih);
@@ -182,11 +192,9 @@ void pass_4_check_unaccessed_items (void);
 
 /* check.c */
 int is_leaf_bad (struct buffer_head * bh);
-int is_internal_bad (struct buffer_head * bh);
 int is_bad_item (struct buffer_head * bh, struct item_head *, char *);
 /*int check_file_system (void);*/
 void reiserfsck_check_pass1 (void);
-void reiserfsck_check_after_all (void);
 /*char * bad_name (char * name, int namelen);*/
 /* to test result of direcotry item recovering on pass 0 */
 int is_bad_directory (struct item_head * ih, char * item, int dev, int blocksize);
@@ -200,7 +208,9 @@ void do_clean_attributes (reiserfs_filsys_t * fs);
 int bad_pair (reiserfs_filsys_t *, struct buffer_head * bh, int i);
 int bad_leaf_2 (reiserfs_filsys_t *, struct buffer_head * bh);
 
-
+extern int should_be_relocated (struct key * key);
+extern void to_be_relocated (struct key * key);
+extern void clear_relocated_list(void);
 
 /* ustree.c */
 void reiserfsck_paste_into_item (struct path * path, const char * body, int size);
@@ -217,7 +227,7 @@ void reiserfsck_cut_from_item (struct path * path, int cut_size);
 
 typedef int do_after_read_t (reiserfs_filsys_t *, struct buffer_head **, int h);
 typedef int do_on_full_path_t (reiserfs_filsys_t *, struct buffer_head **, int);
-void pass_through_tree (reiserfs_filsys_t *, do_after_read_t, do_on_full_path_t);
+void pass_through_tree (reiserfs_filsys_t *, do_after_read_t, do_on_full_path_t, int depth);
 
 //int comp_keys_3 (void * key1, void * key2);
 //int comp_dir_entries (void * key1, void * key2);
@@ -239,50 +249,31 @@ int is_block_uninsertable (unsigned long block);
 /* objectid.c */
 int comp_ids(const void *p1, const void *p2);
 int is_objectid_used (reiserfs_filsys_t *, __u32 objectid);
-__u32 get_unused_objectid (reiserfs_filsys_t *);
 
-struct id_map * init_id_map (void);
-void free_id_map (struct id_map *);
-int is_objectid_really_used (struct id_map *, __u32 id, __u32 * ppos);
-int mark_objectid_really_used (struct id_map *, __u32 id);
-int __mark_objectid_really_used (struct id_map *, __u32 id, __u32 pos);
-void flush_objectid_map (struct id_map * map, reiserfs_filsys_t * fs);
+typedef struct id_map {
+    void **index;
+    __u32 count, last_used;
+} id_map_t;
+
+id_map_t *id_map_init();
+void id_map_free(id_map_t *);
+int id_map_test(id_map_t *map, __u32 id);
+int id_map_mark(id_map_t *map, __u32 id);
+__u32 id_map_alloc(id_map_t *map);
+void id_map_flush(struct id_map * map, reiserfs_filsys_t * fs);
+    
+/* FIXME: Needs to be implemented
 void fetch_objectid_map (struct id_map * map, reiserfs_filsys_t * fs);
 
 void reiserfs_objectid_map_save (FILE * fp, struct id_map * id_map);
 struct id_map * reiserfs_objectid_map_load (FILE * fp);
-
-/* segments.c */
-/*
-struct overwritten_unfm_segment {
-    int ous_begin;
-    int ous_end;
-    struct overwritten_unfm_segment * ous_next;  
-};
-struct overwritten_unfm * look_for_overwritten_unfm (__u32);
-struct overwritten_unfm_segment * find_overwritten_unfm (unsigned long unfm, int length, struct overwritten_unfm_segment * segment_to_init);
-int get_unoverwritten_segment (struct overwritten_unfm_segment * list_head, struct overwritten_unfm_segment * unoverwritten_segment);
-void save_unfm_overwriting (unsigned long unfm, struct item_head * direct_ih);
-void free_overwritten_unfms (void);
 */
 
 void mark_formatted_pointed_by_indirect (__u32);
 int is_formatted_pointed_by_indirect (__u32);
 
-
-/* size of 1 piece of in-memory map */
-#define MAP_SIZE   4096
-
-struct id_map {
-    __u32 * m_begin; /* pointer to map area */
-    __u32 m_used_slots_count;
-    int m_page_count; /* objectid map expands by one page at
-                         time. This is size of objectid map size in
-                         pages */
-    unsigned long objectids_marked; /* number of objectids marked used
-                                       in a map */
-};			
-
+#define MAP_NOT_PACKED	0
+#define MAP_PACKED	1
 
 struct pass0_stat {
     unsigned long dealt_with; /* number of blocks read during pass 0 */
@@ -357,8 +348,10 @@ struct rebuild_info {
 	struct pass0_stat pass0;
 	struct pass1_stat pass1;
 	struct pass2_stat pass2;
-	struct semantic_stat semantic;
-	struct lost_found_stat lost_found;
+	struct {
+	    struct semantic_stat semantic;
+	    struct lost_found_stat lost_found;
+	} tree;
 	struct pass_4_stat pass4;
     } pass_u;
 
@@ -428,8 +421,8 @@ struct fsck_data {
     FILE * progress;
 
     /* objectid maps */
-    struct id_map * proper_id_map;
-    struct id_map * semantic_id_map; /* this objectid map is used to
+    id_map_t * proper_id_map;
+    id_map_t * semantic_id_map; /* this objectid map is used to
                                         cure objectid sharing problem */
 };
 
@@ -438,8 +431,8 @@ struct fsck_data {
 #define pass_0_stat(fs) (&(fsck_data(fs)->rebuild.pass_u.pass0))
 #define pass_1_stat(fs) (&(fsck_data(fs)->rebuild.pass_u.pass1))
 #define pass_2_stat(fs) (&(fsck_data(fs)->rebuild.pass_u.pass2))
-#define sem_pass_stat(fs) (&(fsck_data(fs)->rebuild.pass_u.semantic))
-#define lost_found_pass_stat(fs) (&(fsck_data(fs)->rebuild.pass_u.lost_found))
+#define sem_pass_stat(fs) (&(fsck_data(fs)->rebuild.pass_u.tree.semantic))
+#define lost_found_pass_stat(fs) (&(fsck_data(fs)->rebuild.pass_u.tree.lost_found))
 #define pass_4_stat(fs) (&(fsck_data(fs)->rebuild.pass_u.pass4))
 
 #define fsck_check_stat(fs) (&(fsck_data(fs)->check))
@@ -470,10 +463,10 @@ struct fsck_data {
 #define fsck_adjust_file_size(fs) (fsck_data(fs)->options & OPT_ADJUST_FILE_SIZE)
 #define fsck_quiet(fs)	(fsck_data(fs)->options & OPT_QUIET)
 #define fsck_silent(fs)	(fsck_data(fs)->options & OPT_SILENT)
-#define fsck_save_leaf_bitmap(fs) (fsck_data(fs)->options & OPT_SAVE_EXTERN_BITMAP)
 #define fsck_in_background(fs) (fsck_data(fs)->options & OPT_BACKGROUND)
 #define fsck_hash_defined(fs) (fsck_data(fs)->options & OPT_HASH_DEFINED)
 #define fsck_skip_journal(fs) (fsck_data(fs)->options & OPT_SKIP_JOURNAL)
+#define fsck_yes_all(fs) (fsck_data(fs)->options & OPT_YES)
 
 
 #define fsck_mode(fs) (fsck_data(fs)->mode)
@@ -508,11 +501,19 @@ reiserfs_warning (fsck_progress_file(fs), fmt, ## list);\
 fflush (fsck_progress_file(fs));\
 }
 
+#define FATAL	1
+#define FIXABLE 2
+
+void one_more_corruption(reiserfs_filsys_t *fs, int kind);
+void one_less_corruption(reiserfs_filsys_t *fs, int kind);
+
+/*
 #define one_more_corruption(fs,kind) fsck_check_stat (fs)->kind##_corruptions++
 #define one_less_corruption(fs,kind) fsck_check_stat (fs)->kind##_corruptions--
+*/
 
 #define fsck_exit(fmt, list...) \
 {\
 reiserfs_warning (fsck_progress_file(fs), fmt, ## list);\
-exit (16);\
+exit (EXIT_USER);\
 }

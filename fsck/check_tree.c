@@ -1,5 +1,6 @@
 /*
- * Copyright 1999, 2000, 2001, 2002 Hans Reiser
+ * Copyright 1999-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "fsck.h"
@@ -11,7 +12,7 @@ struct check_relocated {
     struct check_relocated * next;
 };
 
-struct check_relocated * relocated_list;
+static struct check_relocated * relocated_list;
 
 void to_be_relocated (struct key * key)
 {
@@ -34,32 +35,51 @@ void to_be_relocated (struct key * key)
         new_relocated->next = prev->next;
         prev->next = new_relocated;
     } else {
-        new_relocated->next = 0;
+        new_relocated->next = relocated_list;
         relocated_list = new_relocated;
     }
 }
 
 int should_be_relocated (struct key * key)
 {
-    struct check_relocated * cur, * next;
+    struct check_relocated *cur, *prev;
     int ret = 0;
 
+    if (!key)
+	return 0;
+    
     cur = relocated_list;
 
+    prev = NULL;
     while (cur && comp_short_keys(key, (struct key *)cur) != 1) {
 	if (comp_short_keys (key, (struct key *)cur) == 0) {
 	    ret = 1;
 	    break;
 	}
-        cur = cur->next;
+	prev = cur;
+	cur = cur->next;
     }
-        
-    while (relocated_list != cur) {
+ 
+    if (ret) {
+	/* cur is found */
+	if (prev) /* not the first */
+	    prev->next = cur->next;
+	else /* first */
+	    relocated_list = cur->next;
+	freemem (cur);
+    }
+ 
+    return ret;    
+}
+
+void clear_relocated_list() {
+    struct check_relocated *next;
+
+    while (relocated_list) {
         next = relocated_list->next;
         freemem (relocated_list);
         relocated_list = next;
     }
-    return ret;    
 }
 
 //
@@ -116,7 +136,7 @@ static int did_we_meet_it (unsigned long block)
 
 static void init_control_bitmap (reiserfs_filsys_t * fs)
 {
-    int i;
+    unsigned int i;
     unsigned long block;
     unsigned long reserved;
     
@@ -223,8 +243,8 @@ static void handle_bitmaps (reiserfs_filsys_t * fs)
         } else if (problem) {
 	    fsck_log ("vpf-10640: The on-disk and the correct bitmaps differs.\n");	    
             while (problem) {
-                /* fixable corruptions because we can try to recover them w/out rebuilding the tree */
-        	one_more_corruption (fs, fixable); 
+                /* fixable corruptions because we can try to recover them without rebuilding the tree */
+        	one_more_corruption (fs, FIXABLE); 
         	problem --;
             }
         }
@@ -232,6 +252,21 @@ static void handle_bitmaps (reiserfs_filsys_t * fs)
         fsck_progress ("finished\n");
         
     return;
+}
+
+static int auto_handle_bitmaps (reiserfs_filsys_t *fs) {
+    unsigned long i;
+    
+    if (source_bitmap->bm_byte_size != control_bitmap->bm_byte_size)
+	return -1;
+    
+    for (i = 0; i < source_bitmap->bm_byte_size; i ++) {
+	if (control_bitmap->bm_map[i] & ~source_bitmap->bm_map[i]) {
+	    return 1;
+	}
+    }
+    
+    return 0;
 }
 
 
@@ -276,57 +311,11 @@ static int got_already (reiserfs_filsys_t * fs, unsigned long block)
     return 0;
 }
 
-
-/* 1 if some of fields in the block head of bh look bad */
-static int bad_block_head (reiserfs_filsys_t * fs, struct buffer_head * bh)
-{
-    struct block_head * blkh;
-    int sum_length = 0;
-
-    blkh = B_BLK_HEAD (bh);
-    if (get_blkh_nr_items (blkh) > (bh->b_size - BLKH_SIZE) / IH_SIZE) {
-	fsck_log ("block %lu: The number of items (%u) exceeds the limit.\n",
-		  bh->b_blocknr, get_blkh_nr_items (blkh));
-	one_more_corruption (fs, fatal);
-	return 1;
-    }
-
-    if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF) {
-	fsck_log ("block %lu: The block has wrong structure of items.\n", bh->b_blocknr);
-        one_more_corruption (fs, fatal);
-	return 1;
-    }
-
-    sum_length = (get_blkh_nr_items (blkh) > 0) ?
-	get_ih_location (B_N_PITEM_HEAD (bh, get_blkh_nr_items (blkh) - 1)) : bh->b_size;
-
-    if (get_blkh_free_space (blkh) !=
-	sum_length - BLKH_SIZE - IH_SIZE * get_blkh_nr_items (blkh))
-    {
-	fsck_log ("block %lu: The free space (%lu) is incorrect, should be (%lu)",
-		bh->b_blocknr, get_blkh_free_space (blkh), sum_length - BLKH_SIZE - IH_SIZE * get_blkh_nr_items (blkh) );
-	if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
-	    set_blkh_free_space (blkh, sum_length - BLKH_SIZE - IH_SIZE * get_blkh_nr_items (blkh));
-	    fsck_log (" - corrected\n");
-	    mark_buffer_dirty (bh);
-	} else {
-	    fsck_log ("\n");
-	    one_more_corruption (fs, fixable);
-	    return 1;
-	}
-    }
-
-    return 0;
-}
-
 /* 1 if it does not look like reasonable stat data */
 static int bad_stat_data (reiserfs_filsys_t * fs, struct buffer_head * bh, struct item_head * ih)
 {
     unsigned long objectid;
-    struct stat_data * sd;
-    __u32 pos;
 //    __u32 links;
-
 
     objectid = get_key_objectid (&ih->ih_key);
     if (!is_objectid_used (fs, objectid)) {
@@ -338,21 +327,21 @@ static int bad_stat_data (reiserfs_filsys_t * fs, struct buffer_head * bh, struc
            no way to call one_less_corruption later
         */
 	if (fsck_mode (fs) != FSCK_FIX_FIXABLE)
-	    one_more_corruption (fs, fixable);
+	    one_more_corruption (fs, FIXABLE);
     }
 
-    if (is_objectid_really_used (proper_id_map (fs), objectid, &pos)) {
+    if (id_map_mark(proper_id_map (fs), objectid)) {
 	fsck_log ("bad_stat_data: The objectid (%lu) is shared by at least two files\n", objectid);
 	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) 
             to_be_relocated (&ih->ih_key);
 	    
-	one_more_corruption (fs, fixable);	
-	
-	return 0;
+//	one_more_corruption (fs, FIXABLE);	
     }
 
-    sd = (struct stat_data *)B_I_PITEM(bh,ih);
+    return 0;
 /* Check this on semantic_check pass.    
+
+    sd = (struct stat_data *)B_I_PITEM(bh,ih);
     get_sd_nlink (ih, sd, &links);
     if (S_ISDIR(sd->sd_mode)) {
         if (links < 2) {
@@ -368,8 +357,6 @@ static int bad_stat_data (reiserfs_filsys_t * fs, struct buffer_head * bh, struc
         }
     }
 */    
-    __mark_objectid_really_used (proper_id_map (fs), objectid, pos);
-    return 0;
 }
 
 
@@ -386,7 +373,7 @@ inline void handle_one_pointer (reiserfs_filsys_t * fs, struct buffer_head * bh,
 	*ptr = 0;
 	mark_buffer_dirty (bh);
     } else {
-	one_more_corruption (fs, fixable);
+	one_more_corruption (fs, FIXABLE);
     }
 }
 
@@ -455,13 +442,13 @@ static int bad_badblocks_item (reiserfs_filsys_t * fs, struct buffer_head * bh,
 static int bad_indirect_item (reiserfs_filsys_t * fs, struct buffer_head * bh,
 			      struct item_head * ih)
 {
-    int i;
     __u32 * ind = (__u32 *)B_I_PITEM (bh, ih);
+    unsigned int i;
 
     if (get_ih_item_len (ih) % 4) {
 	fsck_log ("%s: block %lu: The item (%H) has the bad length (%u)\n",
 	    __FUNCTION__, bh->b_blocknr, ih, get_ih_item_len (ih));
-	one_more_corruption (fs, fatal);
+	one_more_corruption (fs, FATAL);
 	return 1;
     }
 
@@ -513,9 +500,9 @@ static int bad_indirect_item (reiserfs_filsys_t * fs, struct buffer_head * bh,
 /* FIXME: this was is_bad_directory from pass0.c */
 static int bad_directory_item (reiserfs_filsys_t * fs, struct buffer_head * bh, struct item_head * ih)
 {
-    int i;
     char * name;
     int namelen;
+    unsigned int count, i;
     struct reiserfs_de_head * deh = B_I_DEH (bh, ih);
     int min_entry_size = 1;/* We have no way to understand whether the
                               filesystem was created in 3.6 format or
@@ -523,31 +510,38 @@ static int bad_directory_item (reiserfs_filsys_t * fs, struct buffer_head * bh, 
                               length is 1 */
     __u16 state;
 
+    count = get_ih_entry_count (ih);
+
+    if (count == 0) {
+	one_more_corruption (fs, FATAL);	
+	return 1;
+    }
+    
     /* make sure item looks like a directory */
-    if (get_ih_item_len (ih) / (DEH_SIZE + min_entry_size) < get_ih_entry_count (ih)) {
+    if (get_ih_item_len (ih) / (DEH_SIZE + min_entry_size) < count) {
 	/* entry count can not be that big */
 	fsck_log ("%s: block %lu: The directory item %k has the exsessively big entry count (%u)\n",
-	    __FUNCTION__, bh->b_blocknr, &ih->ih_key, get_ih_entry_count (ih));
-	one_more_corruption (fs, fatal);	
+	    __FUNCTION__, bh->b_blocknr, &ih->ih_key, count);
+	one_more_corruption (fs, FATAL);	
 	return 1;
     }
 
-    if (get_deh_location (&deh[get_ih_entry_count (ih) - 1]) != DEH_SIZE * get_ih_entry_count (ih)) {
+    if (get_deh_location (&deh[count - 1]) != DEH_SIZE * count) {
 	/* last entry should start right after array of dir entry headers */
 	fsck_log ("%s: block %lu: The directory item %k has the corrupted entry structure\n",
 	    __FUNCTION__, bh->b_blocknr, &ih->ih_key);
-	one_more_corruption (fs, fatal);	
+	one_more_corruption (fs, FATAL);
 	return 1;
     }
-
+    
     /* check name hashing */
-    for (i = 0; i < get_ih_entry_count (ih); i ++, deh ++) {
+    for (i = 0; i < count; i ++, deh ++) {
 	namelen = name_in_entry_length (ih, deh, i);
 	name = name_in_entry (deh, i);
 	if (!is_properly_hashed (fs, name, namelen, get_deh_offset (deh))) {
 	    fsck_log ("%s: block %lu: The directory item %k has a not properly hashed entry (%d)\n",
 			__FUNCTION__, bh->b_blocknr, &ih->ih_key, i);
-	    one_more_corruption (fs, fatal);	
+	    one_more_corruption (fs, FATAL);	
 	    return 1;
 	}
     }
@@ -555,7 +549,7 @@ static int bad_directory_item (reiserfs_filsys_t * fs, struct buffer_head * bh, 
     deh = B_I_DEH (bh, ih);
     state = (1 << DEH_Visible2);
     /* ok, items looks like a directory */
-    for (i = 0; i < get_ih_entry_count (ih); i ++, deh ++) {
+    for (i = 0; i < count; i ++, deh ++) {
 	if (get_deh_state (deh) != state) {
 	    fsck_log ("bad_directory_item: block %lu: The directory item %k has the entry (%d) "
 		      "\"%.*s\" with a not legal state (%o), (%o) expected",
@@ -566,7 +560,7 @@ static int bad_directory_item (reiserfs_filsys_t * fs, struct buffer_head * bh, 
 		mark_buffer_dirty (bh);
 		fsck_log (" - corrected\n");
 	    } else 
-		one_more_corruption (fs, fixable);
+		one_more_corruption (fs, FIXABLE);
 	    
 	    fsck_log ("\n");
 	}
@@ -584,8 +578,8 @@ static int bad_item (reiserfs_filsys_t * fs, struct buffer_head * bh, int num)
     ih = B_N_PITEM_HEAD (bh, num);
 
     if ((get_ih_flags(ih)) != 0) {
-	if (fsck_mode(fs) == FSCK_CHECK) {
-	    one_more_corruption (fs, fixable);
+	if (fsck_mode(fs) != FSCK_FIX_FIXABLE) {
+	    one_more_corruption (fs, FIXABLE);
 	    fsck_log ("%s: vpf-10570: block %lu: The item header (%d) has not cleaned flags.\n", 
 		__FUNCTION__, bh->b_blocknr, num);
 	} else {
@@ -605,8 +599,8 @@ static int bad_item (reiserfs_filsys_t * fs, struct buffer_head * bh, int num)
 	format = key_format(&ih->ih_key);
     
     if (format != get_ih_key_format(ih)) {
-	if (fsck_mode(fs) == FSCK_CHECK) {
-	    one_more_corruption (fs, fixable);
+	if (fsck_mode(fs) != FSCK_FIX_FIXABLE) {
+	    one_more_corruption (fs, FIXABLE);
 	    fsck_log ("%s: vpf-10710: block %lu: The format (%d) specified in the item header (%d) "
 		"differs from the key format (%d).\n", __FUNCTION__, bh->b_blocknr, 
 		get_ih_key_format(ih), num, format);
@@ -646,7 +640,7 @@ static int bad_item (reiserfs_filsys_t * fs, struct buffer_head * bh, int num)
 	    /* it does not look like safe link */
 
 	    /* dir_id == -1 can be used only by safe links */
-	    one_more_corruption (fs, fatal);
+	    one_more_corruption (fs, FATAL);
 	    fsck_log ("%s: vpf-10290: block %lu, item %d: The item has a wrong key %k\n", 
 		__FUNCTION__, num, bh->b_blocknr, &ih->ih_key);
 	    return 1;
@@ -661,13 +655,13 @@ static int bad_item (reiserfs_filsys_t * fs, struct buffer_head * bh, int num)
 		return bad_badblocks_item (fs, bh, ih);
 	} else  {*/
 
-	    one_more_corruption (fs, fatal);
+	    one_more_corruption (fs, FATAL);
 	    fsck_log ("%s: vpf-10300: block %lu, item %d: The item has a wrong key %k\n", 
 		__FUNCTION__, num, bh->b_blocknr, &ih->ih_key);
 	    return 1;
 	}
     } else if (get_key_objectid (&ih->ih_key) == (__u32)-1) {
-	one_more_corruption (fs, fatal);
+	one_more_corruption (fs, FATAL);
 	fsck_log ("%s: vpf-10310: block %lu, item %d: The item has a wrong key %k\n", 
 	    __FUNCTION__, num, bh->b_blocknr, &ih->ih_key);
 	return 1;
@@ -695,7 +689,7 @@ int bad_pair (reiserfs_filsys_t * fs, struct buffer_head * bh, int pos)
 
     if (comp_keys (&((ih - 1)->ih_key), &ih->ih_key) != -1) {
 	if (fsck_mode (fs) != FSCK_REBUILD)
-	    one_more_corruption (fs, fatal);	
+	    one_more_corruption (fs, FATAL);	
 	return 1;
     }
 
@@ -703,7 +697,7 @@ int bad_pair (reiserfs_filsys_t * fs, struct buffer_head * bh, int pos)
 	/* left item must be of another object */
 	if (comp_short_keys (&((ih - 1)->ih_key), &ih->ih_key) != -1) {
 	    if (fsck_mode (fs) != FSCK_REBUILD)
-		one_more_corruption (fs, fatal);	
+		one_more_corruption (fs, FATAL);	
 	    return 1;
 	}
 
@@ -733,7 +727,7 @@ int bad_pair (reiserfs_filsys_t * fs, struct buffer_head * bh, int pos)
 	   file */
 	if (not_of_one_file (&((ih - 1)->ih_key), &ih->ih_key)) {
 	    if (fsck_mode (fs) != FSCK_REBUILD)
-		one_more_corruption (fs, fatal);
+		one_more_corruption (fs, FATAL);
 	    return 1;
 	}
 
@@ -742,7 +736,7 @@ int bad_pair (reiserfs_filsys_t * fs, struct buffer_head * bh, int pos)
 	       get_offset (&(ih - 1)->ih_key) + get_bytes_number (ih-1, bh->b_size) ==
 	       get_offset (&ih->ih_key)))) {
 	    if (fsck_mode (fs) != FSCK_REBUILD)
-		one_more_corruption (fs, fatal);
+		one_more_corruption (fs, FATAL);
 	    return 1;
 	}
     }
@@ -752,7 +746,7 @@ int bad_pair (reiserfs_filsys_t * fs, struct buffer_head * bh, int pos)
 	if (not_of_one_file (&((ih - 1)->ih_key), &ih->ih_key) ||
 	    !is_stat_data_ih (ih - 1)) {
 	    if (fsck_mode (fs) != FSCK_REBUILD)
-		one_more_corruption (fs, fatal);
+		one_more_corruption (fs, FATAL);
 	    return 1;
 	}
     }
@@ -765,9 +759,8 @@ static int bad_leaf (reiserfs_filsys_t * fs, struct buffer_head * bh)
 {
     int i;
 
-    if (bad_block_head (fs, bh)) {
+    if (leaf_structure_check(fs, bh))
 	return 1;
-    }
     
     for (i = 0; i < B_NR_ITEMS (bh); i ++) {
 	if (bad_item (fs, bh, i)) {
@@ -777,7 +770,8 @@ static int bad_leaf (reiserfs_filsys_t * fs, struct buffer_head * bh)
 
 	if (i && bad_pair (fs, bh, i)) {
 	    fsck_log ("bad_leaf: block %lu, items %d and %d: The wrong order of items: %k, %k\n",
-		bh->b_blocknr, i-1, i, &B_N_PITEM_HEAD (bh, i-1)->ih_key, &B_N_PITEM_HEAD (bh, i)->ih_key);
+		bh->b_blocknr, i-1, i, &B_N_PITEM_HEAD (bh, i-1)->ih_key, 
+		&B_N_PITEM_HEAD (bh, i)->ih_key);
 	}
     }
     return 0;
@@ -792,17 +786,19 @@ static int bad_internal (reiserfs_filsys_t * fs, struct buffer_head * bh)
         if (i != B_NR_ITEMS (bh) && i != B_NR_ITEMS (bh) - 1)
 	    /* make sure that keys are in increasing order */
             if (comp_keys (B_N_PDELIM_KEY (bh, i), B_N_PDELIM_KEY (bh, i + 1)) != -1) {
-		fsck_log ("%s: vpf-10320: block %lu, items %d and %d: The wrong order of items: %k, %k\n",
-		    __FUNCTION__, bh->b_blocknr, i, i+1, B_N_PDELIM_KEY (bh, i), B_N_PDELIM_KEY (bh, i + 1));
-		one_more_corruption (fs, fatal);
+		fsck_log ("%s: vpf-10320: block %lu, items %d and %d: The wrong order "
+		    "of items: %k, %k\n", __FUNCTION__, bh->b_blocknr, i, i+1, 
+		    B_N_PDELIM_KEY (bh, i), B_N_PDELIM_KEY (bh, i + 1));
+		one_more_corruption (fs, FATAL);
                 return 1;
 	    }
 
 	/* make sure that the child is correct */
         if (bad_block_number (fs, get_dc_child_blocknr (B_N_CHILD (bh,i)))) {
-	    fsck_log ("%s: vpf-10330: block %lu, item %d: The internal item points to the not legal block (%lu)\n",
-		__FUNCTION__, bh->b_blocknr, i, get_dc_child_blocknr (B_N_CHILD (bh,i)));
-            one_more_corruption (fs, fatal);
+	    fsck_log ("%s: vpf-10330: block %lu, item %d: The internal item points to the "
+		"not legal block (%lu)\n", __FUNCTION__, bh->b_blocknr, i, 
+		get_dc_child_blocknr (B_N_CHILD (bh,i)));
+            one_more_corruption (fs, FATAL);
             return 1;
 	}
     }
@@ -818,29 +814,28 @@ static inline int h_to_level (reiserfs_filsys_t * fs, int h)
 
 
 /* bh must be formatted node. blk_level must be tree_height - h + 1 */
-static int bad_node (reiserfs_filsys_t * fs, struct buffer_head ** path,
-		     int h)
+static int bad_node (reiserfs_filsys_t * fs, struct buffer_head ** path, int h)
 {
     struct buffer_head ** pbh = &path[h];
 
     if (B_LEVEL (*pbh) != h_to_level (fs, h)) {
        	fsck_log ("block %lu: The level of the node (%d) is not correct, (%d) expected\n",
 	    (*pbh)->b_blocknr, B_LEVEL (*pbh), h_to_level (fs, h));
-	one_more_corruption (fs, fatal);
+	one_more_corruption (fs, FATAL);
         return 1;
     }
 
     if (bad_block_number (fs, (*pbh)->b_blocknr)) {
-	one_more_corruption (fs, fatal);
+	one_more_corruption (fs, FATAL);
 	fsck_log ("%s: vpf-10340: The node in the wrong block number (%lu) found in the tree\n",
 	      __FUNCTION__, (*pbh)->b_blocknr);
 	return 1;
     }
 
     if (got_already (fs, (*pbh)->b_blocknr)) {
-	fsck_log ("%s: vpf-10350: The block (%lu) is used more then once in the tree.\n",
+	fsck_log ("%s: vpf-10350: The block (%lu) is used more than once in the tree.\n",
 	      __FUNCTION__, (*pbh)->b_blocknr);
-	one_more_corruption (fs, fatal);
+	one_more_corruption (fs, FATAL);
         return 1;
     }
     
@@ -922,9 +917,10 @@ static int bad_path (reiserfs_filsys_t * fs, struct buffer_head ** path, int h1)
     if (dk && comp_keys (dk, B_N_PKEY (path[h], 0))) {
 	/* left delimiting key must be equal to the key of 0-th item in the
 	   node */
-	fsck_log ("bad_path: The left delimiting key %k of the node (%lu) must be equal to the first element's "
-	    "key %k within the node.\n", dk, path[h]->b_blocknr, B_N_PKEY (path[h], 0));
-	one_more_corruption (fs, fatal);
+	fsck_log ("bad_path: The left delimiting key %k of the node (%lu) must "
+	    "be equal to the first element's key %k within the node.\n", dk, 
+	    path[h]->b_blocknr, B_N_PKEY (path[h], 0));
+	one_more_corruption (fs, FATAL);
 	return 1;
     }
     
@@ -932,10 +928,11 @@ static int bad_path (reiserfs_filsys_t * fs, struct buffer_head ** path, int h1)
     if (dk && comp_keys (dk, B_N_PKEY (path[h],
        get_blkh_nr_items (B_BLK_HEAD (path[h])) - 1)) != 1) {
 	/* right delimiting key must be greater than the key of the last item in the node */
-	fsck_log ("bad_path: The right delimiting key %k of the node (%lu) must be greater then the last (%d) element's"
-	    "key %k within the node.\n", dk, path[h]->b_blocknr, get_blkh_nr_items (B_BLK_HEAD (path[h])) - 1, 
+	fsck_log ("bad_path: The right delimiting key %k of the node (%lu) must "
+	    "be greater than the last (%d) element's key %k within the node.\n", 
+	    dk, path[h]->b_blocknr, get_blkh_nr_items (B_BLK_HEAD (path[h])) - 1, 
 	    B_N_PKEY (path[h], get_blkh_nr_items (B_BLK_HEAD (path[h])) - 1));
-	one_more_corruption (fs, fatal);
+	one_more_corruption (fs, FATAL);
 	return 1;
     }
 
@@ -944,10 +941,12 @@ static int bad_path (reiserfs_filsys_t * fs, struct buffer_head ** path, int h1)
     	BLKH_SIZE != path[h]->b_size))
     {
 	/* wrong dc_size */
-	fsck_log ("bad_path: block %lu, pointer %d: The used space (%d) of the child block (%lu)",
-	    path[h-1]->b_blocknr, pos, get_dc_child_size (B_N_CHILD(path[h-1],pos)), path[h]->b_blocknr);
-	fsck_log (" is not equal to the (blocksize (4096) - free space (%d) - header size (%u))",
-		get_blkh_free_space ((struct block_head *)path[h]->b_data), BLKH_SIZE);
+	fsck_log ("bad_path: block %lu, pointer %d: The used space (%d) of the "
+	    "child block (%lu)", path[h-1]->b_blocknr, pos, 
+	    get_dc_child_size(B_N_CHILD(path[h-1],pos)), path[h]->b_blocknr);
+	fsck_log (" is not equal to the (blocksize (4096) - free space (%d) - "
+	    "header size (%u))", 
+	    get_blkh_free_space((struct block_head *)path[h]->b_data), BLKH_SIZE);
 	
 	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 	    set_dc_child_size (B_N_CHILD(path[h-1],pos), path[h]->b_size -
@@ -955,7 +954,7 @@ static int bad_path (reiserfs_filsys_t * fs, struct buffer_head ** path, int h1)
 	    fsck_log (" - corrected to (%lu)\n", get_dc_child_size (B_N_CHILD(path[h-1],pos)));
 	    mark_buffer_dirty (path[h-1]);
 	} else {
-	    one_more_corruption (fs, fixable);
+	    one_more_corruption (fs, FIXABLE);
 	    fsck_log ("\n");
 	    return 1;
 	}
@@ -970,14 +969,14 @@ static void before_check_fs_tree (reiserfs_filsys_t * fs) {
     source_bitmap = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
     reiserfs_bitmap_copy (source_bitmap, fs->fs_bitmap2);
 
-    proper_id_map (fs) = init_id_map ();
+    proper_id_map (fs) = id_map_init();
 }
 
 static void after_check_fs_tree (reiserfs_filsys_t * fs) {
     if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
-        fs->fs_dirt = 1;
         reiserfs_flush_to_ondisk_bitmap (fs->fs_bitmap2, fs);
         reiserfs_flush (fs);
+        fs->fs_dirt = 1;
 	reiserfs_bitmap_delta (source_bitmap, control_bitmap);
 	fsck_deallocate_bitmap(fs) = source_bitmap;
     } else 
@@ -993,13 +992,20 @@ void check_fs_tree (reiserfs_filsys_t * fs)
     before_check_fs_tree (fs);
     
     fsck_progress ("Checking internal tree..");
-    pass_through_tree (fs, bad_node, bad_path);
+    pass_through_tree (fs, bad_node, bad_path, fsck_mode(fs) == FSCK_AUTO ? 2 : -1);
     /* internal tree is correct (including all objects have correct
        sequences of items) */
     fsck_progress ("finished\n");
     
     /* compare created bitmap with the original */
-    handle_bitmaps (fs);
+    if (fsck_mode(fs) == FSCK_AUTO) {
+	if (auto_handle_bitmaps(fs)) {
+	    fprintf(stderr, "The on-disk bitmap looks corrupted.");
+	    one_more_corruption(fs, FIXABLE);
+	}
+	id_map_free(proper_id_map(fs));
+    } else
+	handle_bitmaps (fs);
     
     after_check_fs_tree (fs);
 }
@@ -1028,8 +1034,9 @@ static int clean_attributes_handler (reiserfs_filsys_t * fs, struct buffer_head 
 }
 
 void do_clean_attributes (reiserfs_filsys_t * fs) {
-    pass_through_tree (fs, clean_attributes_handler, NULL);
+    pass_through_tree (fs, clean_attributes_handler, NULL, -1);
     set_sb_v2_flag (fs->fs_ondisk_sb, reiserfs_attrs_cleared);
     mark_buffer_dirty (fs->fs_super_bh);
 }
+
 

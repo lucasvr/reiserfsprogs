@@ -1,6 +1,6 @@
 /*
- * Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Hans Reiser, see
- * reiserfs/README for licensing and copyright details
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 /* Now we have all buffers that must be used in balancing of the tree 	*/
@@ -344,8 +344,8 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 			    /* 0-th item in S0 can be only of DIRECT type when l_n != 0*/
 			    //B_N_PKEY (tbS0, 0)->k_offset += l_n;z
 			    key = B_N_PKEY (tbS0, 0);
-                            temp_n = (is_indirect_ih(B_N_PITEM_HEAD (tb->L[0], n + item_pos - ret_val))) ?
-                                 (l_n  / UNFM_P_SIZE) * tb->tb_fs->fs_blocksize : l_n;
+                            temp_n = is_indirect_ih(B_N_PITEM_HEAD (tb->L[0], n + item_pos - ret_val)) ?
+                                 (int)((l_n / UNFM_P_SIZE) * tb->tb_fs->fs_blocksize) : l_n;
 
 			    set_offset (key_format (key), key, get_offset (key) + temp_n);
 
@@ -848,10 +848,9 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 		else
 		    /* item falls wholly into S_new[i] */
 		{
-		    int ret_val;
 		    struct item_head * pasted;
 		
-		    ret_val = leaf_move_items (LEAF_FROM_S_TO_SNEW, tb, snum[i], sbytes[i], S_new[i]);
+		    leaf_move_items (LEAF_FROM_S_TO_SNEW, tb, snum[i], sbytes[i], S_new[i]);
 		    /* paste into item */
 		    bi.bi_bh = S_new[i];
 		    bi.bi_parent = 0;
@@ -983,7 +982,7 @@ struct buffer_head * get_FEB (struct tree_balance * tb)
     bi.bi_parent = 0;
     bi.bi_position = 0;
     make_empty_node (&bi);
-    set_bit(BH_Uptodate, &first_b->b_state);
+    misc_set_bit(BH_Uptodate, &first_b->b_state);
 
     tb->FEB[i] = 0;
     tb->used[i] = first_b;
@@ -1012,7 +1011,7 @@ void replace_key (reiserfs_filsys_t * fs,
 void reiserfs_invalidate_buffer (struct tree_balance * tb, struct buffer_head * bh, int do_free_block)
 {
     set_blkh_level (B_BLK_HEAD (bh), FREE_LEVEL);
-    clear_bit(BH_Dirty, &bh->b_state);
+    misc_clear_bit(BH_Dirty, &bh->b_state);
 
     if (do_free_block) {
 	struct buffer_head * to_be_forgotten;

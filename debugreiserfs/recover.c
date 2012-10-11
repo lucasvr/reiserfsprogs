@@ -1,5 +1,6 @@
 /*
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "debugreiserfs.h"
@@ -264,7 +265,8 @@ static void recover_items(FILE *fp, reiserfs_filsys_t * fs, FILE *target_file) {
     int size = sizeof(struct saved_item) - sizeof(struct saved_item *);
     struct saved_item *map = NULL;
     __u32 map_size = 0;
-    int i, start = 0, j;
+    int start = 0;
+    unsigned int i, j;
     __u64 offset = 0, length;
     long int result = 0;
     unsigned long unfm_ptr;
@@ -285,7 +287,7 @@ static void recover_items(FILE *fp, reiserfs_filsys_t * fs, FILE *target_file) {
 	if (i == map_size / sizeof(struct saved_item)) {
 	    if (start != -1) {
 		reiserfs_print_item(stdout, bh, B_N_PITEM_HEAD (bh, (cur - 1)->si_item_num));
-		result = get_answer((long int)i - start) + start;
+		result = get_answer(i - start) + start;
 	    } else {
 		result = i - 1;
 	    }

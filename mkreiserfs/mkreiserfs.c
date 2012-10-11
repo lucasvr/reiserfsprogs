@@ -1,5 +1,6 @@
 /*
- * Copyright 1996-2002 Hans Reiser, licensing governed by ../README
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 /* mkreiserfs is very simple. It supports only 4k blocks. It skips
@@ -26,7 +27,6 @@
 #include <errno.h>
 #include <sys/vfs.h>
 #include <time.h>
-#include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <linux/kdev_t.h>
@@ -46,8 +46,7 @@ char *program_name;
 static void message( const char * fmt, ... ) 
 	__attribute__ ((format (printf, 1, 2)));
 
-	static void message( const char * fmt, ... ) 
-{
+static void message( const char * fmt, ... ) {
     char *buf;
     va_list args;
 	
@@ -64,34 +63,36 @@ static void message( const char * fmt, ... )
 
 static void print_usage_and_exit(void)
 {
-	fprintf(stderr, "Usage: %s [options] "
-			" device [block-count]\n"
-			"\n"
-			"Options:\n\n"
-			"  -b | --block-size N              size of file-system block, in bytes\n"
-			"  -j | --journal-device FILE       path to separate device to hold journal\n"
-			"  -s | --journal-size N            size of the journal in blocks\n"
-			"  -o | --journal-offset N          offset of the journal from the start of\n"
-			"                                   the separate device, in blocks\n"
-			"  -t | --transaction-max-size N    maximal size of transaction, in blocks\n"
-			"  -h | --hash rupasov|tea|r5       hash function to use by default\n"
-			"  -u | --uuid UUID                 store UUID in the superblock\n"
-			"  -l | --label LABEL               store LABEL in the superblock\n"
-			"  --format 3.5|3.6                 old 3.5 format or newer 3.6\n"
-			"  -f | --force                     specified once, make mkreiserfs the whole\n"
-			"                                   disk, not block device or mounted partition;\n"
-			"                                   specified twice, do not ask for confirmation\n"
-			"  -d | --debug                     print debugging information during mkreiser\n"
-			"  -V                               print version and exit\n",
-			program_name);
-	exit (1);
+    fprintf(stderr, "Usage: %s [options] "
+	" device [block-count]\n"
+	"\n"
+	"Options:\n\n"
+	"  -b | --block-size N              size of file-system block, in bytes\n"
+	"  -j | --journal-device FILE       path to separate device to hold journal\n"
+	"  -s | --journal-size N            size of the journal in blocks\n"
+	"  -o | --journal-offset N          offset of the journal from the start of\n"
+	"                                   the separate device, in blocks\n"
+	"  -t | --transaction-max-size N    maximal size of transaction, in blocks\n"
+	"  -h | --hash rupasov|tea|r5       hash function to use by default\n"
+	"  -u | --uuid UUID                 store UUID in the superblock\n"
+	"  -l | --label LABEL               store LABEL in the superblock\n"
+	"  --format 3.5|3.6                 old 3.5 format or newer 3.6\n"
+	"  -f | --force                     specified once, make mkreiserfs the whole\n"
+	"                                   disk, not block device or mounted partition;\n"
+	"                                   specified twice, do not ask for confirmation\n"
+	"  -q | --quiet                     quiet work without messages, progress and\n"
+	"                                   questions. Useful if run in a script. For use\n" 
+	"                                   by end users only.\n"
+	"  -d | --debug                     print debugging information during mkreiser\n"
+	"  -V                               print version and exit\n",
+	program_name);
+    exit (1);
 }
 
-//			"  -B badblocks-file                list of all bad blocks on the fs\n"
+//	"  -B badblocks-file                list of all bad blocks on the fs\n"
 
 int Create_default_journal = 1;
 int Block_size = 4096;
-int DEBUG_MODE = 0;
 
 /* size of journal + 1 block for journal header */
 unsigned long Journal_size = 0;
@@ -103,21 +104,28 @@ unsigned char UUID[16];
 unsigned char * LABEL = NULL;
 char * badblocks_file;
 
+enum mkfs_mode {
+    DEBUG_MODE = 1 << 0,
+    QUIET_MODE = 1 << 1
+};
+
+int mode;
 
 /* form super block (old one) */
 static void make_super_block (reiserfs_filsys_t * fs)
 {
-    set_sb_umount_state (fs->fs_ondisk_sb, REISERFS_CLEANLY_UMOUNTED);
+    set_sb_umount_state (fs->fs_ondisk_sb, FS_CLEANLY_UMOUNTED);
     set_sb_tree_height (fs->fs_ondisk_sb, 2);
     set_sb_hash_code (fs->fs_ondisk_sb, Hash);
     if (fs->fs_format == REISERFS_FORMAT_3_6) {
         if (!uuid_is_correct (UUID) && generate_random_uuid (UUID))
-	    reiserfs_warning (stdout, "failed to genetate UUID\n");
+	    reiserfs_warning (stderr, "failed to genetate UUID\n");
 
 	memcpy (fs->fs_ondisk_sb->s_uuid, UUID, 16);
 	if (LABEL != NULL) {
 	    if (strlen (LABEL) > 16)
-	        reiserfs_warning (stderr, "\nSpecified LABEL is longer then 16 characters, will be truncated\n\n");
+	        reiserfs_warning (stderr, "\nSpecified LABEL is longer then 16 "
+		"characters, will be truncated\n\n");
 	    strncpy (fs->fs_ondisk_sb->s_label, LABEL, 16);
 	}
 	set_sb_v2_flag (fs->fs_ondisk_sb, reiserfs_attrs_cleared);
@@ -157,20 +165,18 @@ static void invalidate_other_formats (int dev)
 
 void zero_journal (reiserfs_filsys_t * fs)
 {
-    int i;
+    unsigned long start, len, done;
     struct buffer_head * bh;
-    unsigned long done;
-    unsigned long start, len;
+    unsigned int i;
 
-
-    fprintf (stderr, "Initializing journal - ");
+    fprintf (stdout, "Initializing journal - ");
 
     start = get_jp_journal_1st_block (sb_jp (fs->fs_ondisk_sb));
     len = get_jp_journal_size (sb_jp (fs->fs_ondisk_sb));
 
     done = 0;
     for (i = 0; i < len; i ++) {
-        print_how_far (stderr, &done, len, 1, 1/*be quiet*/);
+        print_how_far (stdout, &done, len, 1, 1/*be quiet*/);
         bh = getblk (fs->fs_journal_dev, start + i, fs->fs_blocksize);
 		if (!bh)
 			die ("zero_journal: getblk failed");
@@ -181,8 +187,8 @@ void zero_journal (reiserfs_filsys_t * fs)
         brelse (bh);
     }
 
-    fprintf (stderr, "\n");
-    fflush (stderr);
+    fprintf (stdout, "\n");
+    fflush (stdout);
 }
 
 
@@ -191,20 +197,18 @@ void zero_journal (reiserfs_filsys_t * fs)
 static void make_bitmap (reiserfs_filsys_t * fs)
 {
     struct reiserfs_super_block * sb = fs->fs_ondisk_sb;
-    int i;
+    unsigned int i;
     unsigned long block;
     int marked;
     
-
     marked = 0;
 
     /* mark skipped area and super block */
     for (i = 0; i <= fs->fs_super_bh->b_blocknr; i ++) {
-		reiserfs_bitmap_set_bit (fs->fs_bitmap2, i);
-		marked ++;
+	reiserfs_bitmap_set_bit (fs->fs_bitmap2, i);
+	marked ++;
     }
-
-
+    
     if (fs->fs_badblocks_bm) {
 	for (i = 0; i < get_sb_block_count (sb); i ++) {
 	    if (reiserfs_bitmap_test_bit (fs->fs_badblocks_bm, i)) {
@@ -221,7 +225,8 @@ static void make_bitmap (reiserfs_filsys_t * fs)
 		reiserfs_bitmap_set_bit (fs->fs_bitmap2, block);
 		marked ++;
 		if (spread_bitmaps (fs))
-			block = (block / (fs->fs_blocksize * 8) + 1) * (fs->fs_blocksize * 8);
+			block = (block / (fs->fs_blocksize * 8) + 1) * 
+				(fs->fs_blocksize * 8);
 		else
 			block ++;
     }
@@ -233,7 +238,7 @@ static void make_bitmap (reiserfs_filsys_t * fs)
 		/* makr journal blocks as used */
 		for (i = 0; i <= get_jp_journal_size (sb_jp (sb)); i ++) {
 			reiserfs_bitmap_set_bit (fs->fs_bitmap2,
-									 i + get_jp_journal_1st_block (sb_jp (sb)));
+			    i + get_jp_journal_1st_block (sb_jp (sb)));
 			marked ++;
 		}
 		block = get_jp_journal_1st_block (sb_jp (sb)) + i;
@@ -244,7 +249,9 @@ static void make_bitmap (reiserfs_filsys_t * fs)
         block++;
     }
 
-    while ((block < get_sb_block_count (sb)) && reiserfs_bitmap_test_bit (fs->fs_bitmap2, block)) {
+    while ((block < get_sb_block_count (sb)) && 
+	   reiserfs_bitmap_test_bit (fs->fs_bitmap2, block)) 
+    {
     	block++;
     }
 
@@ -300,7 +307,9 @@ static void make_root_block (reiserfs_filsys_t * fs)
 static void report (reiserfs_filsys_t * fs, char * j_filename)
 {
 //    print_block (stdout, fs, fs->fs_super_bh);
-    struct reiserfs_super_block * sb = (struct reiserfs_super_block *)(fs->fs_super_bh->b_data);
+    struct reiserfs_super_block * sb = 
+	(struct reiserfs_super_block *)(fs->fs_super_bh->b_data);
+
     struct stat st;
     dev_t rdev;
 
@@ -308,12 +317,12 @@ static void report (reiserfs_filsys_t * fs, char * j_filename)
 		return;
 
     if (fstat (fs->fs_super_bh->b_dev, &st) == -1) {
-		/*reiserfs_warning (stderr, "fstat failed: %m\n");*/
+		/*reiserfs_warning (stderr, "fstat failed: %s\n", strerror(errno));*/
 		rdev = 0;
     } else	
 		rdev = st.st_rdev;
 
-    if (DEBUG_MODE) {
+    if (mode & DEBUG_MODE) {
         reiserfs_warning (stdout, "Block %lu (0x%x) contains super block. ",
 						  fs->fs_super_bh->b_blocknr, rdev);
     }
@@ -328,44 +337,48 @@ static void report (reiserfs_filsys_t * fs, char * j_filename)
     if (is_reiserfs_jr_magic_string (sb))
 		reiserfs_warning (stdout, "non-");
     reiserfs_warning (stdout, "standard journal\n");
-    reiserfs_warning (stdout, "Count of blocks on the device: %u\n", get_sb_block_count (sb));
-    reiserfs_warning (stdout, "Number of blocks consumed by mkreiserfs formatting process: %u\n", 
-					  get_sb_block_count (sb) - get_sb_free_blocks (sb));    
-    if (DEBUG_MODE)
+    reiserfs_warning (stdout, "Count of blocks on the device: %u\n", 
+	get_sb_block_count (sb));
+    reiserfs_warning (stdout, "Number of blocks consumed by mkreiserfs "
+	"formatting process: %u\n", get_sb_block_count (sb) - get_sb_free_blocks (sb));
+    if (mode & DEBUG_MODE)
         reiserfs_warning (stdout, "Free blocks: %u\n", get_sb_free_blocks (sb));
     reiserfs_warning (stdout, "Blocksize: %d\n", get_sb_block_size (sb));
     reiserfs_warning (stdout, "Hash function used to sort names: %s\n",
 					  code2name (get_sb_hash_code (sb)));
-    if (DEBUG_MODE) {
+    if (mode & DEBUG_MODE) {
         reiserfs_warning (stdout, "Number of bitmaps: %u\n", get_sb_bmap_nr (sb));
         reiserfs_warning (stdout, "Root block: %u\n", get_sb_root_block (sb));
         reiserfs_warning (stdout, "Tree height: %d\n", get_sb_tree_height (sb));
-        reiserfs_warning (stdout, "Objectid map size %d, max %d\n", get_sb_oid_cursize (sb),
-						  get_sb_oid_maxsize (sb));
+        reiserfs_warning (stdout, "Objectid map size %d, max %d\n", 
+	    get_sb_oid_cursize (sb), get_sb_oid_maxsize (sb));
         reiserfs_warning (stdout, "Journal parameters:\n");
         print_journal_params (stdout, sb_jp (sb));
     } else {
         if (j_filename && strcmp (j_filename, fs->fs_file_name)) 
-            reiserfs_warning (stdout, "Journal Device [0x%x]\n", get_jp_journal_dev (sb_jp (sb)));
+            reiserfs_warning (stdout, "Journal Device [0x%x]\n", 
+		get_jp_journal_dev (sb_jp (sb)));
+	
         reiserfs_warning (stdout, "Journal Size %u blocks (first block %u)\n",
-						  get_jp_journal_size (sb_jp (sb)) + 1,
-						  get_jp_journal_1st_block (sb_jp (sb)));
+	    get_jp_journal_size (sb_jp (sb)) + 1,
+	    get_jp_journal_1st_block (sb_jp (sb)));
         reiserfs_warning (stdout, "Journal Max transaction length %u\n", 
-						  get_jp_journal_max_trans_len (sb_jp (sb)));
+	    get_jp_journal_max_trans_len (sb_jp (sb)));
     }
 
     if (j_filename && strcmp (j_filename, fs->fs_file_name)) {
         reiserfs_warning (stdout, "Space on this device reserved by journal: %u\n", 
-						  get_sb_reserved_for_journal (sb));
+	    get_sb_reserved_for_journal (sb));
     }
     
-    if (DEBUG_MODE) {
-		reiserfs_warning (stdout, "Filesystem state 0x%x\n", get_sb_fs_state (sb));
-		reiserfs_warning (stdout, "sb_version %u\n", get_sb_version (sb));
+    if (mode & DEBUG_MODE) {
+	reiserfs_warning (stdout, "Filesystem state 0x%x\n", get_sb_fs_state (sb));
+	reiserfs_warning (stdout, "sb_version %u\n", get_sb_version (sb));
     }
 
     if (get_reiserfs_format (sb) == REISERFS_FORMAT_3_6) {
-        reiserfs_warning (stdout, "inode generation number: %u\n", get_sb_v2_inode_generation (sb));
+        reiserfs_warning (stdout, "inode generation number: %u\n", 
+	    get_sb_v2_inode_generation (sb));
         reiserfs_warning (stdout, "UUID: %U\n", sb->s_uuid);
         if (strcmp (sb->s_label, ""))
             reiserfs_warning (stdout, "LABEL: %s\n", sb->s_label);
@@ -393,11 +406,11 @@ static void set_hash_function (char * str)
 static void set_reiserfs_version (char * str)
 {
     if (!strcmp (str, "3.5"))
-		Format = "3.5";
+	Format = "3.5";
     else  {
-		Format = "3.6";
-		if (strcmp (str, "3.6"))
-			message("wrong reiserfs version specified. Using default 3.6 format");
+	Format = "3.6";
+	if (strcmp (str, "3.6"))
+	    message("wrong reiserfs version specified. Using default 3.6 format");
     }
 }
 
@@ -408,7 +421,7 @@ static int str2int (char * str)
 
     val = (int) strtol (str, &tmp, 0);
     if (*tmp)
-		die ("%s: strtol is unable to make an integer of %s\n", program_name, str);
+	die ("%s: strtol is unable to make an integer of %s\n", program_name, str);
     return val;
 }
 
@@ -418,8 +431,8 @@ static void set_block_size (char * str, int *b_size)
     *b_size = str2int (str);
       
     if (!is_blocksize_correct (*b_size))
-        die ("%s: wrong blocksize %s specified, only divisible by 1024 are supported currently",
-        	program_name, str);
+        die ("%s: wrong blocksize %s specified, only power of 2 from 512-8192 "
+	    "interval are supported", program_name, str);
 }
 
 
@@ -451,15 +464,18 @@ static void set_offset_in_journal_device (char * str)
 
 static int is_journal_default (char * name, char * jname, int blocksize)
 {
-	if (jname && strcmp (name, jname))
-		return 0;
-	if (Journal_size &&
-	    Journal_size != journal_default_size (REISERFS_DISK_OFFSET_IN_BYTES / blocksize, blocksize) + 1)
-		/* journal size is set and it is not default size */
-		return 0;
-	if (Max_trans_size != JOURNAL_TRANS_MAX)
-		return 0;
-	return 1;
+    if (jname && strcmp (name, jname))
+	return 0;
+    
+    if (Journal_size && Journal_size != 
+	journal_default_size(REISERFS_DISK_OFFSET_IN_BYTES / blocksize, blocksize) + 1)
+	/* journal size is set and it is not default size */
+	return 0;
+    
+    if (Max_trans_size && Max_trans_size != JOURNAL_TRANS_MAX)
+	return 0;
+
+    return 1;
 }
 
 	
@@ -482,14 +498,17 @@ static int select_format (void)
 		return REISERFS_FORMAT_3_6;
 	}
 	
-	message ("Guessing about desired format.. ");
+	reiserfs_warning (stdout, "Guessing about desired format.. ");
 	
 	if (uname (&sysinfo) == -1) {
-		message ("could not get system info: %m");
+		message ("could not get system info: %s", strerror(errno));
 		exit (1);
 	}
 	
-	message ("Kernel %s is running.", sysinfo.release);
+	reiserfs_warning(stdout, "Kernel %s is running.\n", sysinfo.release);
+	if (!strncmp (sysinfo.release, "2.6", 3))
+		return REISERFS_FORMAT_3_6;
+	
 	if (!strncmp (sysinfo.release, "2.5", 3))
 		return REISERFS_FORMAT_3_6;
 	
@@ -497,12 +516,12 @@ static int select_format (void)
 		return REISERFS_FORMAT_3_6;
 
 	if (strncmp (sysinfo.release, "2.2", 3)) {
-		message( "You should run either 2.4 or 2.2 to be able "
-				 "to create reiserfs filesystem or specify desired format with -v");
+		message( "You should run either 2.2 or 2.4 or higher to be able "
+		    "to create reiserfs filesystem or specify desired format with --format");
 		exit (1);
 	}
 
-    message ("Creating filesystem of format 3.5");
+    reiserfs_warning(stdout, "Creating filesystem of format 3.5\n");
     return REISERFS_FORMAT_3_5;
 }
 
@@ -510,28 +529,27 @@ static int select_format (void)
 int main (int argc, char **argv)
 {
     reiserfs_filsys_t * fs;
-    int force;
-    char * device_name;
-    char * jdevice_name;
-    unsigned long fs_size;
+    int force = 0;
+    char * device_name = NULL;
+    char * jdevice_name = NULL;
+    unsigned long fs_size = 0;
     int c;
     static int flag;
 
-
     program_name = strrchr( argv[ 0 ], '/' );
-    program_name = program_name ? ++ program_name : argv[ 0 ];
     
-    print_banner (program_name);
-
-    if (argc < 2)
-		print_usage_and_exit ();
+    if (program_name)
+	program_name++;
+    else
+	program_name = argv[ 0 ];
     
-    force = 0;
-    fs_size = 0;
-    device_name = 0;
-    jdevice_name = 0;
 
+    if (argc < 2) {
+	print_banner (program_name);
 
+	print_usage_and_exit ();
+    }
+    
     while (1) {
 		static struct option options[] = {
 			{"block-size", required_argument, 0, 'b'},
@@ -547,7 +565,7 @@ int main (int argc, char **argv)
 		};
 		int option_index;
       
-		c = getopt_long (argc, argv, "b:j:s:t:o:h:u:l:Vfd",
+		c = getopt_long (argc, argv, "b:j:s:t:o:h:u:l:VfdB:q",
 						 options, &option_index);
 		if (c == -1)
 			break;
@@ -596,19 +614,19 @@ int main (int argc, char **argv)
 			break;
 
 		case 'V':
-			exit (1);
+			print_usage_and_exit ();
 
 		case 'f':
 			force ++;
 			break;
 
 		case 'd':
-			DEBUG_MODE = 1;
+			mode |= DEBUG_MODE;
 			break;
 		
 		case 'u':
 			if (set_uuid (optarg, UUID)) {
-			    reiserfs_warning(stdout, "wrong UUID specified\n");
+			    reiserfs_warning(stderr, "wrong UUID specified\n");
 			    return 1;
 			}
 			
@@ -617,7 +635,10 @@ int main (int argc, char **argv)
 		case 'l':
 			LABEL = optarg;
 			break;
-		
+		case 'q':
+			mode |= QUIET_MODE;
+			fclose(stdout);
+			break;
 		default:
 			print_usage_and_exit();
 		}
@@ -640,28 +661,23 @@ int main (int argc, char **argv)
     if (is_journal_default (device_name, jdevice_name, Block_size))
         Create_default_journal = 1;
     
-    if (!Max_trans_size) {
-        /* max transaction size has not been specified,
-           for blocksize >= 4096 - max transaction size is 1024. For block size < 4096
-           - trans max size is decreased proportionally */
-        Max_trans_size = JOURNAL_TRANS_MAX;
-        if (Block_size < 4096)
-            Max_trans_size = JOURNAL_TRANS_MAX / (4096 / Block_size);
-    }
-	
-    if (!can_we_format_it (device_name, force))
+    if (!(mode & QUIET_MODE) && !can_we_format_it (device_name, force))
         return 1;
 	
     if (jdevice_name)
-        if (!can_we_format_it (jdevice_name, force))
+        if (!(mode & QUIET_MODE) && !can_we_format_it (jdevice_name, force))
             return 1;
 
-    fs = reiserfs_create (device_name, select_format (), fs_size, Block_size, Create_default_journal, 1);
+    fs = reiserfs_create (device_name, select_format(), fs_size, Block_size, 
+	Create_default_journal, 1);
+    
     if (!fs) {
         return 1;
     }
 		
-    if (!reiserfs_create_journal (fs, jdevice_name, Offset, Journal_size, Max_trans_size)) {
+    if (!reiserfs_create_journal (fs, jdevice_name, Offset, Journal_size, 
+	Max_trans_size)) 
+    {
         return 1;
     }
 
@@ -672,7 +688,7 @@ int main (int argc, char **argv)
     /* these fill buffers (super block, first bitmap, root block) with
        reiserfs structures */
     if (uuid_is_correct (UUID) && fs->fs_format != REISERFS_FORMAT_3_6) {
-	reiserfs_warning(stdout, "UUID can be specified only with 3.6 format\n");
+	reiserfs_warning(stderr, "UUID can be specified only with 3.6 format\n");
 	return 1;
     }
 
@@ -683,11 +699,11 @@ int main (int argc, char **argv)
     make_super_block (fs);
     make_bitmap (fs);
     make_root_block (fs);
-    add_badblock_list (fs, 1);
+//    add_badblock_list (fs, 1);
   
     report (fs, jdevice_name);
 
-    if (!force) {
+    if (!force && !(mode & QUIET_MODE)) {
         fprintf (stderr, "ATTENTION: YOU SHOULD REBOOT AFTER FDISK!\n"
                 "\tALL DATA WILL BE LOST ON '%s'", device_name);
         if (jdevice_name && strcmp (jdevice_name, device_name))
@@ -709,32 +725,15 @@ int main (int argc, char **argv)
     sync ();
     printf ("ok\n");
  
-	if (DEBUG_MODE)
-		return 0;
-	printf ("\nThe Defense Advanced Research Projects Agency (DARPA) is the primary sponsor of"
-			"\nReiser4. DARPA does not endorse this project; it merely sponsors it."
-			"\n"
-			"\nContinuing core development of version 3 is mostly paid for by Hans Reiser from"
-			"\nmoney made selling licenses in addition to the GPL to companies who don't want"
-			"\nit known that they use ReiserFS as a foundation for their proprietary product."
-			"\nAnd my lawyer asked 'People pay you money for this?'.  Yup.  Hee Hee.  Life is"
-			"\ngood.  If you buy ReiserFS, you can focus on your value add rather than"
-			"\nreinventing an entire FS.  You should buy some free software too...."
-			"\n"
-			"\nSuSE pays for continuing work on journaling for version 3, and paid for much of"
-			"\nthe previous version 3 work.  Reiserfs integration in their distro is"
-			"\nconsistently solid."
-			"\n"
-			"\nMP3.com paid for initial journaling development."
-			"\n"
-			"\nBigstorage.com contributes to our general fund every month, and has done so for"
-			"\nquite a long time."
-			"\n"
-			"\nThanks to all of those sponsors, including the secret ones.  Without you, Hans"
-			"\nwould still have that day job, and the merry band of hackers would be missing"
-			"\nquite a few...."
-			"\n"
-			"\nHave fun.\n"); 
+    if (mode & DEBUG_MODE)
+	return 0;
+    
+    misc_print_credit(stdout);
+    printf("\nTell your friends to use the kernel based on 2.4.18 or later "
+	"when you use\nreiserFS. Have fun.\n\n");
+        
+    printf("ReiserFS is successfully created on %s.\n", device_name);
+
     return 0;
 }
 

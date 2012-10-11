@@ -1,6 +1,8 @@
 /*
- * Copyright 2002  Hans Reiser
+ * Copyright 2002-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
+
 #include "tune.h"
 
 char *program_name;
@@ -47,6 +49,11 @@ static void print_usage_and_exit(void)
     exit (1);
 }
 
+/*
+    Undocumented options:
+    -B badblock_file
+*/
+
 unsigned long Journal_size = 0;
 int Max_trans_size = JOURNAL_TRANS_MAX;
 int Offset = 0;
@@ -54,62 +61,52 @@ __u16 Options = 0;
 int Force = 0;
 char * LABEL;
 unsigned char UUID[16];
+char * badblocks_file;
 
-static int should_make_journal_non_standard (int force)
-{
-    message ("ATTENTION! Filesystem with standard journal found. ");
-    check_forcing_ask_confirmation (force);
-    return 1;
-}
-
+/* If specified paramenters defines the standard journal, make it standard. */
 static int should_make_journal_standard (reiserfs_filsys_t * fs, char * j_new_dev_name)
 {
     if (!is_reiserfs_jr_magic_string (fs->fs_ondisk_sb))
 	return 0;
-    
+/*    
     if (!user_confirmed (stderr, "ATTENTION! Filesystem with non-standard journal "
 			 "found. Continue? (y/n):", "y\n")) {
 	exit(1);
     }
+*/  
     /* make sure journal is on main device, it has default size
      and the file system has non-standard magic */
-
+ 
     if (j_new_dev_name) {
 	/* new journal was specified - check if it is available */
-	if (strcmp (j_new_dev_name, fs->fs_file_name)) {
-	    message ("Can not create standard journal on separated device %s",
-		     j_new_dev_name);
+	if (strcmp (j_new_dev_name, fs->fs_file_name))
 	    return 0;
-	}
-	if (Journal_size && (Journal_size != journal_default_size (fs->fs_super_bh->b_blocknr, fs->fs_blocksize))) {
-	    message ("Can not create standard journal of the size %lu",
-		     Journal_size);
+	
+	if (Journal_size && Journal_size != 
+	    journal_default_size(fs->fs_super_bh->b_blocknr, fs->fs_blocksize) + 1) 
 	    return 0;
-	}
-	if (Max_trans_size && (Max_trans_size != JOURNAL_TRANS_MAX)) {
-		message ("Can not create standard journal with the transaction "
-			 "max size %u", Max_trans_size);
-		return 0;
-	}
-    }
-    else {
+	
+	if (Max_trans_size && (Max_trans_size != JOURNAL_TRANS_MAX))
+		return 0;	
+    } else {
 	/* new journal was not specified - check ondisk journal params */
-	if (get_jp_journal_dev(sb_jp(fs->fs_ondisk_sb))) {
-	    message ("Can not create standard journal on separated device [0x%x]",
-		    get_jp_journal_dev(sb_jp(fs->fs_ondisk_sb)));
-	    return 0;
-	}
-	if(get_jp_journal_size(sb_jp(fs->fs_ondisk_sb))!= journal_default_size (fs->fs_super_bh->b_blocknr, fs->fs_blocksize)){
-	    message ("Can not create standard journal of the size %u",
-		     get_jp_journal_size(sb_jp(fs->fs_ondisk_sb)));
+	
+	if (get_sb_reserved_for_journal(fs->fs_ondisk_sb) < 
+	    journal_default_size (fs->fs_super_bh->b_blocknr, fs->fs_blocksize) + 1)
+	{
+	    message ("Can not create standard journal of the size %llu",
+		     journal_default_size(fs->fs_super_bh->b_blocknr, fs->fs_blocksize) + 1);
 	    return 0;
 	}
     }
+
     return 1;
 }
 
 static int set_standard_journal_params (reiserfs_filsys_t * fs)
 {
+    struct buffer_head * bh;
+
     /* ondisk superblock update */
 
     if (get_sb_version(fs->fs_ondisk_sb) == 0)
@@ -123,6 +120,11 @@ static int set_standard_journal_params (reiserfs_filsys_t * fs)
 		 " try reiserfsck first", get_sb_version(fs->fs_ondisk_sb));
 	return 0;
     }
+    
+    set_jp_journal_1st_block (sb_jp(fs->fs_ondisk_sb), get_journal_start_must (fs));
+    set_jp_journal_dev (sb_jp(fs->fs_ondisk_sb), 0);
+    set_jp_journal_size (sb_jp(fs->fs_ondisk_sb), journal_default_size(fs->fs_super_bh->b_blocknr, fs->fs_blocksize));
+
     if (get_jp_journal_max_trans_len(sb_jp(fs->fs_ondisk_sb)) != JOURNAL_TRANS_MAX)
 	set_jp_journal_max_trans_len(sb_jp(fs->fs_ondisk_sb), JOURNAL_TRANS_MAX);
     if (get_jp_journal_max_batch(sb_jp(fs->fs_ondisk_sb)) != JOURNAL_MAX_BATCH)
@@ -134,15 +136,26 @@ static int set_standard_journal_params (reiserfs_filsys_t * fs)
     set_sb_reserved_for_journal (fs->fs_ondisk_sb, 0);
     
     /* journal_header update */
+    bh = getblk(fs->fs_journal_dev, 
+	    get_jp_journal_1st_block(sb_jp(fs->fs_ondisk_sb)) + 
+	    get_jp_journal_size(sb_jp(fs->fs_ondisk_sb)), fs->fs_blocksize);
     
-    ((struct reiserfs_journal_header *)(fs->fs_jh_bh->b_data)) -> jh_journal =
-	*(sb_jp(fs->fs_ondisk_sb));
+    if (!bh) {
+	message ("Cannot get the journal header block. getblk failed.\n");
+	return 0;
+    }
+    ((struct reiserfs_journal_header *)(bh->b_data))->jh_journal = *(sb_jp(fs->fs_ondisk_sb));
+    mark_buffer_uptodate (bh, 1);
+    mark_buffer_dirty (bh);
+    bwrite(bh);
+    brelse(bh);
+
     return 1;
 }
 
 void zero_journal (reiserfs_filsys_t * fs)
 {
-    int i;
+    unsigned int i;
     struct buffer_head * bh;
     unsigned long done;
     unsigned long start, len;
@@ -214,7 +227,11 @@ int main (int argc, char **argv)
     int Is_journal_or_maxtrans_size_specified = 0;
 
     program_name = strrchr( argv[ 0 ], '/' );
-    program_name = program_name ? ++ program_name : argv[ 0 ];
+
+    if (program_name)
+	program_name++;
+    else 
+	program_name = argv[ 0 ];
     
     print_banner (program_name);
 
@@ -243,7 +260,7 @@ int main (int argc, char **argv)
 	};
 	int option_index;
       
-	c = getopt_long (argc, argv, "j:s:t:o:fu:l:",
+	c = getopt_long (argc, argv, "j:s:t:o:fu:l:B:",
 			 options, &option_index);
 	if (c == -1)
 	    break;
@@ -289,6 +306,9 @@ int main (int argc, char **argv)
 	       confirmation */
 	    Force ++;
 	    break;
+	case 'B': /* --badblock-list */
+	    asprintf (&badblocks_file, "%s", optarg);			
+	    break;
 	case 'u':
 	    /* UUID */
 	    if (!strcmp(optarg, "random")) {
@@ -331,37 +351,10 @@ int main (int argc, char **argv)
     /* device to be formatted */
     device_name = argv [optind];
 
-    if (!jdevice_name && !(Options & OPT_SKIP_J))
-        jdevice_name = device_name;
-
-    if (jdevice_name && (Options & OPT_SKIP_J)) {
-	    message ("either specify journal device, "
-		     "or choose the option --no-journal-awailable");
-	    return 1;
-    }
-    fs = reiserfs_open (device_name, O_RDONLY, 0, NULL);
+    fs = reiserfs_open (device_name, O_RDONLY, 0, NULL, 1);
     if (no_reiserfs_found(fs)) {
 	message ("Cannot open reiserfs on %s", device_name);
         return 1;
-    }
-
-    /* now we try to open journal, it makes sence if there is no the flag
-       NEED_TUNE  in ondisk superblock */
-    if (get_jp_journal_magic(sb_jp(fs->fs_ondisk_sb)) != NEED_TUNE) {
-      if (!reiserfs_open_journal (fs, jdevice_name, O_RDONLY)) {
-	if (!(Options & OPT_SKIP_J)) {
-	    message ("Unable to open old journal.");
-	    reiserfs_close (fs);
-	    return 1;
-	}
-	else
-	  if (!reiserfs_is_fs_consistent (fs)) {
-	    message ("Check filesystem consistency first");
-	    reiserfs_close (fs);
-	    return 1;
-	  }
-	/* forced to continue without journal available/specifed */
-      }
     }
 
     /* journal was opened or it wasn't opened but the option
@@ -370,11 +363,96 @@ int main (int argc, char **argv)
     /* make sure filesystem is not mounted */
     if (is_mounted (fs->fs_file_name)) {
 	/* fixme: it can not be mounted, btw */
-        message ("can not rebuild journal of mounted filesystem");
+        message ("Reiserfstune is not allowed to be run on mounted filesystem.");
 	reiserfs_close (fs);
         return 1;
     }
+    
+    if (!reiserfs_is_fs_consistent (fs)) {
+	message ("Filesystem looks not cleanly umounted, check the consistency first.\n");
+	reiserfs_close (fs);
+	return 1;
+    }
 
+    reiserfs_reopen (fs, O_RDWR);
+    
+    if (badblocks_file) {
+	unsigned long i, marked = 0;
+	
+	if (reiserfs_open_ondisk_bitmap (fs) < 0) {
+	    message("Failed to open reiserfs ondisk bitmap.\n");
+	    reiserfs_close(fs);
+	    exit(1);
+	}
+	
+	if (create_badblock_bitmap (fs, badblocks_file)) {
+	    message("Failed to initialize the bad block bitmap.\n");
+	    reiserfs_close(fs);
+	    exit(1);
+	}
+	    
+	for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
+	    if (reiserfs_bitmap_test_bit (fs->fs_badblocks_bm, i)) {
+		if (!reiserfs_bitmap_test_bit (fs->fs_bitmap2, i)) {
+		    reiserfs_bitmap_set_bit (fs->fs_bitmap2, i);
+		    marked++;
+		} else {
+		    /* Check that this is a block  */
+		    if (not_data_block(fs, i)) {
+			message("Block %lu belongs to the internal reiserfs area "
+			    "and cannot be reloacted.\n", i);
+
+			exit(1);
+		    } else {
+			message("Block %lu is used already in reiserfs tree.\n", i);
+		    }
+		}
+	    }
+	}
+	
+	message("%lu bad blocks were marked as used.\n", marked);
+	
+	reiserfs_close(fs);
+	exit(0);
+    }
+    
+    if (!jdevice_name && !(Options & OPT_SKIP_J)) {
+	message ("Journal device has not been specified. Assuming journal is on the main "
+	    "device (%s).\n", device_name);
+        jdevice_name = device_name;
+    }
+
+    if (jdevice_name && (Options & OPT_SKIP_J)) {
+	message ("Either specify journal device, "
+		 "or choose the option --no-journal-available");
+	return 1;
+    }
+    
+    if (j_new_device_name && (Options & OPT_STANDARD)) {
+	/* New device was specified and --make-journal-standard was also. */
+	message ("Either specify new journal device, "
+		 "or choose the option --make-journal-standard");
+	return 1;
+    }
+    
+    /* now we try to open journal, it makes sence if there is no the flag
+       NEED_TUNE  in ondisk superblock and --no-journal available is not 
+       specified. */
+    if (get_jp_journal_magic(sb_jp(fs->fs_ondisk_sb)) != NEED_TUNE && 
+	!(Options & OPT_SKIP_J)) 
+    {
+	if (reiserfs_open_journal (fs, jdevice_name, O_RDWR | O_LARGEFILE)) {
+	    message ("Failed to open the journal device (%s).", jdevice_name);
+	    return 1;
+	}
+
+	if (reiserfs_journal_params_check(fs)) {
+	    message ("Unable to open old journal. Wrong journal parameters.");
+	    reiserfs_close (fs);
+	    return 1;
+	}
+    }
+    
     /* in spite of journal was opened, the file system can be non-consistent or
        there are non-replayed transaction in journal, 
        make sure it isn't (if there is no the flag NEED_TUNE in ondisk superblock */
@@ -398,13 +476,12 @@ int main (int argc, char **argv)
 	} 
     }
 
-    reiserfs_reopen (fs, O_RDWR);
-
     /* set UUID and LABEL if specified */
     if (fs->fs_format == REISERFS_FORMAT_3_6) {
         if (uuid_is_correct (UUID)) {
 	    memcpy (fs->fs_ondisk_sb->s_uuid, UUID, 16);
 	    mark_buffer_dirty (fs->fs_super_bh);
+	    fs->fs_dirt = 1;
 	}
 	
 	if (LABEL != NULL) {
@@ -412,8 +489,8 @@ int main (int argc, char **argv)
 	        message ("Specified LABEL is longer then 16 characters, will be truncated\n");
 	    strncpy (fs->fs_ondisk_sb->s_label, LABEL, 16);
 	    mark_buffer_dirty (fs->fs_super_bh);
+	    fs->fs_dirt = 1;
 	}
-	fs->fs_dirt = 1;
     } else {
         if (uuid_is_correct (UUID))
             reiserfs_panic ("UUID cannot be specified for 3.5 format\n");
@@ -422,15 +499,22 @@ int main (int argc, char **argv)
     }
 
     if (!j_new_device_name) {
-	/* new journal device hasn't been specify */
+	
+	/* new journal device hasn't been specified */
 	printf ("Current parameters:\n");
 	print_filesystem_state (stdout, fs);
 	print_block (stdout, fs, fs->fs_super_bh);
-	printf ("Current journal parameters:\n");
-	print_journal_params (stdout, sb_jp (fs->fs_ondisk_sb));
 
 	if ((Options & OPT_STANDARD)
-	    && should_make_journal_standard(fs, j_new_device_name)) {
+	    && should_make_journal_standard(fs, j_new_device_name)) 
+	{
+	    if (!user_confirmed (stderr, "ATTENTION! Filesystem with "
+		"non-standard journal found. Continue? (y/n):", "y\n")) 
+	    {
+		exit(1);
+	    }
+
+	    fs->fs_journal_dev = fs->fs_dev;
 	    if (set_standard_journal_params (fs)) {
 		printf ("\nNew parameters:\n");
 		print_filesystem_state (stdout, fs);
@@ -439,8 +523,6 @@ int main (int argc, char **argv)
 		print_journal_params (stdout, sb_jp (fs->fs_ondisk_sb));
 		mark_buffer_dirty (fs->fs_super_bh);
 		mark_buffer_uptodate (fs->fs_super_bh, 1);
-		mark_buffer_dirty (fs->fs_jh_bh);
-		mark_buffer_uptodate (fs->fs_jh_bh, 1);
 		reiserfs_close (fs);
 		printf ("Syncing.."); fflush (stdout);
 		sync ();
@@ -448,12 +530,18 @@ int main (int argc, char **argv)
 		return 0;
 	    }
 	}
-	if (Is_journal_or_maxtrans_size_specified)
+	
+	if (Is_journal_or_maxtrans_size_specified) {
 	    /* new journal device hasn't been specified, but
 	       journal size or max transaction size have been, so we suppose
 	       that journal device remains the same */
+	    if (!reiserfs_journal_opened (fs)) {
+		message("Cannot set up new paramenters for not specified journal.");
+		return 1;
+	    }
+	
 	    j_new_device_name = jdevice_name;
-	else {	
+	} else {	
 	    /* the only parameter has been specified is device_name, so
 	       there is nothing to do */
 	    reiserfs_close (fs);
@@ -479,17 +567,23 @@ int main (int argc, char **argv)
 	else
 	    /* non-standard journal */
 	    reserved = get_sb_reserved_for_journal (fs->fs_ondisk_sb);
+		
+	journal_size = Journal_size;
 	
-	journal_size = (Journal_size ? Journal_size : journal_default_size(fs->fs_super_bh->b_blocknr, fs->fs_blocksize));
+	if (!journal_size) {
+	    journal_size = journal_default_size(fs->fs_super_bh->b_blocknr, fs->fs_blocksize) + 1;
+	    message("Journal size has not been specified. Assuming it is the default size (%lu)", 
+		journal_size);
+	}
 	
 /*	journal_size = (Journal_size ? Journal_size : // specified
 			(fs->fs_blocksize == 1024 ? (fs->fs_blocksize) * 8 - 3 -
 			 REISERFS_DISK_OFFSET_IN_BYTES / fs->fs_blocksize :
 			 JOURNAL_DEFAULT_SIZE + 1));	// default
 */
-	if (journal_size > reserved) {
+	if (journal_size + Offset > get_journal_start_must (fs) + reserved) {
 		message ("There is no enough space reserved for journal on main "
-			 "device (journal_size=%lu, reserved=%lu\n", journal_size,
+			 "device (journal_size=%lu, reserved=%lu)\n", journal_size,
 			 reserved);
 	    reiserfs_close (fs);
 	    return 1;
@@ -502,11 +596,14 @@ int main (int argc, char **argv)
     if (!is_reiserfs_jr_magic_string (fs->fs_ondisk_sb)) {
 	/* we have standard journal, so check if we can convert it
 	   to non-standard one */
+	
+	/*
 	if (!should_make_journal_non_standard (Force)) {
 	    reiserfs_close (fs);
 	    return 1;
 	}
-
+	*/
+	
         if (is_reiserfs_3_6_magic_string (fs->fs_ondisk_sb))
 	    set_sb_version (fs->fs_ondisk_sb, REISERFS_FORMAT_3_6);
         else if (is_reiserfs_3_5_magic_string (fs->fs_ondisk_sb))
@@ -520,7 +617,7 @@ int main (int argc, char **argv)
 	memcpy (fs->fs_ondisk_sb->s_v1.s_magic, REISERFS_JR_SUPER_MAGIC_STRING,
 		strlen (REISERFS_JR_SUPER_MAGIC_STRING));
 	set_sb_reserved_for_journal (fs->fs_ondisk_sb,
-				     get_jp_journal_size (sb_jp(fs->fs_ondisk_sb)) + 1);
+		get_jp_journal_size (sb_jp(fs->fs_ondisk_sb)) + 1);
     }
 
     /* now we are going to close old journal and to create a new one */
@@ -533,10 +630,9 @@ int main (int argc, char **argv)
         return 1;
     }
 
-    if (Options & OPT_STANDARD) 
-	if (should_make_journal_standard (fs, j_new_device_name))
-	    set_standard_journal_params (fs);
-    
+    if (should_make_journal_standard (fs, j_new_device_name))
+	set_standard_journal_params (fs);
+
     message ("New journal parameters:");
     print_journal_params (stdout, sb_jp (fs->fs_ondisk_sb));
 

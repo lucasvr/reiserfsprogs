@@ -1,5 +1,6 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "fsck.h"
@@ -20,26 +21,22 @@
    of directory */
 
 
-/* in list of this structures we store what has been
-   relocated. */
+/* in list of this structures we store what has been relocated. */
 struct relocated {
     unsigned long old_dir_id;
     unsigned long old_objectid;
+    
     unsigned long new_objectid;
-    /*mode_t mode;*/
+    
     struct relocated * next;
 };
 
-
 /* all relocated files will be linked into lost+found directory at the
    beginning of semantic pass */
-struct relocated * relocated_list;
+static struct relocated * relocated_list = NULL;
 
-
-__u32 get_relocated_objectid_from_list (struct key * key) {
-    struct relocated * cur;
-
-    cur = relocated_list;
+static __u32 get_relocated_objectid_from_list (struct key * key) {
+    struct relocated *cur = relocated_list;
 
     while (cur) {
 	if (cur->old_dir_id == get_key_dirid (key) &&
@@ -63,7 +60,7 @@ __u32 objectid_for_relocation (struct key * key)
     cur = getmem (sizeof (struct relocated));
     cur->old_dir_id = get_key_dirid (key);
     cur->old_objectid = get_key_objectid (key);
-    cur->new_objectid = get_unused_objectid (fs);
+    cur->new_objectid = id_map_alloc(proper_id_map(fs));
     cur->next = relocated_list;
     relocated_list = cur;
 /*    fsck_log ("relocation: (%K) is relocated to (%lu, %lu)\n",
@@ -71,6 +68,65 @@ __u32 objectid_for_relocation (struct key * key)
     return cur->new_objectid;
 }
 
+/* relocated files get added into lost+found with slightly different names */
+static __u64 link_one (struct relocated * file) {
+    char * name;
+    struct key obj_key;
+    __u64 len = 0;
+
+    asprintf (&name, "%lu,%lu", file->old_dir_id, file->new_objectid);
+    set_key_dirid (&obj_key, file->old_dir_id);
+    set_key_objectid (&obj_key, file->new_objectid);
+
+    /* 0 for fsck_need does not mean too much - it would make effect if there 
+     * were no this directory yet. But /lost_found is there already */
+    len = reiserfs_add_entry (fs, &lost_found_dir_key, name, 
+	name_length(name, lost_found_dir_format), &obj_key, 0/*fsck_need*/);
+    pass_2_stat (fs)->relocated ++;
+    free (name);
+
+    return len;
+}
+
+void linked_already(struct key *new_key /*, link_func_t link_func*/) {
+    struct relocated *cur = relocated_list;
+    struct relocated *prev = NULL;
+
+    while (cur) {
+	if (cur->old_dir_id == get_key_dirid(new_key) && 
+	    cur->new_objectid == get_key_objectid(new_key))
+	    break;
+
+	prev = cur;
+	cur = cur->next;
+    }
+
+    if (cur) {	
+	/* len = link_func(cur); */
+
+	if (prev) 
+	    prev->next = cur->next;
+	else
+	    relocated_list = cur->next;
+
+	freemem (cur);
+    }
+}
+
+void link_relocated_files (void)
+{
+    struct relocated * tmp;
+    int count;
+    
+    count = 0;
+    while (relocated_list) {
+	link_one (relocated_list);
+	tmp = relocated_list;
+	relocated_list = relocated_list->next;
+	freemem (tmp);
+	count ++;
+    }
+}
 
 /* this item is in tree. All unformatted pointer are correct. Do not
    check them */
@@ -318,42 +374,6 @@ static void put_directory_item_into_tree (struct item_head * comingih, char * it
 }
 
 
-/* relocated files get added into lost+found with slightly different names */
-static void link_one (struct relocated * file)
-{
-    char * name;
-    struct key obj_key;
-
-    asprintf (&name, "%lu,%lu", file->old_dir_id, file->new_objectid);
-    set_key_dirid (&obj_key, file->old_dir_id);
-    set_key_objectid (&obj_key, file->new_objectid);
-
-
-    /* 0 for fsck_need does not mean too much - it would make effect
-       if there were no this directory yet. But /lost_found is there
-       already */
-    reiserfs_add_entry (fs, &lost_found_dir_key, name, name_length (name, lost_found_dir_format),
-    		&obj_key, 0/*fsck_need*/);
-    pass_2_stat (fs)->relocated ++;
-    free (name);
-}
-
-
-void link_relocated_files (void)
-{
-    struct relocated * tmp;
-    int count;
-    
-    count = 0;
-    while (relocated_list) {
-	link_one (relocated_list);
-	tmp = relocated_list;
-	relocated_list = relocated_list->next;
-	freemem (tmp);
-	count ++;
-    }
-}
-
 
 void insert_item_separately (struct item_head * ih,
 			     char * item, int was_in_tree)
@@ -424,7 +444,6 @@ static void save_pass_2_result (reiserfs_filsys_t * fs)
     reiserfs_begin_stage_info_save(file, TREE_IS_BUILT);
     reiserfs_end_stage_info_save (file);
     close_file (file);
-    retval = unlink (state_dump_file (fs));
     retval = rename ("temp_fsck_file.deleteme", state_dump_file (fs));
     if (retval != 0)
 	fsck_progress ("%s: Could not rename the temporary file temp_fsck_file.deleteme to %s",
@@ -447,8 +466,10 @@ void load_pass_2_result (reiserfs_filsys_t * fs)
     fs->block_deallocator = reiserfsck_reiserfs_free_block;
 
     /* we need objectid map on semantic pass to be able to relocate files */
-    proper_id_map (fs) = init_id_map ();
+    proper_id_map (fs) = id_map_init();
+    /* Not implemented yet.
     fetch_objectid_map (proper_id_map (fs), fs);    
+    */
 }
 
     
@@ -475,21 +496,21 @@ static void do_pass_2 (reiserfs_filsys_t * fs) {
 	    if (bh == 0) {
 	        fsck_log ("pass_2: Reading of the block (%lu) failed on the device 0x%x\n",
 		      j, fs->fs_dev);
-                goto next;
+                goto cont;
             }
 	
             if (is_block_used (bh->b_blocknr) && !(block_of_journal (fs, bh->b_blocknr) &&
 					       fsck_data(fs)->rebuild.use_journal_area)) {
-	        fsck_log ("%s: The block (%lu) is in the tree already. Should not happen.\n", 
+		fsck_log("%s: The block (%lu) is in the tree already. Should not happen.\n", 
 		    __FUNCTION__, bh->b_blocknr);
-	        goto next;
+		goto cont;
             }
             /* this must be leaf */
             what_node = who_is_this (bh->b_data, bh->b_size);
 	    if (what_node != THE_LEAF) { // || B_IS_KEYS_LEVEL(bh)) {
 	        fsck_log ("%s: The block (%b), marked as a leaf on the first two passes, is not a leaf! Will be skipped.\n", 
 		    __FUNCTION__, bh);
-	        goto next;
+	        goto cont;
 	    }
 /*	
 	    fsck_log ("block %lu is being inserted\n", bh->b_blocknr);
@@ -506,7 +527,7 @@ static void do_pass_2 (reiserfs_filsys_t * fs) {
                 put_stat_data_items (bh);
 
             print_how_far (fsck_progress_file (fs), &done, total, 1, fsck_quiet (fs));
-        next:
+        cont:
 	    brelse (bh);
 	    j ++;
         }
@@ -547,7 +568,7 @@ static void after_pass_2 (reiserfs_filsys_t * fs)
   
     /* write all dirty blocks */
     fsck_progress ("Flushing..");
-    flush_objectid_map (proper_id_map (fs), fs);
+    id_map_flush(proper_id_map (fs), fs);
     fs->fs_dirt = 1;
     reiserfs_flush_to_ondisk_bitmap (fs->fs_bitmap2, fs);
     reiserfs_flush (fs);
@@ -571,7 +592,7 @@ static void after_pass_2 (reiserfs_filsys_t * fs)
 	save_pass_2_result (fs);
 
     
-    free_id_map (proper_id_map (fs));
+    id_map_free(proper_id_map (fs));
     proper_id_map (fs) = 0;
     
     reiserfs_delete_bitmap (fsck_new_bitmap (fs));
@@ -601,8 +622,18 @@ void pass_2 (reiserfs_filsys_t * fs)
     
     after_pass_2 (fs);
 
-    if (get_sb_root_block (fs->fs_ondisk_sb) == -1)
-	die ("\n\nNo reiserfs metadata found");
+    if (get_sb_root_block (fs->fs_ondisk_sb) == ~0ul || 
+	get_sb_root_block (fs->fs_ondisk_sb) == 0)
+	die ( "\nNo reiserfs metadata found.  If you are sure that you had the reiserfs\n"
+		"on this partition,  then the start  of the partition  might be changed\n"
+		"or all data were wiped out. The start of the partition may get changed\n"
+		"by a partitioner  if you have used one.  Then you probably rebuilt the\n"
+		"superblock as there was no one.  Zero the block at 64K offset from the\n"
+		"start of the partition (a new super block you have just built) and try\n"
+	        "to move the start of the partition a few cylinders aside  and check if\n" 
+		"debugreiserfs /dev/xxx detects a reiserfs super block. If it does this\n"
+	        "is likely to be the right super block version.                        \n"
+		"If this makes you nervous, try  www.namesys.com/support.html,  and for\n"
+		"$25 the author of fsck,  or a colleague  if he is out,  will  step you\n"
+		"through it all.\n");
 }
-
-

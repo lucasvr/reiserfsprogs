@@ -1,9 +1,10 @@
 /*
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
+
 #include "resize.h"
 #include <time.h>
-
 
 static unsigned long int_node_cnt   = 0, int_moved_cnt   = 0;
 static unsigned long leaf_node_cnt  = 0, leaf_moved_cnt  = 0;
@@ -55,6 +56,9 @@ static unsigned long move_generic_block(reiserfs_filsys_t * fs, unsigned long bl
 	/* move wrong block */ 
 	bh = bread(fs->fs_dev, block, fs->fs_blocksize);
 
+	if (!bh)
+	    reiserfs_panic ("move_generic_block: bread failed.\n");
+
 	reiserfs_bitmap_find_zero_bit(bmp, &unused_block);
 	if (unused_block == 0 || unused_block >= bnd) {
 		fputs ("resize_reiserfs: can\'t find free block\n", stderr);
@@ -95,7 +99,7 @@ static unsigned long move_formatted_block(reiserfs_filsys_t * fs, unsigned long 
 	struct item_head *ih;
 	unsigned long new_blocknr = 0;
 	int node_is_internal = 0;
-	int i, j;
+	unsigned int i, j;
 	
 	bh = bread(fs->fs_dev, block, fs->fs_blocksize);
 	if (!bh)
@@ -105,7 +109,7 @@ static unsigned long move_formatted_block(reiserfs_filsys_t * fs, unsigned long 
 		
 		leaf_node_cnt++;
 		
-		for (i=0; i < B_NR_ITEMS(bh); i++) {
+		for (i = 0; i < B_NR_ITEMS(bh); i++) {
 			ih = B_N_PITEM_HEAD(bh, i);
 			if (is_indirect_ih(ih)) {
 				__u32 * indirect;
@@ -172,11 +176,11 @@ int shrink_fs(reiserfs_filsys_t * fs, unsigned long blocks)
 		int c;
 
 		printf(
-			"You are running BETA version of reiserfs shrinker.\n"
-			"This version is only for testing or VERY CAREFUL use.\n"
-			"Backup of you data is recommended.\n\n"
-			"Do you want to continue? [y/N]:"
-			);
+		    "You are running BETA version of reiserfs shrinker.\n"
+		    "This version is only for testing or VERY CAREFUL use.\n"
+		    "Backup of you data is recommended.\n\n"
+		    "Do you want to continue? [y/N]:"
+		);
 		fflush(stdout);
 		c = getchar();
 		if (c != 'y' && c != 'Y')
@@ -186,18 +190,22 @@ int shrink_fs(reiserfs_filsys_t * fs, unsigned long blocks)
 	bmap_nr_new = (blocks - 1) / (8 * fs->fs_blocksize) + 1;
 
 	/* is shrinking possible ? */
-	if (get_sb_block_count(ondisk_sb) - blocks > get_sb_free_blocks(ondisk_sb) + get_sb_bmap_nr(ondisk_sb) - bmap_nr_new) {
-	    fprintf(stderr, "resize_reiserfs: can\'t shrink fs; too many blocks already allocated\n");
+	if (get_sb_block_count(ondisk_sb) - blocks > 
+	    get_sb_free_blocks(ondisk_sb) + get_sb_bmap_nr(ondisk_sb) - 
+	    bmap_nr_new) 
+	{
+	    fprintf(stderr, "resize_reiserfs: can\'t shrink fs; too many "
+		"blocks already allocated\n");
 	    return -1;
 	}
 
 	reiserfs_reopen(fs, O_RDWR);
-	if (!reiserfs_open_ondisk_bitmap (fs))
+	if (reiserfs_open_ondisk_bitmap (fs))
 	    DIE("cannot open ondisk bitmap");
 	bmp = fs->fs_bitmap2;
 	ondisk_sb = fs->fs_ondisk_sb;
 
-	set_sb_fs_state (fs->fs_ondisk_sb, REISERFS_CORRUPTED);
+	set_sb_fs_state (fs->fs_ondisk_sb, FS_ERROR);
 	mark_buffer_uptodate(fs->fs_super_bh, 1);
 	mark_buffer_dirty(fs->fs_super_bh);
 	bwrite(fs->fs_super_bh);
@@ -218,10 +226,11 @@ int shrink_fs(reiserfs_filsys_t * fs, unsigned long blocks)
 		fflush(stdout);
 	}
 
-	n_root_block = move_formatted_block(fs, get_sb_root_block(ondisk_sb), blocks, 0);
-	if (n_root_block) {
-		set_sb_root_block (ondisk_sb, n_root_block);
-	}
+	n_root_block = move_formatted_block(fs, get_sb_root_block(ondisk_sb), 
+	    blocks, 0);
+	
+	if (n_root_block)
+	    set_sb_root_block (ondisk_sb, n_root_block);
 
 	if (opt_verbose)
 	    printf ("\n\nnodes processed (moved):\n"

@@ -1,5 +1,6 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 /* for stat64() */
@@ -22,14 +23,12 @@
 #include <linux/hdreg.h>
 #include <dirent.h>
 
+#include <asm/ioctl.h>
 #include <unistd.h>
-//#include <linux/unistd.h>
-//#include <sys/stat.h>
 
 #if defined(__linux__) && defined(_IOR) && !defined(BLKGETSIZE64)
 #   define BLKGETSIZE64 _IOR(0x12, 114, sizeof(__u64))
 #endif
-    
 
 #include "swab.h"
 
@@ -61,11 +60,10 @@ void die (char * fmt, ...)
 #define CONTROL_SIZE (strlen (MEM_BEGIN) + 1 + sizeof (int) + strlen (MEM_END) + 1)
 
 
-int get_mem_size (char * p)
-{
-    char * begin;
-
-    begin = p - strlen (MEM_BEGIN) - 1 - sizeof (int);
+unsigned int get_mem_size(char *p) {
+    char *begin;
+    
+    begin = p - strlen (MEM_BEGIN) - 1 - sizeof(int);
     return *(int *)(begin + strlen (MEM_BEGIN) + 1);
 }
 
@@ -88,8 +86,20 @@ void checkmem (char * p, int size)
 }
 
 
-void * getmem (int size)
+void *getmem (int size)
 {
+    char * mem;
+
+    if ((mem = mem_alloc(size)) == NULL)
+	die ("getmem: no more memory (%d)", size);
+    
+    memset (mem, 0, size);
+//    checkmem (mem, size);
+
+    return mem;
+}
+
+void *mem_alloc(int size) {
     char * p;
     char * mem;
 
@@ -97,20 +107,18 @@ void * getmem (int size)
     if (!p)
 	die ("getmem: no more memory (%d)", size);
 
+    /* Write the MEM_BEGIN magic in the beginning of allocated memory. */
     strcpy (p, MEM_BEGIN);
     p += strlen (MEM_BEGIN) + 1;
+    /* Write the size after the magic. */
     *(int *)p = size;
     p += sizeof (int);
     mem = p;
-    memset (mem, 0, size);
     p += size;
     strcpy (p, MEM_END);
 
-//    checkmem (mem, size);
-
     return mem;
 }
-
 
 void * expandmem (void * vp, int size, int by)
 {
@@ -250,7 +258,7 @@ static int _is_mounted (char * device_name, func_t f)
     mode_t mode;
 
     if (stat ("/", &root_st) == -1)
-	die ("is_mounted: could not stat \"/\": %m\n");
+	die ("is_mounted: could not stat \"/\": %s\n", strerror(errno));
 
 
     mode = get_st_mode (device_name);
@@ -272,11 +280,12 @@ static int _is_mounted (char * device_name, func_t f)
 	/* proc filesystem is not mounted, or /proc/mounts does not
            exist */
 	if (f)
-	    return (user_confirmed (stderr, " (could not figure out) Is filesystem mounted read-only? (Yes)",
-				    "Yes\n"));
+	    return (user_confirmed (stderr, 
+		" (could not figure out) Is filesystem mounted read-only? (Yes)",
+		"Yes\n"));
 	else
-	    return (user_confirmed (stderr, " (could not figure out) Is filesystem mounted? (Yes)",
-				    "Yes\n"));
+	    return (user_confirmed (stderr, 
+		" (could not figure out) Is filesystem mounted? (Yes)", "Yes\n"));
     }
     
     retval = 0;
@@ -366,7 +375,7 @@ static void str_to_be (char * buf, int prosents)
 
 void print_how_far (FILE * fp,
 		    unsigned long * passed, unsigned long total,
-		    int inc, int quiet)
+		    unsigned int inc, int quiet)
 {
     int percent;
 
@@ -390,9 +399,10 @@ void print_how_far (FILE * fp,
 
     strcat (current_progress, progress_to_be + strlen (current_progress));
 
-    if (!quiet)
-	print_how_fast (*passed/* - inc*/, total, strlen (progress_to_be),
-			(*passed == inc) ? 1 : 0);
+    if (!quiet) {
+	print_how_fast(*passed /* - inc*/, total, strlen (progress_to_be),
+	    (*passed == inc) ? 1 : 0);
+    }
 
     fflush (fp);
 }
@@ -419,10 +429,11 @@ unsigned long count_blocks (char * filename, int blocksize)
 #ifdef BLKGETSIZE64
     {
 	if (ioctl (fd, BLKGETSIZE64, &size) >= 0) {
+	    size = (size / 4096) * 4096 / blocksize;
 	    sz = size;
 	    if ((__u64)sz != size)
 		    die ("count_blocks: block device too large");
-	    return (size / 4096) * 4096 / blocksize;
+	    return sz;
 	}
     }
 #endif
@@ -580,8 +591,8 @@ int blocklist__is_block_saved (struct block_handler ** base, __u32 * count,
     return 0;
 }
 */
-void blocklist__insert_in_position (void *elem, void **base, __u32 *count, int elem_size, 
-    __u32 * position) 
+void blocklist__insert_in_position (void *elem, void **base, __u32 *count, 
+    int elem_size, __u32 *position) 
 {
     if (elem_size == 0)
     	return;
@@ -589,7 +600,7 @@ void blocklist__insert_in_position (void *elem, void **base, __u32 *count, int e
     if (*base == NULL)
         *base = getmem (BLOCKLIST__ELEMENT_NUMBER * elem_size);
     
-    if (*count == get_mem_size ((void *)*base) / elem_size)
+    if (*count == get_mem_size((void *)*base) / elem_size)
         *base = expandmem (*base, get_mem_size((void *)*base), 
                         BLOCKLIST__ELEMENT_NUMBER * elem_size);
     
@@ -643,11 +654,11 @@ int uuid_is_correct (unsigned char * uuid)
     if (i == 16)
 	return 0;
 
-    if (!test_bit(7, &uuid[8]) || test_bit(6, &uuid[8]))
+    if (!misc_test_bit(7, &uuid[8]) || misc_test_bit(6, &uuid[8]))
     	return 0;
 
-    if (test_bit(7, &uuid[6]) || !test_bit(6, &uuid[6]) ||
-    	test_bit(5, &uuid[6]) ||  test_bit(4, &uuid[6]))
+    if (misc_test_bit(7, &uuid[6]) || !misc_test_bit(6, &uuid[6]) ||
+    	misc_test_bit(5, &uuid[6]) ||  misc_test_bit(4, &uuid[6]))
     	return 0;
     	
     return 1;
@@ -822,3 +833,151 @@ void clean_after_dma_check(int fd, dma_info_t *dma_info) {
     if (dma_info->fd && fd != dma_info->fd)
 	close(dma_info->fd);
 }
+
+/* Only le bitops operations are used. */
+
+inline int misc_set_bit (unsigned long long nr, void * addr) {
+    __u8 * p, mask;
+    int retval;
+
+    p = (__u8 *)addr;
+    p += nr >> 3;
+    mask = 1 << (nr & 0x7);
+    /*cli();*/
+    retval = (mask & *p) != 0;
+    *p |= mask;
+    /*sti();*/
+    return retval;
+}
+
+
+inline int misc_clear_bit (unsigned long long nr, void * addr) {
+    __u8 * p, mask;
+    int retval;
+
+    p = (__u8 *)addr;
+    p += nr >> 3;
+    mask = 1 << (nr & 0x7);
+    /*cli();*/
+    retval = (mask & *p) != 0;
+    *p &= ~mask;
+    /*sti();*/
+    return retval;
+}
+
+inline int misc_test_bit(unsigned long long nr, const void * addr) {
+    __u8 * p, mask;
+
+    p = (__u8 *)addr;
+    p += nr >> 3;
+    mask = 1 << (nr & 0x7);
+    return ((mask & *p) != 0);
+}
+
+inline unsigned long long misc_find_first_zero_bit (const void *vaddr, 
+    unsigned long long size) 
+{
+    const __u8 *p = vaddr, *addr = vaddr;
+    unsigned long long res;
+
+    if (!size)
+        return 0;
+
+    size = (size >> 3) + ((size & 0x7) > 0);
+    while (*p++ == 255) {
+        if (--size == 0)
+            return (unsigned long long)(p - addr) << 3;
+    }
+
+    --p;
+    for (res = 0; res < 8; res++)
+        if (!misc_test_bit (res, p))
+            break;
+    return res + (p - addr) * 8;
+}
+
+
+inline unsigned long long misc_find_next_zero_bit (const void *vaddr, 
+    unsigned long long size, unsigned long long offset) 
+{
+    const __u8 *addr = vaddr;
+    const __u8 *p = addr + (offset >> 3);
+    int bit = offset & 7;
+    unsigned long long res;
+
+    if (offset >= size)
+        return size;
+
+    if (bit) {
+        /* Look for zero in first char */
+        for (res = bit; res < 8; res++)
+            if (!misc_test_bit (res, p))
+                return res + (p - addr) * 8;
+        p++;
+    }
+    /* No zero yet, search remaining full bytes for a zero */
+    res = misc_find_first_zero_bit (p, size - 8 * (p - addr));
+    return res + (p - addr) * 8;
+}
+
+inline unsigned long long misc_find_first_set_bit (const void *vaddr, 
+    unsigned long long size) 
+{
+    const __u8 *p = vaddr, *addr = vaddr;
+    unsigned long long res;
+
+    if (!size)
+        return 0;
+
+    size = (size >> 3) + ((size & 0x7) > 0);
+    while (*p++ == 0) {
+        if (--size == 0)
+            return (unsigned long long)(p - addr) << 3;
+    }
+
+    --p;
+    for (res = 0; res < 8; res++)
+        if (misc_test_bit (res, p))
+            break;
+
+    return res + (p - addr) * 8;
+}
+
+inline unsigned long long misc_find_next_set_bit(const void *vaddr, 
+    unsigned long long size, unsigned long long offset)
+{
+    const __u8 *addr = vaddr;
+    const __u8 *p = addr + (offset >> 3);
+    int bit = offset & 7;
+    unsigned long long res;
+
+    if (offset >= size)
+        return size;
+
+    if (bit) {
+        /* Look for zero in first char */
+        for (res = bit; res < 8; res++)
+            if (misc_test_bit (res, p))
+                return res + (p - addr) * 8;
+        p++;
+    }
+    /* No set bit yet, search remaining full bytes for a 1 */
+    res = misc_find_first_set_bit (p, size - 8 * (p - addr));
+    return res + (p - addr) * 8;
+}
+
+#include "credits.h"
+
+/* Reads the "CREDITS" file and prints one paragraph from it. */
+void misc_print_credit(FILE *out) {
+    char *line;
+    
+    fprintf(out, "\nA pair of credits:\n");
+    
+    line = credits[(random() % CREDITS_COUNT)];
+    fprintf(out, "%s", line);
+    
+    line = credits[(random() % CREDITS_COUNT)];
+    fprintf(out, "%s", line);
+}
+

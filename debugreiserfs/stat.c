@@ -1,5 +1,6 @@
 /*
- * Copyright 2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2002-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "debugreiserfs.h"
@@ -114,14 +115,15 @@ static int is_unique_item (struct obstack * ostack, void ** tree, void * ih)
 
 static void stat1_the_leaf (reiserfs_filsys_t * fs, struct buffer_head * bh)
 {
-    int i;
+    int i, i_num;
     struct item_head * ih;
     int is_there_unique_item;
 
 
     ih = B_N_PITEM_HEAD (bh, 0);
     is_there_unique_item = 0;
-    for (i = 0; i < get_blkh_nr_items (B_BLK_HEAD (bh)); i ++, ih ++) {
+    i_num = leaf_item_number_estimate(bh);
+    for (i = 0; i < i_num; i ++, ih ++) {
 	/* count all items */
 	fs_stat.all ++;
 
@@ -140,7 +142,7 @@ static void stat1_the_leaf (reiserfs_filsys_t * fs, struct buffer_head * bh)
     } else {
 	ih = B_N_PITEM_HEAD (bh, 0);
 	/* node contains at least one unique item. We will put it in, count items of each type */
-	for (i = 0; i < get_blkh_nr_items (B_BLK_HEAD (bh)); i ++, ih ++) {
+	for (i = 0; i < i_num; i ++, ih ++) {
 	    fs_stat.items [get_type (&ih->ih_key)] ++;
 	}
     }
@@ -178,10 +180,6 @@ void do_stat (reiserfs_filsys_t * fs)
     return;
 */
 
-
-
-    total = reiserfs_bitmap_ones (input_bitmap (fs));
-
     /* pass 0 of stating */
     total = reiserfs_bitmap_ones (input_bitmap (fs));
     done = 0;
@@ -197,7 +195,7 @@ void do_stat (reiserfs_filsys_t * fs)
 	    continue;
 	}
 	type = who_is_this (bh->b_data, bh->b_size);
-	if (type != THE_LEAF) {
+	if (type != THE_LEAF && type != HAS_IH_ARRAY) {
 	    reiserfs_bitmap_clear_bit (input_bitmap (fs), i);
 	    brelse (bh);
 	    continue;

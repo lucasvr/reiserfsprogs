@@ -1,10 +1,10 @@
-%define reiserfsprogsversion 3.6.4 
+%define reiserfsprogsversion 3.6.9 
 
 Vendor:       Hans Reiser
 Distribution: Hans Reiser
 Name:         reiserfsprogs
 Release:      1
-Copyright:    2002 Hans Reiser
+Copyright:    2003 Hans Reiser
 Group:        Unsorted
 
 Packager:     anthon@mnt.org
@@ -22,7 +22,7 @@ checking and correcting any inconsistencies (reiserfsck) and resizing
 Authors:
 --------
 Hans Reiser <reiser@namesys.com>
-Vitaly Fertman <vetalf@inbox.ru>
+Vitaly Fertman <vitaly@namesys.com>
 Alexander Zarochentcev <zam@namesys.com>
 Vladimir Saveliev <monstr@namesys.com>
 
@@ -81,4 +81,5 @@ fi
 %clean
   %{__rm} -rf $RPM_BUILD_ROOT
 %files -f %{buildroot}/rpm-filelist
+%defattr(-,root,root)
 %doc README

@@ -1,5 +1,6 @@
 /*
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #define _GNU_SOURCE
@@ -30,17 +31,21 @@ extern reiserfs_filsys_t * fs;
  */
 #define DO_DUMP    		1  /* not a real dump, just printing to stdout contents of
                       			tree nodes */
-#define DO_CORRUPT 		2 /* used to make filesystem corruption and then test fsck */
-#define DO_SCAN    		3
-#define DO_RECOVER 		4
-#define DO_TEST    		6
-#define DO_PACK    		7  /* -p extract meta data of reiserfs filesystem */
-#define DO_STAT    		8
-#define DO_SCAN_FOR_NAME 	9 /* -n */
-#define DO_LOOK_FOR_NAME 	10 /* -N */
-#define DO_SCAN_JOURNAL  	11 /* -J */
-#define DO_EXTRACT_BADBLOCKS	12
-#define DO_FILE_MAP 		13
+#define DO_CORRUPT_ONE 		2 /* used to make filesystem corruption and then test fsck */
+#define DO_CORRUPT_FILE		3 /* used to make filesystem corruption and then test fsck, the list of corruption is set on the file */
+#define DO_RANDOM_CORRUPTION 4
+#define DO_SCAN    		5
+#define DO_RECOVER 		6
+#define DO_TEST    		7
+#define DO_PACK    		8  /* -p extract meta data of reiserfs filesystem */
+#define DO_STAT    		9
+#define DO_SCAN_FOR_NAME 	10 /* -n */
+#define DO_LOOK_FOR_NAME 	11 /* -N */
+#define DO_SCAN_JOURNAL  	12 /* -J */
+#define DO_EXTRACT_BADBLOCKS	13
+#define DO_FILE_MAP 		14
+#define DO_ZERO_BITMAP		15
+
 
 
 /*first bits are in reiserfs_fs.b*/
@@ -210,13 +215,13 @@ sent_bytes += 8;\
 
 
 struct debugreiserfs_data {
-    int mode; /* DO_DUMP | DO_PACK | DO_CORRUPT... */
+    int mode; /* DO_DUMP | DO_PACK | DO_CORRUPT_ONE... */
 #define USED_BLOCKS 	1
 #define EXTERN_BITMAP 	2
 #define ALL_BLOCKS 	3
 #define UNUSED_BLOCKS 	4
 
-    int scan_area; /* for -p, -s and -n */
+	int scan_area; /* for -p, -s and -n */
     char * input_bitmap; /* when ->scan_area is set to EXTERN_BITMAP */
     reiserfs_bitmap_t * bitmap; /* bitmap is read from ->input_bitmap */
     unsigned long block; /* set by -B. this is a must for -C, option for -p and -d */
@@ -228,6 +233,10 @@ struct debugreiserfs_data {
 
     unsigned long options; /* -q only yet*/
     int JJ;
+  /* log file name and handle */
+    char * log_file_name;
+    FILE * log ;
+    
 };
 
 #define data(fs) ((struct debugreiserfs_data *)((fs)->fs_vp))
@@ -249,7 +258,10 @@ struct debugreiserfs_data {
 void do_stat (reiserfs_filsys_t * fs);
 
 /* corruption.c */
-void do_corrupt_one_block (reiserfs_filsys_t * fs);
+void do_corrupt_one_block (reiserfs_filsys_t * fs, char * fline);
+void do_leaves_corruption (reiserfs_filsys_t * fs, unsigned long nr_leaves_cr);
+void do_bitmap_corruption (reiserfs_filsys_t * fs);
+void do_fs_random_corrupt (reiserfs_filsys_t * fs);
 
 /* recover.c */
 void do_recover (reiserfs_filsys_t * fs);
@@ -268,5 +280,16 @@ struct saved_item {
     int si_item_num;
     struct saved_item * si_next; /* list of items having the same key */
 };
+
+/*
+   Local variables:
+   c-indentation-style: "K&R"
+   mode-name: "LC"
+   c-basic-offset: 4
+   tab-width: 4
+   fill-column: 80
+   End:
+*/
+
 
 

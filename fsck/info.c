@@ -1,5 +1,6 @@
 /*
- * Copyright 1996-2002 Hans Reiser
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "fsck.h"
@@ -35,7 +36,7 @@ void stage_report (int pass, reiserfs_filsys_t * fs)
 	if (stat->wrong_pointers)
 	    fsck_progress ("\t\tpointers in indirect items to wrong area %lu (zeroed)\n",
 			   stat->wrong_pointers);
-	fsck_progress ("\t\tObjectids found %lu\n", proper_id_map (fs)->objectids_marked);
+	fsck_progress ("\t\tObjectids found %lu\n", proper_id_map(fs)->count);
     }
     break;
 	
@@ -74,7 +75,7 @@ void stage_report (int pass, reiserfs_filsys_t * fs)
 	if (stat->shared_objectids)
 	    fsck_progress ("\t%lu shared objectids\n", stat->shared_objectids);
 	if (stat->relocated)
-	    fsck_progress ("\tFiles relocated because of key conflicts w/ a directory %lu\n",
+	    fsck_progress ("\tFiles relocated because of key conflicts with a directory %lu\n",
 			   stat->relocated);
 	if (stat->rewritten)
 	    fsck_progress ("\tFiles rewritten %lu\n", stat->rewritten);

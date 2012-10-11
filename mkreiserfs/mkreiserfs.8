@@ -1,7 +1,7 @@
 .\" -*- nroff -*-
-.\" Copyright 1996-2002 Hans Reiser.
+.\" Copyright 1996-2003 Hans Reiser.
 .\" 
-.TH MKREISERFS 8 "January 2002" "Reiserfsprogs-3.6.4"
+.TH MKREISERFS 8 "April 2003" "Reiserfsprogs-3.6.9"
 .SH NAME
 mkreiserfs \- create a Linux ReiserFS file system 
 .SH SYNOPSIS
@@ -12,6 +12,7 @@ mkreiserfs \- create a Linux ReiserFS file system
 [ \fB-u\fR | \fB--uuid \fIUUID\fR ] 
 [ \fB-l\fR | \fB--label \fILABEL\fR ]
 [ \fB--format \fIFORMAT\fR ]
+[ \fB-q\fR | \fB--quiet\fR ]
 [ \fB-j\fR | \fB--journal-device \fIFILE\fR ]
 [ \fB-s\fR | \fB--journal-size \fIN\fR ]
 [ \fB-o\fR | \fB--journal-offset \fIN\fR ]
@@ -41,7 +42,7 @@ will be sorted with. Choose one of r5, rupasov, tea. r5 is default
 .TP
 \fB--format \fIFORMAT\fR
 \fIFORMAT\fR specifies a format new filsystem has to be of. Choose one
-of 3.5 and 3.6. If none is specified mkreiserfs will create format 3.6
+of 3.5 and 3.6. If none is specified \fBmkreiserfs\fR will create format 3.6
 if running kernel is 2.4, 3.5 if 2.2 is running, and will refuse
 creation under other kernels.
 .TP
@@ -50,11 +51,15 @@ Set  the  universally  unique  identifier (\fB UUID \fR) of the filesystem to
 \fIUUID\fR (see also \fBuuidgen(8)\fR). The  format  of  the  UUID  is  a 
 series  of  hex  digits  separated  by  hypthens,  like  this:
 "c1b9d5a2-f162-11cf-9ece-0020afc76f16". If the option skipped,
-mkreiserfs generates a new one.
+\fBmkreiserfs\fR generates a new one.
 .TP
 \fB-l\fR | \fB--label \fILABEL\fR
 Set  the  volume  label  of  the filesystem. \fILABEL\fR can be at most 16
-characters long; if it is longer than 16 characters, mkreiserfs will truncate it.
+characters long; if it is longer than 16 characters, \fBmkreiserfs\fR will truncate it.
+.TP
+\fB-q\fR | \fB--quiet \fR
+Make \fBmkreiserfs\fR to work quiet without producing any message, progress and question. 
+It is useful if you run \fBmkreiserfs\fR in a script. For use by end users only.
 .TP
 \fB-j\fR | \fB--journal-device \fIFILE\fR
 \fIFILE\fR is name of block device where the file system is to have
@@ -79,12 +84,12 @@ than half the size of the journal. If specifed incorrectly, it will be
 adjusted.
 .TP
 \fB-f\fR
-This forces mkreiserfs to continue even if device is either whole
+This forces \fBmkreiserfs\fR to continue even if device is either whole
 disk, or looks mounted or is not a block device. Specified more than
 once allows to avoid asking for confirmation.
 .TP
 \fB-d\fR
-This makes mkreiserfs to print debugging information during mkreiserfs.
+This makes \fBmkreiserfs\fR to print debugging information during \fBmkreiserfs\fR.
 .TP
 \fB-V\fR
 This prints version and exits.

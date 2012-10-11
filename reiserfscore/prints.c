@@ -1,6 +1,6 @@
 /*
- * Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Hans Reiser, see
- * reiserfs/README for licensing and copyright details
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "includes.h"
@@ -376,7 +376,7 @@ static void print_sequence (FILE * fp, __u32 start, int len)
 void print_indirect_item (FILE * fp, struct buffer_head * bh, int item_num)
 {
     struct item_head * ih;
-    int j;
+    unsigned int j;
     __u32 * unp, prev = INT_MAX;
     int num;
 
@@ -403,7 +403,7 @@ char timebuf[256];
 
 char * timestamp (time_t t)
 {
-    strftime (timebuf, 256, "%m/%d/%Y %T", localtime (&t));
+    strftime (timebuf, 256, "%d/%Y %T", localtime (&t));
     return timebuf;
 }
 
@@ -517,8 +517,8 @@ static int print_leaf (FILE * fp, reiserfs_filsys_t * fs, struct buffer_head * b
 
     blkh = B_BLK_HEAD (bh);
     ih = B_N_PITEM_HEAD (bh,0);
-    nr = get_blkh_nr_items (blkh);
-
+    nr = leaf_count_ih(bh->b_data, bh->b_size);
+    
     reiserfs_warning (fp,
 		      "\n===================================================================\n");
     reiserfs_warning (fp, "LEAF NODE (%ld) contains %b (real items %d)\n",
@@ -526,7 +526,7 @@ static int print_leaf (FILE * fp, reiserfs_filsys_t * fs, struct buffer_head * b
 
     if (!(print_mode & PRINT_TREE_DETAILS)) {
 	reiserfs_warning (fp, "FIRST ITEM_KEY: %k, LAST ITEM KEY: %k\n",
-			   &(ih->ih_key), &((ih + get_blkh_nr_items (blkh) - 1)->ih_key));
+			   &(ih->ih_key), &((ih + nr - 1)->ih_key));
 	return 0;
     }
 
@@ -607,6 +607,7 @@ int print_super_block (FILE * fp, reiserfs_filsys_t * fs, char * file_name,
     struct reiserfs_super_block * sb = (struct reiserfs_super_block *)(bh->b_data);
     dev_t rdev;
     int format = 0;
+    __u16 state;
 
     if (!does_look_like_super_block (sb))
 	return 1;
@@ -643,7 +644,7 @@ int print_super_block (FILE * fp, reiserfs_filsys_t * fs, char * file_name,
 	reiserfs_warning (fp, "Root block: %u\n", get_sb_root_block (sb));
     }
     reiserfs_warning (fp, "Filesystem is %scleanly umounted\n",
-		      (get_sb_umount_state (sb) == REISERFS_CLEANLY_UMOUNTED) ? "" : "NOT ");
+		      (get_sb_umount_state (sb) == FS_CLEANLY_UMOUNTED) ? "" : "NOT ");
 
     if (short_print)
     	return 0;
@@ -656,14 +657,23 @@ int print_super_block (FILE * fp, reiserfs_filsys_t * fs, char * file_name,
     print_journal_params (fp, sb_jp (sb));
     reiserfs_warning (fp, "Blocks reserved by journal: %u\n",
 		      get_sb_reserved_for_journal (sb));
-    reiserfs_warning (fp, "Fs state field: 0x%x\n", get_sb_fs_state (sb));
+    state = get_sb_fs_state (sb);
+    reiserfs_warning (fp, "Fs state field: 0x%x:\n", state);
+    if ((state & FS_FATAL) == FS_FATAL)
+	reiserfs_warning (fp, "\tFATAL corruptions exist.\n");
+    if ((state & FS_ERROR) == FS_ERROR)
+	reiserfs_warning (fp, "\t some corruptions exist.\n");
+    if ((state & IO_ERROR) == IO_ERROR)
+	reiserfs_warning (fp, "\tI/O corruptions exist.\n");
+
     reiserfs_warning (fp, "sb_version: %u\n", get_sb_version (sb));
     if (format == 2) {
         reiserfs_warning (fp, "inode generation number: %u\n", get_sb_v2_inode_generation (sb));
         reiserfs_warning (fp, "UUID: %U\n", sb->s_uuid);
         reiserfs_warning (fp, "LABEL: %.16s\n", sb->s_label);
         reiserfs_warning (fp, "Set flags in SB:\n");
-        reiserfs_warning (fp, "\t%s\n", ((get_sb_v2_flag (sb, reiserfs_attrs_cleared)) ? "ATTRIBUTES CLEAN" : ""));
+	if ((get_sb_v2_flag (sb, reiserfs_attrs_cleared)))
+	    reiserfs_warning (fp, "\tATTRIBUTES CLEAN\n");
     }
 
     return 0;
@@ -722,8 +732,7 @@ void print_block (FILE * fp, reiserfs_filsys_t * fs,
 
 void print_tb (int mode, int item_pos, int pos_in_item, struct tree_balance * tb, char * mes)
 {
-  int h = 0;
-  int i;
+  unsigned int h = 0;
   struct buffer_head * tbSh, * tbFh;
 
 
@@ -753,19 +762,19 @@ void print_tb (int mode, int item_pos, int pos_in_item, struct tree_balance * tb
       tbSh = 0;
       tbFh = 0;
     }
-    printf ("* %d * %3ld(%2d) * %3ld(%2d) * %3ld(%2d) * %5ld * %5ld * %5ld * %5ld * %5ld *\n",
+    printf ("* %u * %3lu(%2lu) * %3lu(%2lu) * %3lu(%2lu) * %5ld * %5ld * %5ld * %5ld * %5ld *\n",
 	    h, 
-	    (tbSh) ? (tbSh->b_blocknr):(-1),
-	    (tbSh) ? tbSh->b_count : -1,
-	    (tb->L[h]) ? (tb->L[h]->b_blocknr):(-1),
-	    (tb->L[h]) ? tb->L[h]->b_count : -1,
-	    (tb->R[h]) ? (tb->R[h]->b_blocknr):(-1),
-	    (tb->R[h]) ? tb->R[h]->b_count : -1,
-	    (tbFh) ? (tbFh->b_blocknr):(-1),
-	    (tb->FL[h]) ? (tb->FL[h]->b_blocknr):(-1),
-	    (tb->FR[h]) ? (tb->FR[h]->b_blocknr):(-1),
-	    (tb->CFL[h]) ? (tb->CFL[h]->b_blocknr):(-1),
-	    (tb->CFR[h]) ? (tb->CFR[h]->b_blocknr):(-1));
+	    tbSh ? tbSh->b_blocknr : ~0ul,
+	    tbSh ? tbSh->b_count : ~0ul,
+	    tb->L[h] ? tb->L[h]->b_blocknr : ~0ul,
+	    tb->L[h] ? tb->L[h]->b_count : ~0ul,
+	    tb->R[h] ? tb->R[h]->b_blocknr : ~0ul,
+	    tb->R[h] ? tb->R[h]->b_count : ~0ul,
+	    tbFh ? tbFh->b_blocknr : ~0ul,
+	    tb->FL[h] ? tb->FL[h]->b_blocknr : ~0ul,
+	    tb->FR[h] ? tb->FR[h]->b_blocknr : ~0ul,
+	    tb->CFL[h] ? tb->CFL[h]->b_blocknr : ~0ul,
+	    tb->CFR[h] ? tb->CFR[h]->b_blocknr : ~0ul);
   }
 
   printf ("*********************************************************************\n");
@@ -790,14 +799,12 @@ void print_tb (int mode, int item_pos, int pos_in_item, struct tree_balance * tb
 
 
   /* print FEB list (list of buffers in form (bh (b_blocknr, b_count), that will be used for new nodes) */
-  h = 0;
-  for (i = 0; i < sizeof (tb->FEB) / sizeof (tb->FEB[0]); i ++)
-    printf ("%s%p (%lu %d)", i == 0 ? "FEB list: " : ", ", tb->FEB[i], tb->FEB[i] ? tb->FEB[i]->b_blocknr : 0,
-	    tb->FEB[i] ? tb->FEB[i]->b_count : 0);
+  for (h = 0; h < sizeof (tb->FEB) / sizeof (tb->FEB[0]); h++)
+    printf("%s%p (%lu %d)", h == 0 ? "FEB list: " : ", ", tb->FEB[h], tb->FEB[h] ? tb->FEB[h]->b_blocknr : 0,
+	    tb->FEB[h] ? tb->FEB[h]->b_count : 0);
   printf ("\n");
 
   printf ("********************** END OF PRINT_TB *******************\n\n");
-
 }
 
 
@@ -812,13 +819,13 @@ static void print_bmap_block (FILE * fp, int i, unsigned long block, char * map,
 
     blocks = blocksize * 8;
 
-    if (test_bit (0, map)) {
+    if (misc_test_bit (0, map)) {
 	/* first block addressed by this bitmap block is used */
 	ones ++;
 	if (!silent)
 	    reiserfs_warning (fp, "Busy (%d-", i * bits);
 	for (j = 1; j < blocks; j ++) {
-	    while (test_bit (j, map)) {
+	    while (misc_test_bit (j, map)) {
 		ones ++;
 		if (j == blocks - 1) {
 		    if (!silent)
@@ -830,7 +837,7 @@ static void print_bmap_block (FILE * fp, int i, unsigned long block, char * map,
 	    if (!silent)
 		reiserfs_warning (fp, "%d) Free(%d-", j - 1 + i * bits, j + i * bits);
 
-	    while (!test_bit (j, map)) {
+	    while (!misc_test_bit (j, map)) {
 		zeros ++;
 		if (j == blocks - 1) {
 		    if (!silent)
@@ -844,6 +851,7 @@ static void print_bmap_block (FILE * fp, int i, unsigned long block, char * map,
 
 	    j --;
 	end:
+	    /* to make gcc 3.2 do not sware here */;
 	}
     } else {
 	/* first block addressed by this bitmap is free */
@@ -852,7 +860,7 @@ static void print_bmap_block (FILE * fp, int i, unsigned long block, char * map,
 	    reiserfs_warning (fp, "Free (%d-", i * bits);
 	for (j = 1; j < blocks; j ++) {
 	    k = 0;
-	    while (!test_bit (j, map)) {
+	    while (!misc_test_bit (j, map)) {
 		k ++;
 		if (j == blocks - 1) {
 		    if (!silent)
@@ -867,7 +875,7 @@ static void print_bmap_block (FILE * fp, int i, unsigned long block, char * map,
 		reiserfs_warning (fp, "%d) Busy(%d-", j - 1 + i * bits, j + i * bits);
 	    
 	    k = 0;
-	    while (test_bit (j, map)) {
+	    while (misc_test_bit (j, map)) {
 		ones ++;
 		if (j == blocks - 1) {
 		    if (!silent)
@@ -883,6 +891,7 @@ static void print_bmap_block (FILE * fp, int i, unsigned long block, char * map,
 	
 	    j --;
 	end2:
+	    /* to make gcc 3.2 do not sware here */;
 	}
     }
 
@@ -952,13 +961,14 @@ void print_objectid_map (FILE * fp, reiserfs_filsys_t * fs)
 		      (char *)omap - (char *)sb);
       
     for (i = 0; i < get_sb_oid_cursize (sb); i ++) {
-	if (i % 2 == 0)
-	    reiserfs_warning (fp, "busy(%u-%u) ", le32_to_cpu (omap[i]),
-			      le32_to_cpu (omap[i+1]) - 1); 
-	else
-	    reiserfs_warning (fp, "free(%u-%u) ", 
-			      le32_to_cpu (omap[i]),
-			      ((i+1) == get_sb_oid_cursize (sb)) ? -1 : (le32_to_cpu (omap[i+1]) - 1));
+	if (i % 2 == 0) {
+	    reiserfs_warning(fp, "busy(%u-%u) ", le32_to_cpu (omap[i]),
+			     le32_to_cpu (omap[i+1]) - 1); 
+	} else {
+	    reiserfs_warning(fp, "free(%u-%u) ", le32_to_cpu (omap[i]),
+			    ((i+1) == get_sb_oid_cursize (sb)) ? 
+			    ~0ul : (le32_to_cpu (omap[i+1]) - 1));
+	}
     }
 
     reiserfs_warning (fp, "\nObject id array has size %d (max %d):", 
@@ -990,7 +1000,8 @@ void print_journal_header (reiserfs_filsys_t * fs)
 
 
 static void print_trans_element (reiserfs_filsys_t * fs, reiserfs_trans_t * trans,
-				 int index, unsigned long in_journal, unsigned long in_place)
+				 unsigned int index, unsigned long in_journal, 
+				 unsigned long in_place)
 {
     if (index % 8 == 0)
 	reiserfs_warning (stdout, "#%d\t", index);

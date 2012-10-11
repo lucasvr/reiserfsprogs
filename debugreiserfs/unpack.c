@@ -1,5 +1,6 @@
 /*
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
   
 #include "debugreiserfs.h"
@@ -88,8 +89,8 @@ static void unpack_direntry (struct packed_item * pi, struct buffer_head * bh,
     int location;
     char * item;
 
-    if (!hash_func)
-	die ("unpack_direntry: hash function is not set");
+/*    if (!hash_func)
+	die ("unpack_direntry: hash function is not set");*/
 
     if (!(get_pi_mask(pi) & IH_FREE_SPACE))
         die ("ih_entry_count must be packed for directory items");
@@ -126,7 +127,7 @@ static void unpack_direntry (struct packed_item * pi, struct buffer_head * bh,
 	else if (*(item + location) == '.' && *(item + location + 1) == '.' && namelen == 2)
 	    /* old or new ".." */
 	    set_deh_offset (deh, DOT_DOT_OFFSET);
-	else
+	else if (hash_func)
 	    set_deh_offset (deh, GET_HASH_VALUE (hash_func (item + location,
 							    namelen)));
 	if (mask & HAS_GEN_COUNTER) {
@@ -488,7 +489,7 @@ static void unpack_unformatted_bitmap (int dev, int blocksize)
 // read packed reiserfs partition metadata from stdin
 void unpack_partition (int fd, int jfd)
 {
-    __u32 magic32;
+    __u32 magic32, position;
     __u16 magic16;
     __u16 blocksize;
     int dev = fd;
@@ -562,13 +563,18 @@ void unpack_partition (int fd, int jfd)
 	    break;
 	    
 	case END_MAGIC:
-	    break;
+	    goto out;
 
 	default:
-	    die ("unpack_partition: bad magic found - %x", magic16 & 0xff);
+	    position = ftell(stdin);
+	    if (position == ~0ul)
+		die ("unpack_partition: bad magic found - %x", magic16 & 0xff);
+	    else
+		die ("unpack_partition: bad magic found - %x, position %lu", 
+		    magic16 & 0xff, ftell(stdin));
 	}
     }
-
+out:
     fprintf (stderr, "Unpacked %d leaves, %d full blocks\n", leaves, full);
 
 

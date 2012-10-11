@@ -1,7 +1,8 @@
 /*
- * Copyright 1996-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
-  
+
 /*
  *  Reiser File System constants and structures
  */
@@ -167,8 +168,8 @@ struct reiserfs_super_block_v1
                                    
 
 /* values for sb_mount_state field */
-#define REISERFS_CLEANLY_UMOUNTED    1 /* this was REISERFS_VALID_FS */
-#define REISERFS_NOT_CLEANLY_UMOUNTED    2 /* this was REISERFS_ERROR. It
+#define FS_CLEANLY_UMOUNTED    1 /* this was REISERFS_VALID_FS */
+#define FS_NOT_CLEANLY_UMOUNTED    2 /* this was REISERFS_ERROR. It
                                               means that filesystem was not
                                               cleanly unmounted */
 
@@ -244,9 +245,10 @@ typedef enum {
 #define get_sb_v2_inode_generation(sb)		get_le32 (sb, sb_inode_generation)
 #define set_sb_v2_inode_generation(sb,val)	set_le32 (sb, sb_inode_generation, val)
 
-//#define get_sb_v2_flag(sb, flag)	test_bit ((flag), &((struct reiserfs_super_block *)sb)->s_flags)	
-//#define set_sb_v2_flag(sb, flag)	set_bit  ((flag), &((struct reiserfs_super_block *)sb)->s_flags)
-#define get_sb_v2_flag(sb, flag)	(get_le32 (sb, s_flags) & flag)
+#define get_sb_v2_flags(sb)		get_le32 (sb, s_flags)
+#define set_sb_v2_flags(sb, val)	set_le32 (sb, s_flags, val)
+
+#define get_sb_v2_flag(sb, flag)       (get_le32 (sb, s_flags) & flag)
 #define set_sb_v2_flag(sb, flag)	set_le32 (sb, s_flags, get_le32 (sb, s_flags) | flag)
 #define clear_sb_v2_flag(sb, flag)	set_le32 (sb, s_flags, get_le32 (sb, s_flags) & ~(flag))
 
@@ -255,22 +257,20 @@ typedef enum {
 */
 
 /* these are possible values for sb_fs_state */
-#define REISERFS_CONSISTENT   0   /* this is set by mkreiserfs and by reiserfsck */
-#define REISERFS_CORRUPTED  0x1   /* this will be set by kernel code when it
-                                   encounters suspicious metadata */
-#define PASS_0_DONE      0xfaa1   /* set by fsck when pass-by-pass (-d),
-                                     REISERFS_CORRUPTED flag included */
-#define PASS_1_DONE      0xfaa3   /* set by fsck when pass-by-pass (-d),
-                                     REISERFS_CORRUPTED flag included */
-#define TREE_IS_BUILT    0xfaa5   /* set by fsck when pass-by-pass (-d),
-                                     REISERFS_CORRUPTED flag included */
-#define SEMANTIC_DONE    0xfaa7   /* set by fsck when pass-by-pass (-d),
-                                     REISERFS_CORRUPTED flag included */
-#define LOST_FOUND_DONE  0xfaa9   /* set by fsck when pass-by-pass (-d),
-                                     REISERFS_CORRUPTED flag included */
-//#define FIX_FIXABLE_IS_ALLOWED 0xfaa7
-
-
+#define FS_CONSISTENT   0x0	    /* this is set by mkreiserfs and by reiserfsck */
+#define FS_ERROR	0x1	    /* this is set by the kernel when fsck is wanted. */
+#define FS_FATAL	0x2	    /* this is set by fsck when fatal corruption is found */
+#define IO_ERROR	0x4	    /* this is set by kernel when io error occures */
+#define PASS_0_DONE     0xfa02	    /* set by fsck when pass-by-pass (-d),
+				       FS_FATAL flag included */
+#define PASS_1_DONE     0xfb02	    /* set by fsck when pass-by-pass (-d),
+                                       FS_FATAL flag included */
+#define TREE_IS_BUILT   0xfc02	    /* set by fsck when pass-by-pass (-d),
+                                       FS_FATAL flag included */
+#define SEMANTIC_DONE   0xfd02	    /* set by fsck when pass-by-pass (-d),
+                                       FS_FATAL flag included */
+#define LOST_FOUND_DONE 0xfe02	    /* set by fsck when pass-by-pass (-d),
+                                       FS_FATAL flag included */
 
 /* struct stat_data* access macros */
 /* v1 */
@@ -462,7 +462,7 @@ struct reiserfs_journal_header {
 	blocksize * 8 - (block_of_super_block + 1 + 1 + 1)
 
 #define journal_default_size(block_of_super_block,blocksize) \
-	((8192 > journal_max_size (block_of_super_block,blocksize)) ? \
+	(unsigned long long)((8192 > journal_max_size (block_of_super_block,blocksize)) ? \
 		journal_max_size (block_of_super_block,blocksize) : 8192)
 
 //#define JOURNAL_DEFAULT_SIZE 8192  number of blocks in the journal
@@ -555,6 +555,8 @@ struct key {
 
 #define TYPE_UNKNOWN 15
 
+/* special type for symlink not conflicting to any of item types. */
+#define TYPE_SYMLINK	4
 
 #define KEY_FORMAT_1 0
 #define KEY_FORMAT_2 1
@@ -1062,12 +1064,12 @@ struct path_element  {
 };
 
 
-#define MAX_HEIGHT 5 /* maximal height of a tree. don't change this without changing JOURNAL_PER_BALANCE_CNT */
-#define EXTENDED_MAX_HEIGHT         7 /* Must be equals MAX_HEIGHT + FIRST_PATH_ELEMENT_OFFSET */
-#define FIRST_PATH_ELEMENT_OFFSET   2 /* Must be equal to at least 2. */
+#define MAX_HEIGHT 6
+#define FIRST_PATH_ELEMENT_OFFSET   2
+#define EXTENDED_MAX_HEIGHT         (MAX_HEIGHT + FIRST_PATH_ELEMENT_OFFSET)
 
-#define ILLEGAL_PATH_ELEMENT_OFFSET 1 /* Must be equal to FIRST_PATH_ELEMENT_OFFSET - 1 */
-#define MAX_FEB_SIZE 6   /* this MUST be MAX_HEIGHT + 1. See about FEB below */
+#define ILLEGAL_PATH_ELEMENT_OFFSET 1
+#define MAX_FEB_SIZE (MAX_HEIGHT + 1)
 
 
 
@@ -1081,9 +1083,9 @@ struct path_element  {
    in it, especially about decrement_counters_in_path(), to understand
    this structure. */
 struct path {
-  int                   path_length;                      	/* Length of the array above.   */
+  unsigned int          path_length;                      	/* Length of the array above.   */
   struct  path_element  path_elements[EXTENDED_MAX_HEIGHT];	/* Array of the path elements.  */
-  int			pos_in_item;
+  unsigned int		pos_in_item;
 };
 
 #define INITIALIZE_PATH(var) \
@@ -1136,21 +1138,21 @@ struct path var = {ILLEGAL_PATH_ELEMENT_OFFSET, }
 
 
 // search_by_key (and clones) and fix_nodes error code
-#define CARRY_ON          	0
-#define IO_ERROR		3
+#define CARRY_ON		    0
 
-#define NO_DISK_SPACE           4
-#define NO_BALANCING_NEEDED     5
-#define ITEM_FOUND              6
-#define ITEM_NOT_FOUND          7
-#define GOTO_PREVIOUS_ITEM      10
-#define POSITION_FOUND_INVISIBLE 11
-#define FILE_NOT_FOUND          12
+#define NO_DISK_SPACE		    3
+/* #define IO_ERROR		    0x4 - defined above as 0x4 */
+#define NO_BALANCING_NEEDED	    5
+#define ITEM_FOUND		    6
+#define ITEM_NOT_FOUND		    7
+#define GOTO_PREVIOUS_ITEM	    10
+#define POSITION_FOUND_INVISIBLE    11
+#define FILE_NOT_FOUND		    12
 
 // used by fsck
-#define DIRECTORY_NOT_FOUND     13 
-#define REGULAR_FILE_FOUND     14
-#define DIRECTORY_FOUND        15
+#define DIRECTORY_NOT_FOUND	    13 
+#define REGULAR_FILE_FOUND	    14
+#define DIRECTORY_FOUND		    15
 
 
 struct unfm_nodeinfo {
@@ -1167,17 +1169,19 @@ struct unfm_nodeinfo {
 #define MAX_KEY2_OFFSET  0xfffffffffffffffLL
 
 /* this is aggressive tail suppression policy taken from the kernel */
+/* It should be MAX_DIRECT_ITEM_LEN used here, but sometimes it is not enough,
+ * and items got deleted. */
 #define STORE_TAIL_IN_UNFM(n_file_size,n_tail_size,n_block_size) \
 (\
   (!(n_tail_size)) || \
-  (((n_tail_size) > MAX_DIRECT_ITEM_LEN(n_block_size)) || \
+  (((n_tail_size) > MAX_ITEM_LEN(n_block_size)) || \
    ( (n_file_size) >= (n_block_size) * 4 ) || \
    ( ( (n_file_size) >= (n_block_size) * 3 ) && \
-     ( (n_tail_size) >=   (MAX_DIRECT_ITEM_LEN(n_block_size))/4) ) || \
+     ( (n_tail_size) >=   (MAX_ITEM_LEN(n_block_size))/4) ) || \
    ( ( (n_file_size) >= (n_block_size) * 2 ) && \
-     ( (n_tail_size) >=   (MAX_DIRECT_ITEM_LEN(n_block_size))/2) ) || \
+     ( (n_tail_size) >=   (MAX_ITEM_LEN(n_block_size))/2) ) || \
    ( ( (n_file_size) >= (n_block_size) ) && \
-     ( (n_tail_size) >=   (MAX_DIRECT_ITEM_LEN(n_block_size) * 3)/4) ) ) \
+     ( (n_tail_size) >=   (MAX_ITEM_LEN(n_block_size) * 3)/4) ) ) \
 )
 
 
@@ -1434,7 +1438,7 @@ struct buffer_info {
 #define B_I_STAT_DATA(bh, ih) ( (struct stat_data * )B_I_PITEM(bh,ih) )
 
 #define MAX_DIRECT_ITEM_LEN(size) ((size) - BLKH_SIZE - 2*IH_SIZE - SD_SIZE - UNFM_P_SIZE)
-#define MAX_INDIRECT_ITEM_LEN(size) ((size) - BLKH_SIZE - IH_SIZE)
+#define MAX_INDIRECT_ITEM_LEN(size) MAX_ITEM_LEN(size)
 
 /* indirect items consist of entries which contain blocknrs, pos
    indicates which entry, and B_I_POS_UNFM_POINTER resolves to the
@@ -1532,7 +1536,7 @@ void make_empty_leaf (struct buffer_head *);
 struct buffer_head * get_FEB (struct tree_balance *);
 
 
-__u64 get_bytes_number (struct item_head * ih, int blocksize);
+__u32 get_bytes_number (struct item_head * ih, int blocksize);
 
 
 
@@ -1545,9 +1549,9 @@ __u32 r5_hash (const char *msg, int len);
 
 
 /* node_format.c */
-int get_journal_old_start_must (reiserfs_filsys_t * fs);
-int get_journal_new_start_must (reiserfs_filsys_t * fs);
-int get_journal_start_must (reiserfs_filsys_t * fs);
+extern unsigned int get_journal_old_start_must (reiserfs_filsys_t * fs);
+extern unsigned int get_journal_new_start_must (reiserfs_filsys_t * fs);
+extern unsigned int get_journal_start_must (reiserfs_filsys_t * fs);
 /*extern hashf_t hashes [];*/
 
 

@@ -1,6 +1,6 @@
 /*
- * Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Hans Reiser, see
- * reiserfs/README for licensing and copyright details
+ * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
 
 #include "includes.h"
@@ -704,9 +704,8 @@ void leaf_insert_into_buf (reiserfs_filsys_t * s,
 	mark_buffer_dirty(bi->bi_parent) ;
     }
 
-    if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF)
-	reiserfs_panic ("leaf_insert_into_buf: bad leaf %lu: %b",
-			bh->b_blocknr, bh);
+    if (is_a_leaf(bh->b_data, bh->b_size) != THE_LEAF)
+	reiserfs_panic ("leaf_insert_into_buf: bad leaf %lu: %b", bh->b_blocknr, bh);
 }
 
 
@@ -784,9 +783,8 @@ void leaf_paste_in_buffer (reiserfs_filsys_t * fs,
 	set_dc_child_size (dc, get_dc_child_size (dc) + paste_size);
 	mark_buffer_dirty(bi->bi_parent);
     }
-    if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF)
-	reiserfs_panic ("leaf_paste_in_buffer: bad leaf %lu: %b",
-			bh->b_blocknr, bh);
+    if (is_a_leaf(bh->b_data, bh->b_size) != THE_LEAF)
+	reiserfs_panic ("leaf_paste_in_buffer: bad leaf %lu: %b", bh->b_blocknr, bh);
 }
 
 
@@ -951,7 +949,7 @@ void leaf_cut_from_buffer (reiserfs_filsys_t * fs,
 	set_dc_child_size (dc, get_dc_child_size (dc) - cut_size);
 	mark_buffer_dirty(bi->bi_parent);
     }
-    if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF)
+    if (is_a_leaf(bh->b_data, bh->b_size) != THE_LEAF)
 	reiserfs_panic ("leaf_cut_from_buffer: bad leaf %lu: %b",
 			bh->b_blocknr, bh);
 }
@@ -1013,12 +1011,12 @@ static void leaf_delete_items_entirely (reiserfs_filsys_t * fs,
 	struct disk_child * dc;
 
 	dc = B_N_CHILD (bi->bi_parent, bi->bi_position);
-	set_dc_child_size (dc, get_dc_child_size (dc) - (j - last_removed_loc + IH_SIZE * del_num));
+	set_dc_child_size (dc, get_dc_child_size (dc) - 
+	    (j - last_removed_loc + IH_SIZE * del_num));
 	mark_buffer_dirty(bi->bi_parent);
     }
-    if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF)
-	reiserfs_panic ("leaf_delete_items_entirely: bad leaf %lu: %b",
-			bh->b_blocknr, bh);
+    if (is_a_leaf(bh->b_data, bh->b_size) != THE_LEAF)
+	reiserfs_panic ("leaf_delete_items_entirely: bad leaf %lu: %b", bh->b_blocknr, bh);
 }
 
 
@@ -1075,7 +1073,6 @@ void leaf_paste_entries (struct buffer_head * bh,
     memmove ((char *)(deh + new_entry_count), deh, insert_point - (char *)deh);
 
     /* copy new entry heads */
-    deh = (struct reiserfs_de_head *)((char *)deh);
     memcpy (deh, new_dehs, DEH_SIZE * new_entry_count);
 
     /* set locations of new records */

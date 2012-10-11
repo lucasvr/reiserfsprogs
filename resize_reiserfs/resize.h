@@ -1,6 +1,8 @@
 /* 
- * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
  */
+
 #define _GNU_SOURCE
 
 #include <sys/types.h>
