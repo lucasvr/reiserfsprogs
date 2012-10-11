@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2002-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -31,34 +31,32 @@ reiserfs_filsys_t * fs;
 
 static void print_usage_and_exit(void)
 {
-    message ("Usage: %s [options] "
-	     " device [block-count]\n"
+    message ("Usage: %s [options] device [block-count]\n"
 	     "\n"
 	     "Options:\n\n"
-	     "  -j | --journal-device file\n"
-	     "  --journal-new-device file\n"
-	     "  -o | --journal-new-offset N\n"
-	     "  -s | --journal-new-size N\n"
-	     "  -t | --transaction-max-size N\n"
-	     "  --no-journal-available\n"
-	     "  --make-journal-standard\n"
+	     "  -j | --journal-device file\tcurrent journal device\n"
+	     "  --journal-new-device file\tnew journal device\n"
+	     "  -o | --journal-new-offset N\tnew journal offset in blocks\n"
+	     "  -s | --journal-new-size N\tnew journal size in blocks\n"
+	     "  -t | --trans-max-size N\tnew journal max transaction size in blocks\n"
+	     "  --no-journal-available\tcurrent journal is not available\n"
+	     "  --make-journal-standard\tnew journal to be standard\n"
 	     /*"\t-p | --keep-old-journal-param  (keep parametrs from old journal to new one)\n"*/
-	     "  -u | --uuid UUID|random\n"
-	     "  -l | --label LABEL\n"
-	     "  -f | --force \n", program_name);
+	     "  -b | --add-badblocks file\tadd to bad block list\n"
+	     "  -B | --badblocks file\t\tset the bad block list\n"
+	     "  -u | --uuid UUID|random\tset new UUID\n"
+	     "  -l | --label LABEL\t\tset new label\n"
+	     "  -f | --force\t\t\tforce tuning, less confirmations\n"
+    	     "  -V\t\t\t\tprint version and exit\n", program_name);
     exit (1);
 }
-
-/*
-    Undocumented options:
-    -B badblock_file
-*/
 
 unsigned long Journal_size = 0;
 int Max_trans_size = JOURNAL_TRANS_MAX;
 int Offset = 0;
 __u16 Options = 0;
 int Force = 0;
+int Bads = 0;
 char * LABEL;
 unsigned char UUID[16];
 char * badblocks_file;
@@ -214,6 +212,104 @@ static void set_offset_in_journal_device (char * str)
 }
 
 
+static void callback_new_badblocks(reiserfs_filsys_t *fs, 
+				   struct path *badblock_path, 
+				   void *data) 
+{
+	struct item_head *tmp_ih;
+	__u32 *ind_item, i;
+
+	tmp_ih = get_ih(badblock_path);
+	ind_item = (__u32 *)get_item(badblock_path);
+
+	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++, ind_item++) {
+		if (reiserfs_bitmap_test_bit(fs->fs_badblocks_bm, 
+					     le32_to_cpu(*ind_item)))
+		{
+			message("Block %u is marked as bad already.", 
+				le32_to_cpu(*ind_item));
+			
+			reiserfs_bitmap_clear_bit(fs->fs_badblocks_bm, 
+						  le32_to_cpu(*ind_item));
+		}
+	}
+	
+	pathrelse (badblock_path);
+}
+
+static void callback_clear_badblocks(reiserfs_filsys_t *fs, 
+				     struct path *badblock_path, 
+				     void *data) 
+{
+	struct item_head *tmp_ih;
+	__u32 *ind_item, i;
+
+	tmp_ih = get_ih(badblock_path);
+	ind_item = (__u32 *)get_item(badblock_path);
+
+	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++, ind_item++) {
+		reiserfs_bitmap_clear_bit(fs->fs_bitmap2, 
+					  le32_to_cpu(*ind_item));
+	}
+	
+	pathrelse (badblock_path);
+}
+
+static void add_badblocks(reiserfs_filsys_t *fs) {
+	unsigned long i, marked = 0;
+	
+	if (reiserfs_open_ondisk_bitmap (fs) < 0) {
+	    message("Failed to open reiserfs ondisk bitmap.\n");
+	    reiserfs_close(fs);
+	    exit(1);
+	}
+	
+	if (create_badblock_bitmap (fs, badblocks_file)) {
+	    message("Failed to initialize the bad block bitmap.\n");
+	    reiserfs_close(fs);
+	    exit(1);
+	}
+	
+	if (Bads == 1)
+		badblock_list(fs, callback_new_badblocks, NULL);
+	else
+		badblock_list(fs, callback_clear_badblocks, NULL);
+	
+	for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
+	    if (reiserfs_bitmap_test_bit (fs->fs_badblocks_bm, i)) {
+		if (!reiserfs_bitmap_test_bit (fs->fs_bitmap2, i)) {
+		    reiserfs_bitmap_set_bit (fs->fs_bitmap2, i);
+		    marked++;
+		} else {
+		    /* Check that this is a block  */
+		    message("Bad block %lu is used already in reiserfs tree. "
+			    "To mark it as a bad block use reiserfsck\n"
+			    "--fix-fixable with -B option.", i);
+
+		    reiserfs_bitmap_clear_bit (fs->fs_badblocks_bm, i);
+		}
+	    }
+	}
+	
+	if (marked) {
+		set_sb_free_blocks(fs->fs_ondisk_sb, get_sb_free_blocks(fs->fs_ondisk_sb) - 
+				   fs->fs_badblocks_bm->bm_set_bits);
+		mark_buffer_dirty(fs->fs_super_bh);
+	}
+	
+	if (Bads == 1) {
+		/* fs->fs_badblocks_bm contains blocks which are not in the bad 
+		   block list yet. Merge it with what is in the tree already. */
+		badblock_list(fs, mark_badblock, NULL);
+	}
+	
+	if (marked) {
+		add_badblock_list(fs, 1);
+	}
+	
+	message("%lu blocks were marked as bad.", marked);
+}
+
 int main (int argc, char **argv)
 {
     reiserfs_filsys_t * fs;
@@ -233,8 +329,6 @@ int main (int argc, char **argv)
     else 
 	program_name = argv[ 0 ];
     
-    print_banner (program_name);
-
     if (argc < 2)
 	print_usage_and_exit ();
     
@@ -242,25 +336,28 @@ int main (int argc, char **argv)
     jdevice_name = 0;
     j_new_device_name = 0;
 
+    memset(UUID, 0, 16);
+    
     while (1) {
 	static struct option options[] = {
 	    {"journal-device", required_argument, 0, 'j'},
 	    {"journal-new-device", required_argument, &flag, OPT_NEW_J},
 	    {"journal-new-size", required_argument, 0, 's'},
-	    {"transaction-max-size", required_argument, 0, 't'},
+	    {"trans-max-size", required_argument, 0, 't'},
 	    {"journal-new-offset", required_argument, 0, 'o'},
 	    {"no-journal-available", no_argument, &flag, OPT_SKIP_J},
 	    /*{"keep-old-journal-param", no_argument, 0, 'p'},*/
 	    {"uuid", required_argument, 0, 'u'},
 	    {"label", required_argument, 0, 'l'},
+	    {"add-badblocks", required_argument, 0, 'b'},
+	    {"badblocks", required_argument, 0, 'B'},
 	    {"force", no_argument, 0, 'f'},
-	    {"really-force", no_argument, &flag, OPT_SUPER_FORCE},
 	    {"make-journal-standard", no_argument, &flag, OPT_STANDARD},
 	    {0, 0, 0, 0}
 	};
 	int option_index;
       
-	c = getopt_long (argc, argv, "j:s:t:o:fu:l:B:",
+	c = getopt_long (argc, argv, "j:s:t:o:fu:l:b:B:V",
 			 options, &option_index);
 	if (c == -1)
 	    break;
@@ -275,9 +372,6 @@ int main (int argc, char **argv)
 	    if (flag == OPT_SKIP_J) {
 		Options |= OPT_SKIP_J;
 	    }
-	    if (flag == OPT_SUPER_FORCE) {
-		Options |=OPT_SUPER_FORCE;
-	    }
 	    if (flag == OPT_STANDARD) {
 		Options |=OPT_STANDARD;
 	    } 
@@ -291,7 +385,7 @@ int main (int argc, char **argv)
 	    Is_journal_or_maxtrans_size_specified = 1;
 	    break;
 	    
-	case 't': /* --transaction-max-size */
+	case 't': /* --trans-max-size */
 	    set_transaction_max_size (optarg);
 	    Is_journal_or_maxtrans_size_specified = 1;
 	    break;
@@ -306,26 +400,38 @@ int main (int argc, char **argv)
 	       confirmation */
 	    Force ++;
 	    break;
-	case 'B': /* --badblock-list */
-	    asprintf (&badblocks_file, "%s", optarg);			
+	case 'b': /* --add-badblocks */
+	    asprintf (&badblocks_file, "%s", optarg);
+	    Bads = 1;
+	    break;
+	case 'B': /* --badblocks */
+	    asprintf (&badblocks_file, "%s", optarg);
+	    Bads = 2;
 	    break;
 	case 'u':
 	    /* UUID */
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
 	    if (!strcmp(optarg, "random")) {
-		if (generate_random_uuid (UUID))
-		    message ("failed to genetate UUID\n");
+		uuid_generate(UUID);
 	    } else {
-		if (set_uuid (optarg, UUID)) {
-		    message ("wrong UUID specified\n");
+		if (uuid_parse(optarg, UUID) < 0) {
+		    message ("Invalid UUID '%s' was specified\n", optarg);
 		    return 1;
 		}
 	    }
-	
+#else
+	    message ("Cannot set the UUID, uuidlib was not found "
+		     "by configure.\n");
+	    return 1;
+#endif
             break;
 	case 'l':
 	    /* LABEL */
 	    LABEL = optarg;
             break;
+	case 'V':
+	    print_banner("reiserfstune");
+	    exit(0);
 #if 0
 	case 'J': /* --journal-new-device */
 	    Options |= OPT_NEW_J;
@@ -361,7 +467,7 @@ int main (int argc, char **argv)
        --no-journal-available has been specified by user */
 
     /* make sure filesystem is not mounted */
-    if (is_mounted (fs->fs_file_name)) {
+    if (misc_device_mounted(fs->fs_file_name) > 0) {
 	/* fixme: it can not be mounted, btw */
         message ("Reiserfstune is not allowed to be run on mounted filesystem.");
 	reiserfs_close (fs);
@@ -377,40 +483,7 @@ int main (int argc, char **argv)
     reiserfs_reopen (fs, O_RDWR);
     
     if (badblocks_file) {
-	unsigned long i, marked = 0;
-	
-	if (reiserfs_open_ondisk_bitmap (fs) < 0) {
-	    message("Failed to open reiserfs ondisk bitmap.\n");
-	    reiserfs_close(fs);
-	    exit(1);
-	}
-	
-	if (create_badblock_bitmap (fs, badblocks_file)) {
-	    message("Failed to initialize the bad block bitmap.\n");
-	    reiserfs_close(fs);
-	    exit(1);
-	}
-	    
-	for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
-	    if (reiserfs_bitmap_test_bit (fs->fs_badblocks_bm, i)) {
-		if (!reiserfs_bitmap_test_bit (fs->fs_bitmap2, i)) {
-		    reiserfs_bitmap_set_bit (fs->fs_bitmap2, i);
-		    marked++;
-		} else {
-		    /* Check that this is a block  */
-		    if (not_data_block(fs, i)) {
-			message("Block %lu belongs to the internal reiserfs area "
-			    "and cannot be reloacted.\n", i);
-
-			exit(1);
-		    } else {
-			message("Block %lu is used already in reiserfs tree.\n", i);
-		    }
-		}
-	    }
-	}
-	
-	message("%lu bad blocks were marked as used.\n", marked);
+	add_badblocks(fs);
 	
 	reiserfs_close(fs);
 	exit(0);
@@ -461,12 +534,10 @@ int main (int argc, char **argv)
 	j_head = (struct reiserfs_journal_header *)(fs->fs_jh_bh->b_data);
 	if (get_boundary_transactions(fs, &old, &new)) {
 	    if (new.trans_id != get_jh_last_flushed(j_head)) {
-		if (!(Options & OPT_SUPER_FORCE)) {
-		    message ("There are non-replayed transaction in old journal,"
-			     " check filesystem consistency first");
-		    reiserfs_close (fs);
-		    return 1;
-		}
+		message ("There are non-replayed transaction in old journal,"
+			 " check filesystem consistency first");
+		reiserfs_close (fs);
+		return 1;
 	    }
 	}
 	if (!reiserfs_is_fs_consistent (fs)) {
@@ -478,12 +549,13 @@ int main (int argc, char **argv)
 
     /* set UUID and LABEL if specified */
     if (fs->fs_format == REISERFS_FORMAT_3_6) {
-        if (uuid_is_correct (UUID)) {
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+        if (!uuid_is_null(UUID)) {
 	    memcpy (fs->fs_ondisk_sb->s_uuid, UUID, 16);
 	    mark_buffer_dirty (fs->fs_super_bh);
 	    fs->fs_dirt = 1;
 	}
-	
+#endif	
 	if (LABEL != NULL) {
 	    if (strlen (LABEL) > 16)
 	        message ("Specified LABEL is longer then 16 characters, will be truncated\n");
@@ -492,8 +564,10 @@ int main (int argc, char **argv)
 	    fs->fs_dirt = 1;
 	}
     } else {
-        if (uuid_is_correct (UUID))
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+        if (!uuid_is_null(UUID))
             reiserfs_panic ("UUID cannot be specified for 3.5 format\n");
+#endif
         if (LABEL)
             reiserfs_panic ("LABEL cannot be specified for 3.5 format\n");
     }

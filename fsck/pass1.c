@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README 
  */
 
@@ -28,10 +28,10 @@ struct buffer_head * make_buffer (int dev, unsigned long blocknr, int size, char
 
 
 int find_not_of_one_file(struct key * to_find, struct key * key) {
-    if ((get_key_objectid (to_find) != ~0ul) &&
+    if ((get_key_objectid (to_find) != ~(__u32)0) &&
         (get_key_objectid (to_find) != get_key_objectid (key)))
         return 1;
-    if ((get_key_dirid (to_find) != ~0ul) &&
+    if ((get_key_dirid (to_find) != ~(__u32)0) &&
         (get_key_dirid (to_find) != get_key_dirid (key)))
         return 1;
     return 0;
@@ -246,7 +246,8 @@ static void get_max_buffer_key (struct buffer_head * bh, struct key * key)
 
 int tree_is_empty (void)
 {
-    return (get_sb_root_block (fs->fs_ondisk_sb) == ~0ul || get_sb_root_block (fs->fs_ondisk_sb) == 0) ? 1 : 0;
+    return (get_sb_root_block (fs->fs_ondisk_sb) == ~(__u32)0 || 
+	    get_sb_root_block (fs->fs_ondisk_sb) == 0) ? 1 : 0;
 }
 
 
@@ -543,8 +544,9 @@ static void find_allocable_blocks (reiserfs_filsys_t * fs)
 	}
 
 	/* make allocable not leaves, not bad blocks */
-	if (!is_used_leaf (i) &&
-	    (!fs->fs_badblocks_bm || !reiserfs_bitmap_test_bit (fs->fs_badblocks_bm, i))) {
+	if (!is_used_leaf (i) && (!fs->fs_badblocks_bm || 
+				  !reiserfs_bitmap_test_bit (fs->fs_badblocks_bm, i))) 
+	{
 	    /* this is not leaf and it is not pointed by found indirect items,
                so it does not contains anything valuable */
 	    make_allocable (i);

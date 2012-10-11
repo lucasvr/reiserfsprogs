@@ -1,10 +1,10 @@
-%define reiserfsprogsversion 3.6.9 
+%define reiserfsprogsversion 3.6.13
 
 Vendor:       Hans Reiser
 Distribution: Hans Reiser
 Name:         reiserfsprogs
 Release:      1
-Copyright:    2003 Hans Reiser
+Copyright:    2004 Hans Reiser
 Group:        Unsorted
 
 Packager:     anthon@mnt.org

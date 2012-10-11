@@ -1,7 +1,9 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_INIT(version.h)
 
-AM_INIT_AUTOMAKE(reiserfsprogs, 3.6.9)
+AH_TEMPLATE([HAVE_LIBUUID], [Define for enable libuuid using.])
+
+AM_INIT_AUTOMAKE(reiserfsprogs, 3.6.13)
 
 dnl We install in /sbin, the utils are to be available on boot
 dnl AC_PREFIX(/)
@@ -24,9 +26,14 @@ dnl AC_PROG_LN_S
 
 dnl Checks for libraries.
 
+# Check for LIBUUID
+AC_CHECK_LIB(uuid, uuid_generate, , AC_MSG_WARN(libuuid could not be found))
+UUID_LIBS="$LIBS"
+AC_SUBST(UUID_LIBS)
+
 dnl Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS(fcntl.h limits.h malloc.h sys/ioctl.h unistd.h)
+AC_CHECK_HEADERS(fcntl.h limits.h malloc.h sys/ioctl.h unistd.h uuid/uuid.h)
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -56,7 +63,6 @@ AC_DEFUN(AC_PREPARE_CREDITS,
 AC_MSG_CHECKING(for CREDITS)
 
 AC_TRY_RUN([
-#define _GNU_SOURSE
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -99,7 +105,7 @@ int main (void) {
 	    count++;
 	} else {
 	    if (!start)
-		fprintf(fout, "\t\\\" "\n");
+		fprintf(fout, "\\t\\\\\\n");
 	    else if (start == 1)
 		fprintf(fout, ",\n\n");
 	    
@@ -118,8 +124,9 @@ int main (void) {
     
     return 0;
 }
-], AC_MSG_RESULT(yes), AC_MSG_RESULT(no) ; exit)
-])
+], AC_MSG_RESULT(yes), AC_MSG_RESULT(no) ; exit,
+   [echo $ac_n "cross compiling; assumed OK... $ac_c"]
+)])
 
 AC_PREPARE_CREDITS()
 
@@ -132,6 +139,7 @@ AC_OUTPUT(
     Makefile 
     reiserfscore/Makefile 
     debugreiserfs/Makefile 
-    tune/Makefile 
-    tests/Makefile 
-    tests/PROGS/Makefile)
+    tune/Makefile)
+
+echo
+echo Type \'make\' to compile reiserfsprogs

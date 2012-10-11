@@ -1,4 +1,4 @@
-SUBDIRS = include lib reiserfscore fsck debugreiserfs resize_reiserfs mkreiserfs tune tests
+SUBDIRS = include lib reiserfscore fsck debugreiserfs resize_reiserfs mkreiserfs tune
 
 noinst_DATA = reiserfsprogs.spec
 

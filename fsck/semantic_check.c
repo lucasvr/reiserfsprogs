@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by reiserfsprogs/README
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by reiserfsprogs/README
  */
 
 #include "fsck.h"
@@ -303,8 +303,10 @@ start_again:
 		    set_deh_objectid (deh, get_key_objectid (key));
 		    mark_buffer_dirty (bh);
 		    fsck_log (" - corrected\n");
-		} else
+		} else {
+		    one_more_corruption (fs, FIXABLE);
 		    fsck_log ("\n");
+		}
 	    }
 	}
 
@@ -318,8 +320,10 @@ start_again:
 		    set_deh_objectid (deh, get_key_objectid (parent));
 		    mark_buffer_dirty (bh);
 		    fsck_log (" - corrected\n");
-		} else
+		} else {
+		    one_more_corruption (fs, FIXABLE);
 		    fsck_log ("\n");
+		}
 	    }
 	}
     }
@@ -697,7 +701,7 @@ int check_safe_links ()
 	
 	set_key_dirid(&key, le32_to_cpu(*(__u32 *)get_item(&safe_link_path)));
 	set_key_objectid(&key, get_key_objectid(&tmp_ih->ih_key));
-	if ( (rkey = get_next_key_2 (&safe_link_path)) == NULL )
+	if ((rkey = reiserfs_next_key(&safe_link_path)) == NULL)
 	    set_key_dirid (&safe_link_key, 0);
 	else
 	    safe_link_key = *rkey;
@@ -799,7 +803,7 @@ void semantic_check (void)
         fsck_allocable_bitmap (fs) = NULL;
         set_sb_free_blocks (fs->fs_ondisk_sb, reiserfs_bitmap_zeros (fs->fs_bitmap2));
         mark_buffer_dirty (fs->fs_super_bh);
-	add_badblock_list(fs, 0);
+	add_badblock_list(fs, 1);
     }
     
     fsck_progress ("finished\n");

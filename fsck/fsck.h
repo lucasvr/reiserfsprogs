@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -22,6 +22,8 @@
 #include "misc.h"
 #include "reiserfs_lib.h"
 
+#include "../include/config.h"
+#include "../version.h"
 
 /* main.c */
 extern reiserfs_filsys_t * fs;
@@ -30,6 +32,7 @@ int main (int argc, char * argv []);
 /* Exit codes. */
 #define EXIT_OK		0
 #define EXIT_FIXED	1
+#define EXIT_REBOOT	2
 #define EXIT_FATAL	4
 #define EXIT_FIXABLE	6
 #define EXIT_OPER	8   /* Some operation returns error. */
@@ -187,7 +190,6 @@ void pass_3a_look_for_lost (reiserfs_filsys_t *);
 void load_lost_found_result (reiserfs_filsys_t *);
 
 /* pass4.c */
-//void get_next_key (struct path * path, int i, struct key * key);
 void pass_4_check_unaccessed_items (void);
 
 /* check.c */
@@ -406,6 +408,7 @@ struct check_info {
 struct fsck_data {
     unsigned short mode; /* check, rebuild, etc*/
     unsigned long options;
+    unsigned long mounted;
 
     struct rebuild_info rebuild;
     struct check_info check;

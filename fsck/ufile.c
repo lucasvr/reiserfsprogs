@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -225,7 +225,7 @@ int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, _
 	    }
 	
 	    // does not change path
-	    next_key = get_next_key_2 (&path);
+	    next_key = reiserfs_next_key(&path);
 
 	    if (next_key == 0 || not_of_one_file (key, next_key) || 
 		(!is_indirect_key (next_key) && !is_direct_key(next_key))) 

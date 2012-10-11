@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -21,3 +21,4 @@
 #include "reiserfs_lib.h"
 #include "swab.h"
 
+#include "../include/config.h"

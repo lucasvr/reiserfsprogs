@@ -1,11 +1,15 @@
 /*
- * Copyright 2001-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2001-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
 #include "fsck.h"
 #include <stdlib.h>
 #include <errno.h>
+
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+#    include <uuid/uuid.h>
+#endif
 
 #define fsck_conditional_log(sb_found, fmt, list...) {	\
     if (sb_found)					\
@@ -189,6 +193,12 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
     struct stat64 stat_buf;
     int retval, exit_code = EXIT_OK;
 
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+    char uuid[37];
+    
+    uuid[36] = '\0';
+#endif
+
     if (!no_reiserfs_found (fs)) {
         sb = getmem (sizeof (*sb));
         if (!is_opened_rw (fs)) {
@@ -305,13 +315,12 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
                 getline (&answer, &n, stdin);
                 if (strcmp ("\n", answer))
                     block_count = atoi (answer);
-                set_sb_block_count (sb, block_count);
             } else {
                 fsck_conditional_log (magic_was_found, "rebuild-sb: wrong block count "
 		    "occured (%lu), fixed (%lu)\n", get_sb_block_count(sb), block_count);
-
-                set_sb_block_count (sb, block_count);
             }
+
+	    set_sb_block_count (sb, block_count);
         }
 
         if (get_sb_block_size (sb) != fs->fs_blocksize) {
@@ -491,14 +500,13 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
     }
 
     if (version == 1 || version == 3) {
-        if (!uuid_is_correct(sb->s_uuid)) {
-	    if (generate_random_uuid (sb->s_uuid)) {
-		fsck_log ("rebuild-sb: no uuid found, failed to genetate UUID\n");
-	    } else {
-		fsck_log ("rebuild-sb: no uuid found, a new uuid generated (%U)\n", 
-		    sb->s_uuid);
-	    }
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+        if (uuid_is_null(sb->s_uuid)) {
+	    uuid_generate(sb->s_uuid);
+	    fsck_log ("rebuild-sb: no uuid found, a new uuid was "
+		      "generated (%U)\n", sb->s_uuid);
         }
+#endif
 	if (sb->s_flags != 0 && sb->s_flags != 1) {
 	    fsck_log ("rebuild-sb: super block flags found (%u), zeroed\n",
                   sb->s_flags);
@@ -557,10 +565,10 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
         }
 
 	if ((retval = reiserfs_open_journal(fs, filename, O_RDWR | O_LARGEFILE))) {
-	    fsck_log("\nrebuild-sb: Failed to open the journal device (%s).", 
+	    fsck_log("\nrebuild-sb: Failed to open the journal device (%s).\n", 
 		filename);
 
-	    exit(retval == 1 ? EXIT_USER : EXIT_OPER);
+	    exit(retval < 0 ? EXIT_OPER : EXIT_USER);
 	}	
     } else if (!fsck_skip_journal(fs)) {
 	/* Check that specified non-standard journal device exists. */
@@ -674,7 +682,7 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
 		fsck_log("\nrebuild-sb: Failed to open a journal device (%s).", 
 		    journal_dev_name);
 		
-		exit(retval == 1 ? EXIT_USER : EXIT_OPER);
+		exit(retval < 0 ? EXIT_OPER : EXIT_USER);
 	    }
 	
 	    /* SB was found, but journal params were broken and have been recovered. 
@@ -760,8 +768,6 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
 		set_jp_journal_magic (&j_head->jh_journal, magic);
 
 	    }
-	} else {
-	    set_jp_journal_magic (sb_jp(sb), 0);	    
 	}
 	
 	retval = memcmp(&j_head->jh_journal, sb_jp(sb), sizeof(struct journal_params));

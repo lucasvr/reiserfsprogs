@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -1020,6 +1020,12 @@ struct disk_child {
 #define get_dc_child_size(dc)		get_le16 (dc, dc2_size)
 #define set_dc_child_size(dc,val)	set_le16 (dc, dc2_size, val)
 
+#define set_dc(dc, size, blocknr)	\
+({					\
+    set_dc_child_blocknr(dc, blocknr);	\
+    set_dc_child_size(dc, size);	\
+    set_le16(dc, dc2_reserved, 0);	\
+})
 
 /* Get disk child by buffer header and position in the tree node. */
 #define B_N_CHILD(p_s_bh,n_pos)  ((struct disk_child *)\

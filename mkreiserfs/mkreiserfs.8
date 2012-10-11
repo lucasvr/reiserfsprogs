@@ -1,9 +1,9 @@
 .\" -*- nroff -*-
-.\" Copyright 1996-2003 Hans Reiser.
+.\" Copyright 1996-2004 Hans Reiser.
 .\" 
-.TH MKREISERFS 8 "April 2003" "Reiserfsprogs-3.6.9"
+.TH MKREISERFS 8 "February 2004" "Reiserfsprogs-3.6.13"
 .SH NAME
-mkreiserfs \- create a Linux ReiserFS file system 
+mkreiserfs \- create tool for the Linux ReiserFS file system
 .SH SYNOPSIS
 .B mkreiserfs
 [ \fB-dfV\fR ]
@@ -16,7 +16,8 @@ mkreiserfs \- create a Linux ReiserFS file system
 [ \fB-j\fR | \fB--journal-device \fIFILE\fR ]
 [ \fB-s\fR | \fB--journal-size \fIN\fR ]
 [ \fB-o\fR | \fB--journal-offset \fIN\fR ]
-[ \fB-t\fR | \fB--transaction-max-size\fR \fIN\fR ] \fI device\fR
+[ \fB-t\fR | \fB--transaction-max-size\fR \fIN\fR ]
+[ \fB-B\fR | \fB--badblocks\fR \fIfile\fR ] \fI device\fR
 [ \fIfilesystem-size\fR ]
 .SH DESCRIPTION
 It creates a Linux ReiserFS file system on a device
@@ -82,6 +83,11 @@ for both cases.
 default, and max possible, value is 1024 blocks. It should be less
 than half the size of the journal. If specifed incorrectly, it will be
 adjusted.
+.TP
+\fB-B\fR | \fB--badblocks \fIfile
+\fIFile\fR is the file name of the file that contains the list of blocks 
+to be marked as bad on the filesystem. This list can be created by
+\fB/sbin/badblocks -b block-size device\fR.
 .TP
 \fB-f\fR
 This forces \fBmkreiserfs\fR to continue even if device is either whole

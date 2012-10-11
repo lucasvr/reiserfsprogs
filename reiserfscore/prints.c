@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -7,6 +7,10 @@
 #include <stdarg.h>
 #include <limits.h>
 #include <printf.h>
+
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+#  include <uuid/uuid.h>
+#endif
 
 #define PA_KEY		(PA_LAST)
 #define PA_BUFFER_HEAD	(PA_LAST + 1)
@@ -196,17 +200,16 @@ static int print_sd_uuid (FILE * stream,
 			  const struct printf_info *info,
 			  const void *const *args)
 {
-    int i;
-    const unsigned char * uuid;
-    int len = 0;
-    
-    uuid = *((const unsigned char **)(args[0]));
-    for (i = 0; i < 16; i++) {
-        if (i == 4 || i == 6 || i == 8 || i == 10)
-            len += fprintf (stream, "-");
-        len += fprintf(stream, "%02x", uuid[i]);
-    }
-    return len;
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+    const unsigned char *uuid = *((const unsigned char **)(args[0]));
+    char buf[37];
+
+    buf[36] = '\0';
+    uuid_unparse(uuid, buf);
+    return fprintf(stream, "%s", buf);
+#else
+    return fprintf(stream, "<no libuuid installed>");
+#endif
 }
 
 void reiserfs_warning (FILE * fp, const char * fmt, ...) 
@@ -509,34 +512,34 @@ static int print_leaf (FILE * fp, reiserfs_filsys_t * fs, struct buffer_head * b
     struct item_head * ih;
     int i;
     int from, to;
-    int nr;
+    int real_nr, nr;
 
     if (!is_tree_node (bh, DISK_LEAF_NODE_LEVEL))
 	return 1;
     
-
     blkh = B_BLK_HEAD (bh);
     ih = B_N_PITEM_HEAD (bh,0);
-    nr = leaf_count_ih(bh->b_data, bh->b_size);
-    
+    real_nr = leaf_count_ih(bh->b_data, bh->b_size);
+    nr = get_blkh_nr_items((struct block_head *)bh->b_data);
+
     reiserfs_warning (fp,
 		      "\n===================================================================\n");
     reiserfs_warning (fp, "LEAF NODE (%ld) contains %b (real items %d)\n",
-		      bh->b_blocknr, bh, nr);
+		      bh->b_blocknr, bh, real_nr);
 
     if (!(print_mode & PRINT_TREE_DETAILS)) {
 	reiserfs_warning (fp, "FIRST ITEM_KEY: %k, LAST ITEM KEY: %k\n",
-			   &(ih->ih_key), &((ih + nr - 1)->ih_key));
+			   &(ih->ih_key), &((ih + real_nr - 1)->ih_key));
 	return 0;
     }
 
-    if (first < 0 || first > nr - 1) 
+    if (first < 0 || first > real_nr - 1) 
 	from = 0;
     else 
 	from = first;
 
-    if (last < 0 || last > nr)
-	to = nr;
+    if (last < 0 || last > real_nr)
+	to = real_nr;
     else
 	to = last;
 
@@ -548,7 +551,7 @@ static int print_leaf (FILE * fp, reiserfs_filsys_t * fs, struct buffer_head * b
     for (i = from; i < to; i++) {
 	reiserfs_warning (fp,
 			  "-------------------------------------------------------------------------------\n"
-			  "|%3d|%30H|\n", i, ih + i);
+			  "|%3d|%30H|%s\n", i, ih + i, i >= nr ? " DELETED" : "");
 
 	if (I_IS_STAT_DATA_ITEM(ih+i)) {
 	    is_symlink = print_stat_data (fp, bh, ih + i, 0/*all times*/);
@@ -612,7 +615,7 @@ int print_super_block (FILE * fp, reiserfs_filsys_t * fs, char * file_name,
     if (!does_look_like_super_block (sb))
 	return 1;
 
-    rdev = get_st_rdev (file_name);
+    rdev = misc_device_rdev(file_name);
 
     reiserfs_warning (fp, "Reiserfs super block in block %lu on 0x%x of ",
 		      bh->b_blocknr, rdev);
@@ -643,7 +646,7 @@ int print_super_block (FILE * fp, reiserfs_filsys_t * fs, char * file_name,
 		      "bitmaps, data, reserved] blocks): %u\n", get_sb_free_blocks (sb));
 	reiserfs_warning (fp, "Root block: %u\n", get_sb_root_block (sb));
     }
-    reiserfs_warning (fp, "Filesystem is %scleanly umounted\n",
+    reiserfs_warning (fp, "Filesystem marked as %scleanly umounted\n",
 		      (get_sb_umount_state (sb) == FS_CLEANLY_UMOUNTED) ? "" : "NOT ");
 
     if (short_print)
@@ -967,7 +970,7 @@ void print_objectid_map (FILE * fp, reiserfs_filsys_t * fs)
 	} else {
 	    reiserfs_warning(fp, "free(%u-%u) ", le32_to_cpu (omap[i]),
 			    ((i+1) == get_sb_oid_cursize (sb)) ? 
-			    ~0ul : (le32_to_cpu (omap[i+1]) - 1));
+			    ~(__u32)0 : (le32_to_cpu (omap[i+1]) - 1));
 	}
     }
 

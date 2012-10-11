@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -483,7 +483,7 @@ static void do_pass_2 (reiserfs_filsys_t * fs) {
     unsigned long done = 0, total;
 
 
-    total = reiserfs_bitmap_zeros (fsck_uninsertables (fs)) * 2;
+    total = reiserfs_bitmap_zeros(fsck_uninsertables(fs)) * 2;
     if (!total)
 	return;
 
@@ -491,7 +491,9 @@ static void do_pass_2 (reiserfs_filsys_t * fs) {
 
     for (i = 0; i < 2; i++) {
         j = 0;
-        while (reiserfs_bitmap_find_zero_bit (fsck_uninsertables (fs), &j) == 0) {
+        while ((j < fsck_uninsertables(fs)->bm_bit_size) && 
+	       reiserfs_bitmap_find_zero_bit(fsck_uninsertables(fs), &j) == 0) 
+	{
 	    bh = bread (fs->fs_dev, j, fs->fs_blocksize);
 	    if (bh == 0) {
 	        fsck_log ("pass_2: Reading of the block (%lu) failed on the device 0x%x\n",
@@ -508,8 +510,8 @@ static void do_pass_2 (reiserfs_filsys_t * fs) {
             /* this must be leaf */
             what_node = who_is_this (bh->b_data, bh->b_size);
 	    if (what_node != THE_LEAF) { // || B_IS_KEYS_LEVEL(bh)) {
-	        fsck_log ("%s: The block (%b), marked as a leaf on the first two passes, is not a leaf! Will be skipped.\n", 
-		    __FUNCTION__, bh);
+	        fsck_log ("%s: The block (%b), marked as a leaf on the first two passes, "
+			  "is not a leaf! Will be skipped.\n", __FUNCTION__, bh);
 	        goto cont;
 	    }
 /*	
@@ -622,7 +624,7 @@ void pass_2 (reiserfs_filsys_t * fs)
     
     after_pass_2 (fs);
 
-    if (get_sb_root_block (fs->fs_ondisk_sb) == ~0ul || 
+    if (get_sb_root_block (fs->fs_ondisk_sb) == ~(__u32)0 || 
 	get_sb_root_block (fs->fs_ondisk_sb) == 0)
 	die ( "\nNo reiserfs metadata found.  If you are sure that you had the reiserfs\n"
 		"on this partition,  then the start  of the partition  might be changed\n"

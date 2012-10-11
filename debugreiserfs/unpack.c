@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
   
@@ -489,7 +489,8 @@ static void unpack_unformatted_bitmap (int dev, int blocksize)
 // read packed reiserfs partition metadata from stdin
 void unpack_partition (int fd, int jfd)
 {
-    __u32 magic32, position;
+    __u32 magic32;
+    long position;
     __u16 magic16;
     __u16 blocksize;
     int dev = fd;
@@ -567,7 +568,7 @@ void unpack_partition (int fd, int jfd)
 
 	default:
 	    position = ftell(stdin);
-	    if (position == ~0ul)
+	    if (position == ~(long)0)
 		die ("unpack_partition: bad magic found - %x", magic16 & 0xff);
 	    else
 		die ("unpack_partition: bad magic found - %x, position %lu", 
@@ -615,7 +616,7 @@ int main (int argc, char ** argv)
 	/* only one non-option argument is permitted */
 	print_usage_and_exit();
 
-    if (is_mounted (argv[optind]))
+    if (misc_device_mounted(argv[optind]) > 0)
 	reiserfs_panic ("%s seems mounted, umount it first\n", argv[optind]);
   
     fd = open (argv[optind], O_RDWR | O_LARGEFILE);

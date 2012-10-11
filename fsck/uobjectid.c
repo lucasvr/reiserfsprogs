@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -10,7 +10,7 @@
    when --rebuild-tree - fsck builds map of objectids it inserts into tree */
 
 #define ALLOC_SIZE			1024
-#define MAX_ID				(~0ul)
+#define MAX_ID				(~(__u32)0)
 
 /* 2 bytes for the counter */
 #define BM_SIZE				(ALLOC_SIZE - sizeof(__u16))
@@ -21,10 +21,12 @@
 
 #define id_map_local_count(interval)	(interval + BM_SIZE)
 
+/*
 typedef struct sb_id_map {
     __u32 * m_begin;
     __u32 m_size, m_used_slot_count;
 } sb_id_map_t;
+*/
 
 id_map_t *id_map_init() {
     id_map_t *map;
@@ -103,7 +105,7 @@ int id_map_mark(id_map_t *map, __u32 id) {
 /* call this for proper_id_map only!! */
 __u32 id_map_alloc(id_map_t *map) {
     __u32 i, zero_count;
-    __u32 id = 0, first = ~0ul;
+    __u32 id = 0, first = ~(__u32)0;
 
     for (i = 0, zero_count = 0; zero_count < 10 && i < INDEX_COUNT - 1; i++) {
 	if (map->index[i] == (void *)0) {
@@ -121,7 +123,7 @@ __u32 id_map_alloc(id_map_t *map) {
 	    die ("Id is out of interval size, interval looks corrupted.");
 	
 	id += i * BM_INTERVAL;
-    } else if (first != ~0ul) {
+    } else if (first != ~(__u32)0) {
 	id = first * BM_INTERVAL;
 	if (id == 0) 
 	    id = 2;
@@ -232,7 +234,7 @@ void id_map_flush(struct id_map * map, reiserfs_filsys_t * fs) {
 	if (map->index[map->last_used] == (void *)1) {
 	    prev_id = BM_INTERVAL - 1;
 	} else {	    
-	    prev_id = ~0ul;
+	    prev_id = ~(__u32)0;
 	    
 	    if (id < map->last_used * BM_INTERVAL)
 		id = 0;
@@ -248,7 +250,7 @@ void id_map_flush(struct id_map * map, reiserfs_filsys_t * fs) {
 		prev_id = id;
 	    }
 
-	    if (prev_id == ~0ul)
+	    if (prev_id == ~(__u32)0)
 		die ("Objectid interval does not contain any set bit what is expected.");
 
 	    prev_id++;

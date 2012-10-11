@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -31,7 +31,7 @@ void pass_4_check_unaccessed_items (void)
 	for (i = get_item_pos (&path), ih = get_ih (&path); i < B_NR_ITEMS (bh); i ++, ih ++) {
 	    if (!is_item_reachable (ih)) {
 		PATH_LAST_POSITION (&path) = i;
-		rdkey = get_next_key_2 (&path);
+		rdkey = reiserfs_next_key(&path);
 		if (rdkey)
 		    key = *rdkey;
 		else

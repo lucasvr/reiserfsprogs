@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -136,10 +136,14 @@ static void internal_insert_childs (reiserfs_filsys_t * fs,
     
     /* make disk child array for insertion */
     for (i = 0; i < count; i ++) {
+	set_dc(new_dc + i, MAX_CHILD_SIZE(bh[i]->b_size) - 
+	       get_blkh_free_space (B_BLK_HEAD (bh[i])),
+	       bh[i]->b_blocknr);
+	/*
 	set_dc_child_size (new_dc + i,
 			   MAX_CHILD_SIZE(bh[i]->b_size) - 
 			   get_blkh_free_space (B_BLK_HEAD (bh[i])));
-	set_dc_child_blocknr (new_dc + i, bh[i]->b_blocknr);
+	set_dc_child_blocknr (new_dc + i, bh[i]->b_blocknr);*/
     }
     memcpy (dc, new_dc, DC_SIZE * count);
     
@@ -667,10 +671,15 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 
 	    /* replace the first node-ptr in S[h] by node-ptr to insert_ptr[k] */
 	    dc = B_N_CHILD(tbSh, 0);
+
+	    set_dc(dc, MAX_CHILD_SIZE(insert_ptr[k]->b_size) - 
+		   get_blkh_free_space (B_BLK_HEAD(insert_ptr[k])), 
+		   insert_ptr[k]->b_blocknr);
+	/*	       
 	    set_dc_child_size (dc, MAX_CHILD_SIZE(insert_ptr[k]->b_size) -
 			       get_blkh_free_space (B_BLK_HEAD(insert_ptr[k])));
 	    set_dc_child_blocknr (dc, insert_ptr[k]->b_blocknr);
-
+	*/
 	    mark_buffer_dirty (tbSh);
 
 	    k++;
@@ -721,10 +730,14 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 
 		/* replace the first node-ptr in R[h] by node-ptr insert_ptr[insert_num-k-1]*/
 		dc = B_N_CHILD(tb->R[h], 0);
+		set_dc(dc, MAX_CHILD_SIZE(insert_ptr[insert_num-k-1]->b_size) -
+		       get_blkh_free_space (B_BLK_HEAD(insert_ptr[insert_num-k-1])),
+		       insert_ptr[insert_num-k-1]->b_blocknr);
+		/*
 		set_dc_child_size (dc, MAX_CHILD_SIZE(insert_ptr[insert_num-k-1]->b_size) -
 				   get_blkh_free_space (B_BLK_HEAD(insert_ptr[insert_num-k-1])));
 		set_dc_child_blocknr (dc, insert_ptr[insert_num-k-1]->b_blocknr);
-
+		*/
 		mark_buffer_dirty (tb->R[h]);
 		    
 		insert_num -= (k + 1);
@@ -754,9 +767,14 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	/* Put the unique node-pointer to S[h] that points to S[h-1]. */
 
 	dc = B_N_CHILD(tbSh, 0);
+
+	set_dc(dc, MAX_CHILD_SIZE (tbSh_1->b_size) - 
+	       get_blkh_free_space (B_BLK_HEAD(tbSh_1)),
+	       tbSh_1->b_blocknr);
+	/*
 	set_dc_child_size (dc, MAX_CHILD_SIZE (tbSh_1->b_size) - get_blkh_free_space (B_BLK_HEAD(tbSh_1)));
 	set_dc_child_blocknr (dc, tbSh_1->b_blocknr);
-	
+	*/
 	tb->insert_size[h] -= DC_SIZE;
 	set_blkh_free_space (B_BLK_HEAD(tbSh),
 			     get_blkh_free_space (B_BLK_HEAD(tbSh)) - DC_SIZE);
@@ -835,10 +853,14 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	    /* replace first node-ptr in S_new by node-ptr to insert_ptr[insert_num-k-1] */
 
 	    dc = B_N_CHILD(S_new,0);
+	    set_dc(dc, MAX_CHILD_SIZE(insert_ptr[insert_num-k-1]->b_size) -
+		   get_blkh_free_space (B_BLK_HEAD(insert_ptr[insert_num-k-1])),
+		   insert_ptr[insert_num-k-1]->b_blocknr);
+	    /*
 	    set_dc_child_size (dc, MAX_CHILD_SIZE(insert_ptr[insert_num-k-1]->b_size) -
 			       get_blkh_free_space (B_BLK_HEAD(insert_ptr[insert_num-k-1])));
 	    set_dc_child_blocknr (dc, insert_ptr[insert_num-k-1]->b_blocknr);
-
+	    */
 	    mark_buffer_dirty (S_new);
 			
 	    insert_num -= (k + 1);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2002-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -205,8 +205,9 @@ void do_stat (reiserfs_filsys_t * fs)
 	brelse (bh);
     }
 
-    reiserfs_warning (stderr, "\nThere were %lu leaves\n"
-		      "\ttotal number of items %lu there\n"
+    reiserfs_warning (stderr, "\nThere were found on the '%s' device:\n"
+		      "\tleaves %lu\n"
+		      "\ttotal number of items %lu\n"
 		      "\tblocks containing at least one unique item %lu\n"
 		      "\tblocks which can be skipped %lu\n"
 		      "\t\tstat data %lu\n"
@@ -220,6 +221,7 @@ void do_stat (reiserfs_filsys_t * fs)
 		      "other items %lu\n"
 		      "blocks containing only 1 dir item %lu\n",
 		      */
+		      fs->fs_file_name,
 		      fs_stat.leaves,
 		      fs_stat.all,
 		      fs_stat.leaves - fs_stat.blocks_to_skip,

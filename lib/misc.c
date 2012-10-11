@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -16,29 +16,34 @@
 #include <stdlib.h>
 #include <mntent.h>
 #include <sys/vfs.h>
-#include <fcntl.h>
 #include <time.h>
 #include <utime.h>
 #include <ctype.h>
 #include <linux/hdreg.h>
 #include <dirent.h>
+#include <assert.h>
 
-#include <asm/ioctl.h>
-#include <unistd.h>
-
-#if defined(__linux__) && defined(_IOR) && !defined(BLKGETSIZE64)
-#   define BLKGETSIZE64 _IOR(0x12, 114, sizeof(__u64))
-#endif
-
-#include "swab.h"
-
-#include "io.h"
 #include "misc.h"
 
 /* Debian modifications by Ed Boraas <ed@debian.org> */
 #include <sys/mount.h>
 /* End Debian mods */
 
+#define STAT_FIELD(Field, Type)						\
+inline Type misc_device_##Field(char *device) {				\
+	struct stat st;							\
+									\
+	if (stat(device, &st) == 0)					\
+		return st.st_##Field;					\
+									\
+	fprintf(stderr, "Stat of the device '%s' failed.", device);	\
+	exit(8);							\
+}
+
+STAT_FIELD(mode, mode_t);
+STAT_FIELD(rdev, dev_t);
+STAT_FIELD(size, off64_t);
+STAT_FIELD(blocks, blkcnt64_t);
 
 void die (char * fmt, ...)
 {
@@ -173,144 +178,174 @@ void freemem (void * vp)
 
 typedef int (*func_t) (char *);
 
-static int is_readonly_dir (char * dir)
+/* Lookup the @file in the @mntfile. @file is mntent.mnt_fsname if @fsname 
+   is set; mntent.mnt_dir otherwise. Return the mnt entry from the @mntfile.
+   
+   Warning: if the root fs is mounted RO, the content of /etc/mtab may be 
+   not correct. */
+static struct mntent *misc_mntent_lookup(char *mntfile, 
+					 char *file, 
+					 int fsname) 
 {
-/*
-    int fd;
-    char template [1024];
+	struct mntent *mnt;
+	struct stat st;
+	dev_t rdev = 0;
+	dev_t dev = 0;
+	ino_t ino = 0;
+	FILE *fp;
 
-    snprintf (template, 1024, "%s/testXXXXXX", dir);
-    fd = mkstemp (template);
-    if (fd >= 0) {
-	close (fd);
-	return 0;
-    }
-*/
-    if (utime (dir, 0) != -1)
-	/* this is not ro mounted fs */
-	return 0;
-    return (errno == EROFS) ? 1 : 0;
-}
+	assert(mntfile != NULL);
+	assert(file != NULL);
 
-
-#ifdef __i386__
-
-#include <unistd.h>
-#include <linux/unistd.h>
-
-#define __NR_bad_stat64 195
-_syscall2(long, bad_stat64, char *, filename, struct stat64 *, statbuf);
-
-#else
-
-#define bad_stat64 stat64
-
-#endif
-
-/* yes, I know how ugly it is */
-#define return_stat_field(field) \
-    struct stat st;\
-    struct stat64 st64;\
-\
-    if (bad_stat64 (file_name, &st64) == 0) {\
-	return st64.st_##field;\
-    } else if (stat (file_name, &st) == 0)\
-	return st.st_##field;\
-\
-    perror ("stat failed");\
-    exit (8);\
-
-
-mode_t get_st_mode (char * file_name)
-{
-    return_stat_field (mode);
-}
-
-
-/* may I look at this undocumented (at least in the info of libc 2.3.1-58)
-   field? */
-dev_t get_st_rdev (char * file_name)
-{
-    return_stat_field (rdev);
-}
-
-
-off64_t get_st_size (char * file_name)
-{
-    return_stat_field (size);
-}
-
-
-blkcnt64_t get_st_blocks (char * file_name)
-{
-    return_stat_field (blocks);
-}
-
-
-
-static int _is_mounted (char * device_name, func_t f)
-{
-    int retval;
-    FILE *fp;
-    struct mntent *mnt;
-    struct statfs stfs;
-    struct stat root_st;
-    mode_t mode;
-
-    if (stat ("/", &root_st) == -1)
-	die ("is_mounted: could not stat \"/\": %s\n", strerror(errno));
-
-
-    mode = get_st_mode (device_name);
-    if (S_ISREG (mode))
-	/* regular file can not be mounted */
-	return 0;
-
-    if (!S_ISBLK (mode))
-	die ("is_mounted: %s is neither regular file nor block device", device_name);
-
-    if (root_st.st_dev == get_st_rdev (device_name)) {
-	/* device is mounted as root. Check whether it is mounted read-only */
-	return (f ? f ("/") : 1);
-    }
-
-    /* if proc filesystem is mounted */
-    if (statfs ("/proc", &stfs) == -1 || stfs.f_type != 0x9fa0/*procfs magic*/ ||
-	(fp = setmntent ("/proc/mounts", "r")) == NULL) {
-	/* proc filesystem is not mounted, or /proc/mounts does not
-           exist */
-	if (f)
-	    return (user_confirmed (stderr, 
-		" (could not figure out) Is filesystem mounted read-only? (Yes)",
-		"Yes\n"));
-	else
-	    return (user_confirmed (stderr, 
-		" (could not figure out) Is filesystem mounted? (Yes)", "Yes\n"));
-    }
-    
-    retval = 0;
-    while ((mnt = getmntent (fp)) != NULL)
-	if (strcmp (device_name, mnt->mnt_fsname) == 0) {
-	    retval = (f ? f (mnt->mnt_dir) : 1/*mounted*/);
-	    break;
+	if (fsname && stat(file, &st) == 0) {
+		/* Devices is stated. */
+		if (S_ISBLK(st.st_mode)) {
+			rdev = st.st_rdev;
+		} else {
+			dev = st.st_dev;
+			ino = st.st_ino;
+		}
 	}
-    endmntent (fp);
 
-    return retval;
+	if ((fp = setmntent(mntfile, "r")) == NULL)
+		return INVAL_PTR;
+
+	while ((mnt = getmntent(fp)) != NULL) {
+		/* Check if names match. */
+		if (fsname) {
+			if (strcmp(file, mnt->mnt_fsname) == 0)
+				break;
+		} else {
+			if (strcmp(file, mnt->mnt_dir) == 0)
+				break;
+
+			continue;
+		}
+
+		/* Check if stats match. */
+		if (stat(mnt->mnt_fsname, &st) == 0) {
+			if (rdev && S_ISBLK(st.st_mode)) {
+				if (rdev == st.st_rdev)
+					break;
+			} else {
+				if (dev == st.st_dev &&
+				    ino == st.st_ino)
+					break;
+			}
+		}
+	}
+
+	endmntent (fp);
+        return mnt;
 }
 
+static int misc_root_mounted(char *device) {
+	struct stat rootst, devst;
+	
+	assert(device != NULL);
 
-int is_mounted_read_only (char * device_name)
-{
-    return _is_mounted (device_name, is_readonly_dir);
+	if (stat("/", &rootst) != 0) 
+		return -1;
+
+	if (stat(device, &devst) != 0)
+		return -1;
+
+	if (!S_ISBLK(devst.st_mode) || 
+	    devst.st_rdev != rootst.st_dev)
+		return 0;
+
+	return 1;
 }
 
+static int misc_file_ro(char *file) {
+	if (utime(file, 0) == -1) {
+		if (errno == EROFS)
+			return 1;
+	}
 
-int is_mounted (char * device_name)
-{
-    return _is_mounted (device_name, 0);
+	return 0;
 }
 
+struct mntent *misc_mntent(char *device) {
+	int proc = 0, path = 0, root = 0;
+	
+	struct mntent *mnt;
+	struct statfs stfs;
+
+	assert(device != NULL);
+	
+	/* Check if the root. */
+	if (misc_root_mounted(device) == 1)
+		root = 1;
+	
+#ifdef __linux__
+	/* Check if /proc is procfs. */
+	if (statfs("/proc", &stfs) == 0 && stfs.f_type == 0x9fa0) {
+		proc = 1;
+		
+		if (root) {
+			/* Lookup the "/" entry in /proc/mounts. Special 
+			   case as root entry can present as:
+				rootfs / rootfs rw 0 0
+			   Look up the mount point in this case. */
+			mnt = misc_mntent_lookup("/proc/mounts", "/", 0);
+		} else {
+			/* Lookup the @device /proc/mounts */
+			mnt = misc_mntent_lookup("/proc/mounts", device, 1);
+		}
+		
+		if (mnt == INVAL_PTR) 
+			proc = 0;
+		else if (mnt)
+			return mnt;
+	}
+#endif /* __linux__ */
+
+#if defined(MOUNTED) || defined(_PATH_MOUNTED)
+
+#ifndef MOUNTED
+    #define MOUNTED _PATH_MOUNTED
+#endif
+	/* Check in MOUNTED (/etc/mtab) if RW. */
+	if (!misc_file_ro(MOUNTED)) {
+		path = 1;
+
+		if (root) {
+			mnt = misc_mntent_lookup(MOUNTED, "/", 0);
+		} else {
+			mnt = misc_mntent_lookup(MOUNTED, device, 1);
+		}
+
+		if (mnt == INVAL_PTR) 
+			path = 0;
+		else if (mnt)
+			return mnt;
+	}
+#endif /* defined(MOUNTED) || defined(_PATH_MOUNTED) */
+	
+	/* If has not been checked in neither /proc/mounts nor /etc/mtab (or 
+	   errors have occured), return INVAL_PTR, NULL otherwise. */
+	return (!proc && !path) ? INVAL_PTR : NULL;
+}
+
+int misc_device_mounted(char *device) {
+	struct mntent *mnt;
+	
+	/* Check for the "/" first to avoid any possible problem with 
+	   reflecting the root fs info in mtab files. */
+	if (misc_root_mounted(device) == 1) {
+		return misc_file_ro("/") ? MF_RO : MF_RW;
+	}
+	
+	/* Lookup the mount entry. */
+	if ((mnt = misc_mntent(device)) == NULL) {
+		return MF_NOT_MOUNTED;
+	} else if (mnt == INVAL_PTR) {
+		return 0;
+	}
+
+	return hasmntopt(mnt, MNTOPT_RO) ? MF_RO : MF_RW;
+}
 
 char buf1 [100];
 char buf2 [100];
@@ -407,19 +442,42 @@ void print_how_far (FILE * fp,
     fflush (fp);
 }
 
+#if defined(__linux__) && defined(_IOR) && !defined(BLKGETSIZE64)
+#   define BLKGETSIZE64 _IOR(0x12, 114, __u64)
+#endif
+
+/* To not have problem with last sectors on the block device when switching 
+   to smaller one. */
+#define MAX_BS (64 * 1024)
+
+int valid_offset( int fd, loff_t offset) {
+    char ch;
+    loff_t res;
+
+    /*res = reiserfs_llseek (fd, offset, 0);*/
+    res = lseek64 (fd, offset, SEEK_SET);
+    if (res < 0)
+	return 0;
+
+    /* if (read (fd, &ch, 1) < 0) does not wirk on files */
+    if (read (fd, &ch, 1) < 1)
+	return 0;
 
 
+    return 1;
+}
 
 /* calculates number of blocks in a file. Returns 0 for "sparse"
    regular files and files other than regular files and block devices */
 unsigned long count_blocks (char * filename, int blocksize)
 {
     loff_t high, low;
-    int fd;
     unsigned long sz;
     __u64 size;
+    int fd;
 
-    if (!S_ISBLK (get_st_mode (filename)) && !S_ISREG (get_st_mode (filename)))
+    if (!S_ISBLK(misc_device_mode(filename)) && 
+	!S_ISREG(misc_device_mode(filename)))
 	return 0;
 
     fd = open (filename, O_RDONLY);
@@ -429,10 +487,12 @@ unsigned long count_blocks (char * filename, int blocksize)
 #ifdef BLKGETSIZE64
     {
 	if (ioctl (fd, BLKGETSIZE64, &size) >= 0) {
-	    size = (size / 4096) * 4096 / blocksize;
+	    size = (size / MAX_BS) * MAX_BS / blocksize;
 	    sz = size;
 	    if ((__u64)sz != size)
 		    die ("count_blocks: block device too large");
+
+	    close(fd);
 	    return sz;
 	}
     }
@@ -443,7 +503,9 @@ unsigned long count_blocks (char * filename, int blocksize)
     {
 	if (ioctl (fd, BLKGETSIZE, &sz) >= 0) {
 	    size = sz;
-	    return (size * 512 / 4096) * 4096 / blocksize;
+
+	    close(fd);
+	    return (size * 512 / MAX_BS) * MAX_BS / blocksize;
 	}
     }
 #endif
@@ -459,14 +521,12 @@ unsigned long count_blocks (char * filename, int blocksize)
 	else
 	    high = mid;
     }
+    
     valid_offset (fd, 0);
 
     close (fd);
-
-    return (low + 1) * 4096 / 4096 / blocksize ;
+    return (low + 1) * MAX_BS / MAX_BS / blocksize;
 }
-
-
 
 /* there are masks for certain bits  */
 __u16 mask16 (int from, int count)
@@ -570,27 +630,6 @@ int blockdev_list_compare (const void * block1, const void * block2) {
     return 0;
 }
 
-/* return -1 if smth found, otherwise return position which new item should be inserted into */
-/*
-int blocklist__is_block_saved (struct block_handler ** base, __u32 * count,
-				__u32 blocknr, dev_t device, __u32 * position) {
-    struct block_handler block_h;
-    
-    *position = 0;
-           
-    if (*base == NULL) 
-        return 0;
-
-    block_h.blocknr = blocknr;
-    block_h.device = device;
-    
-    if (reiserfs_bin_search (&block_h, *base, *count, sizeof (block_h),
-		position, blocklist_compare) == POSITION_FOUND)
-        return 1;
-        
-    return 0;
-}
-*/
 void blocklist__insert_in_position (void *elem, void **base, __u32 *count, 
     int elem_size, __u32 *position) 
 {
@@ -612,93 +651,6 @@ void blocklist__insert_in_position (void *elem, void **base, __u32 *count,
 
     memcpy (*base + (char) *position * elem_size, elem, elem_size);
     *count+=1;
-}
-
-static int get_random_bytes (void *out, int size) {
-    int fd;
-    
-    if ((fd = open("/dev/urandom", O_RDONLY)) == -1)
-        return 1;
-    
-    if (read(fd, out, size) <= 0) {
-        close (fd);
-        return 1;
-    }
-    
-    close (fd);
-    return 0;
-}
-
-int generate_random_uuid (unsigned char * uuid)
-{
-    if (get_random_bytes(uuid, 16)) {
-        return -1;
-    }
-
-    /* Set the UUID variant to DCE */
-    uuid[8] = (uuid[8] & 0x3F) | 0x80;
-    /* Set UUID version to 4 --- truely random generation */
-    uuid[6] = (uuid[6] & 0x0F) | 0x40;
-
-    return 0;
-}
-
-int uuid_is_correct (unsigned char * uuid)
-{
-    int i;
-
-    for (i = 0; i < 16; i++)
-        if (uuid[i])
-            break;
-
-    if (i == 16)
-	return 0;
-
-    if (!misc_test_bit(7, &uuid[8]) || misc_test_bit(6, &uuid[8]))
-    	return 0;
-
-    if (misc_test_bit(7, &uuid[6]) || !misc_test_bit(6, &uuid[6]) ||
-    	misc_test_bit(5, &uuid[6]) ||  misc_test_bit(4, &uuid[6]))
-    	return 0;
-    	
-    return 1;
-}
-
-static int parse_uuid (const unsigned char * in, unsigned char * uuid)
-{
-    int i, j = 0;
-    unsigned char frame[3];
-
-    if (strlen(in) != 36)
-	return -1;
-	
-    for (i = 0; i < 36; i++) {
-	if ((i == 8) || (i == 13) || (i == 18) || (i == 23)) {
-	    if (in[i] != '-')
-		return 0;
-	} else if (!isxdigit(in[i])) {
-	    return -1;
-	}
-    }
-
-    frame[2] = 0;
-    for (i = 0; i < 36; i ++) {
-	if ((i == 8) || (i == 13) || (i == 18) || (i == 23))
-	    continue;
-	
-	frame[0] = in[i++];
-	frame[1] = in[i];
-	uuid[j++] = strtoul(frame, NULL, 16);
-    }
-    return 0;
-}
-
-int set_uuid (const unsigned char * text, unsigned char * UUID)
-{
-    if (parse_uuid (text, UUID) || !uuid_is_correct(UUID))
-	return -1;
-
-    return 0;
 }
 
 /* 0 - dma is not supported, scsi or regular file */
@@ -971,13 +923,30 @@ inline unsigned long long misc_find_next_set_bit(const void *vaddr,
 /* Reads the "CREDITS" file and prints one paragraph from it. */
 void misc_print_credit(FILE *out) {
     char *line;
+    __u32 num1, num2;
     
-    fprintf(out, "\nA pair of credits:\n");
+    fprintf(out, "A pair of credits:\n");
     
-    line = credits[(random() % CREDITS_COUNT)];
-    fprintf(out, "%s", line);
+    srandom (time (0));
     
-    line = credits[(random() % CREDITS_COUNT)];
-    fprintf(out, "%s", line);
+    num1 = random() % CREDITS_COUNT;
+    line = credits[num1];
+    fprintf(out, "%s\n", line);
+    
+    while ((num1 == (num2 = random() % CREDITS_COUNT))) {}
+    
+    line = credits[num2];
+    
+    fprintf(out, "%s\n", line);
 }
 
+int user_confirmed (FILE * fp, char * q, char * yes) {
+    char * answer = 0;
+    size_t n = 0;
+
+    fprintf (fp, "%s", q);
+    if (getline (&answer, &n, stdin) != (ssize_t)strlen (yes) || strcmp (yes, answer))
+	return 0;
+
+    return 1;
+}

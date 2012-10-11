@@ -1,9 +1,9 @@
 .\" -*- nroff -*-
-.\" Copyright 1996-2003 Hans Reiser.
+.\" Copyright 1996-2004 Hans Reiser.
 .\" 
-.TH REISERFSCK 8 "April 2003" "Reiserfsprogs-3.6.9"
+.TH REISERFSCK 8 "February 2004" "Reiserfsprogs-3.6.13"
 .SH NAME
-reiserfsck \- check a Linux Reiserfs file system
+reiserfsck \- checking tool for the ReiserFS filesystem
 .SH SYNOPSIS
 .B reiserfsck 
 [ \fB-afprVy\fR ]
@@ -13,6 +13,7 @@ reiserfsck \- check a Linux Reiserfs file system
 [ \fB-j\fR | \fB--journal\fR \fIdevice\fR ]
 [ \fB-z\fR | \fB--adjust-size\fR ]
 [ \fB-n\fR | \fB--nolog\fR ]
+[ \fB-B\fR | \fB--badblocks \fIfile\fR ]
 [ \fB-l\fR | \fB--logfile \fIfile\fR ]
 [ \fB-q\fR | \fB--quiet\fR ]
 [ \fB-y\fR | \fB--yes\fR ]
@@ -51,11 +52,15 @@ zeroing invalid data-block pointers, correcting st_size and st_blocks
 for directories, and deleting invalid directory entries.
 .TP
 .B --rebuild-tree
-This option rebuilds the entire file system tree using leaf nodes found 
-on the device.  Normally you only need this option if the \fB--check\fR 
-option reports "corruption that can be fixed only during \fB--rebuild-tree\fR". 
-You are strongly encouraged to make a backup copy of the whole partition 
-before attempting the \fB--rebuild-tree\fR option.
+This option rebuilds the entire filesystem tree using leaf nodes 
+found on the device.  Normally you only need this option if the 
+\fBreiserfsck --check\fR reports "Running with \fB--rebuild-tree\fR
+is required". You are strongly encouraged to make a backup copy 
+of the whole partition before attempting the \fB--rebuild-tree\fR 
+option. Once \fBreiserfsck --rebuild-tree\fR is started it must
+finish its work (and you should not interrupt it), otherwise the
+filesystem will be left in the unmountable state to avoid subsequent
+data corruptions.
 .TP
 .B --clean-attributes
 This option cleans reserved fields of Stat-Data items.
@@ -76,6 +81,13 @@ implies that holes at the end of a file will be removed.  File
 sizes that are smaller than the offset of the last discovered
 byte are corrected by --fix-fixable.
 .TP
+\fB--badblocks \fIfile\fR, \fB-B \fI file\fR
+This option sets the badblock list to be the list of blocks specified in 
+the given `file`. The filesystem badblock list is cleared before the new 
+list is added. Can be used with \fB--fix-fixable\fR to fix the list of 
+badblocks (see debugreiserfs -B) and must be given with \fB--rebuild-tree\fR 
+option every time if the block device has bad blocks.
+.TP
 \fB--logfile \fIfile\fR, \fB-l \fI file\fR
 This option causes \fBreiserfsck\fR to report any corruption it finds 
 to the specified log file rather than stderr.
@@ -89,7 +101,7 @@ This option prevents \fBreiserfsck\fR from reporting its rate of progress.
 .B --yes, -y
 This option inhibits \fBreiserfsck\fR from asking you for confirmation after
 telling you what it is going to do, assuming yes. For safety, it does not 
-work with the --rebuild-tree option.
+work with the \fB--rebuild-tree\fR option.
 .TP
 \fB-a\fR, \fB-p\fR
 These options are usually passed by fsck -A during the automatic checking 
@@ -140,15 +152,17 @@ If \fBreiserfsck --check\fR fails in some way you should also run \fBreiserfsck
 the whole partition before proceeding. Then run \fBreiserfsck --rebuild-tree 
 --logfile rebuild.log /dev/hda1\fR.
 
-6. If the \fB--rebuild-tree\fR step fails or does not recover what you expected, 
-please submit this as a bug report. Try to provide as much information as 
-possible and we will try to help solve the problem.
+6. If the \fBreiserfsck --rebuild-tree\fR step fails or does not recover what 
+you expected, please submit this as a bug report. Try to provide as much 
+information as possible and we will try to help solve the problem.
 .SH EXIT CODES
 \fBreiserfsck\fR uses the following exit codes:
 .br
 \   \fI0\fR \-\ No errors.
 .br
 \   \fI1\fR \-\ File system errors corrected.
+.br
+\   \fI2\fR \-\ Reboot is needed.
 .br
 \   \fI4\fR \-\ File system fatal errors left uncorrected,
 .br
@@ -168,7 +182,7 @@ This version of \fBreiserfsck\fR has been written by Vitaly Fertman <vitaly@name
 There are likely to be some bugs. Please report bugs to the ReiserFS mail-list 
 <reiserfs-list@namesys.com>.
 .SH TODO
-Faster recovering, signal handling, i/o error handling, etc.
+Faster recovering, signal handling.
 .SH SEE ALSO
 .BR mkreiserfs (8),
 .BR reiserfstune (8)

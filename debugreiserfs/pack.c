@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -406,7 +406,6 @@ static void pack_leaf (reiserfs_filsys_t * fs, struct buffer_head * bh)
 	pack_full_block (fs, bh);
 	return;
     }
-
 
     /* start magic in low 8 bits, hash code in high 8 bits */
     v16 = (LEAF_START_MAGIC | (func2code (fs->fs_hash_function) << 8));

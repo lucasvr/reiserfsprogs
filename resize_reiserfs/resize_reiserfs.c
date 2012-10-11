@@ -1,5 +1,5 @@
 /* 
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -11,8 +11,9 @@
  */
 
 #include "resize.h"
-#include <libgen.h>
+#include <limits.h>
 
+int opt_banner = 0;
 int opt_force = 0;
 int opt_verbose = 1;			/* now "verbose" option is default */
 int opt_nowrite = 0;
@@ -23,17 +24,26 @@ char * g_progname;
 
 /* calculate the new fs size (in blocks) from old fs size and the string
    representation of new size */
-static unsigned long calc_new_fs_size(unsigned long count, int bs,
+static long long int calc_new_fs_size(unsigned long count, 
+				      unsigned int bs, 
 				      char *bytes_str)
 {
     long long int bytes;
-    unsigned long blocks;
-    int c;
-	
-    bytes = atoll(bytes_str);
-    c = bytes_str[strlen(bytes_str) - 1];
+    long long int blocks;
+    char *end;
+    int rel;
 
-    switch (c) {
+    end = bytes_str + strlen(bytes_str) - 1;
+    rel = bytes_str[0] == '+' || bytes_str[0] == '-';
+    bytes = strtoll(bytes_str, &bytes_str, 10);
+    
+    /* Some error occured while convertion or the specified 
+       string is not valid. */
+    if (bytes == LONG_LONG_MIN || bytes == LONG_LONG_MAX || 
+	(bytes_str != end && bytes_str != end + 1))
+	return -EINVAL;
+
+    switch (*end) {
     case 'G':
     case 'g':
 	bytes *= 1024;
@@ -47,10 +57,7 @@ static unsigned long calc_new_fs_size(unsigned long count, int bs,
 	
     blocks = bytes / bs;
 
-    if (bytes_str[0] == '+' || bytes_str[0] == '-')
-	return (count + blocks);
-
-    return blocks;
+    return rel ? count + blocks : blocks;
 }
 
 /* print some fs parameters */
@@ -82,7 +89,7 @@ static int bwrite_cond (struct buffer_head * bh)
 
 
 /* the first one of the most important functions */
-static int expand_fs (reiserfs_filsys_t * fs, unsigned long block_count_new) {
+static int expand_fs (reiserfs_filsys_t * fs, long long int block_count_new) {
     unsigned int bmap_nr_new, bmap_nr_old;
     struct reiserfs_super_block * sb;
     unsigned int i;
@@ -131,6 +138,43 @@ static int expand_fs (reiserfs_filsys_t * fs, unsigned long block_count_new) {
     return 0;
 }
 
+static int resizer_check_fs_size(reiserfs_filsys_t *fs, long long int new_size) {
+    if (new_size < 0) {
+	    reiserfs_warning(stderr, "\nresizer_reiserfs: the new size "
+			     "value is wrong.\n\n");
+	    return new_size;
+    }
+    
+    if (new_size == get_sb_block_count(fs->fs_ondisk_sb)) {
+	reiserfs_warning (stderr, "%s already is of the needed size. "
+			  "Nothing to be done\n\n", fs->fs_file_name);
+	return 1;
+    }
+
+    if (new_size < get_sb_block_count(fs->fs_ondisk_sb)) {
+	if (misc_device_mounted(fs->fs_file_name) > 0) {
+	    reiserfs_warning (stderr, "Can't shrink filesystem on-line.\n\n");
+	    return 1;
+	}
+    }
+
+    if (new_size >= get_sb_block_count(fs->fs_ondisk_sb)) {
+	loff_t offset = (loff_t)new_size * fs->fs_blocksize - 1;
+	
+	if(!valid_offset(fs->fs_dev, offset)) {
+	    reiserfs_warning (stderr, "%s is of %lu blocks size only with "
+			      "reiserfs of %d blocks\nsize on it. You are "
+			      "trying to expand reiserfs up to %lu blocks "
+			      "size.\nYou probably forgot to expand your "
+			      "partition size.\n\n", fs->fs_file_name,
+			      count_blocks(fs->fs_file_name, fs->fs_blocksize),
+			      get_sb_block_count(fs->fs_ondisk_sb), new_size);
+	    return 1;
+	}
+    }
+
+    return 0;
+}
 
 int main(int argc, char *argv[]) {
     char * bytes_count_str = NULL;
@@ -144,12 +188,14 @@ int main(int argc, char *argv[]) {
 
     struct reiserfs_super_block *sb_old;
 
-    unsigned long block_count_new;
+    long long int block_count_new;
 
     g_progname = basename(argv[0]);
-    print_banner (g_progname);
+    
+    if (argc < 2)
+	print_usage_and_exit();
 	
-    while ((c = getopt(argc, argv, "fvcqks:j:")) != EOF) {
+    while ((c = getopt(argc, argv, "fvcqks:j:V")) != EOF) {
 	switch (c) {
 	case 's' :
 	    if (!optarg)
@@ -179,13 +225,20 @@ int main(int argc, char *argv[]) {
 	case 'k':
 	    opt_skipj = 1;
 	    break;
+	case 'V':
+	    opt_banner++;
+	    break;
 	default:
 	    print_usage_and_exit ();
 	}
     }
 
-    if (optind == argc )
-	print_usage_and_exit();
+    print_banner (g_progname);
+    
+    if (opt_banner)
+	exit(0);
+    
+
     devname = argv[optind];
 
     fs = reiserfs_open(devname, O_RDONLY, &error, 0, 1);
@@ -212,22 +265,22 @@ int main(int argc, char *argv[]) {
     }
 
     sb = fs->fs_ondisk_sb;
-    
-    if(bytes_count_str) {	/* new fs size is specified by user */
-	block_count_new = calc_new_fs_size(get_sb_block_count(sb), 
-	    fs->fs_blocksize, bytes_count_str);
-    } else {		/* use whole device */
-	block_count_new = count_blocks(devname, fs->fs_blocksize);
-    }
 
-    if (is_mounted (devname)) {
+    /* If size change was specified by user, calculate it, 
+       otherwise take the whole device. */
+    block_count_new = bytes_count_str ? 
+	    calc_new_fs_size(get_sb_block_count(sb), 
+			     fs->fs_blocksize, bytes_count_str) :
+	    count_blocks(devname, fs->fs_blocksize);
+
+    if (resizer_check_fs_size(fs, block_count_new))
+	return 1;
+
+    if (misc_device_mounted(devname) > 0) {
 	reiserfs_close(fs);
-	if ((error = resize_fs_online(devname, block_count_new)))
-	    reiserfs_warning(stderr, "\n\nresize_reiserfs: On-line resizing "
-		"failed.\n\n ");
-	else
-	    reiserfs_warning(stderr, "\n\nresize_reiserfs: On-line resizing "
-		"finished successfully.\n\n ");
+	error = resize_fs_online(devname, block_count_new);
+	reiserfs_warning(stderr, "\n\nresize_reiserfs: On-line resizing %s.\n\n",
+			 error ? "failed" : "finished successfully");
 	return error;
     }
 
@@ -242,26 +295,6 @@ int main(int argc, char *argv[]) {
 	/* fixme: shouldn't we check for something like: fsck guarantees: fs is ok */
 	DIE ("the file system isn't in valid state.");
 		
-    if (block_count_new >= get_sb_block_count(sb)) {
-	if (block_count_new == get_sb_block_count(sb)) {
-	    reiserfs_warning (stderr, "%s already is of the needed size. "
-		"Nothing to be done\n\n", devname);
-	    exit (1);
-	}
-	
-	if(!valid_offset(fs->fs_dev, 
-	    (loff_t)block_count_new * fs->fs_blocksize - 1)) 
-	{
-	    reiserfs_warning (stderr, "%s is of %lu blocks size only with "
-		"reiserfs of %d blocks\nsize on it. You are trying to expand "
-		"reiserfs up to %lu blocks size.\nYou probably forgot to "
-		"expand your partition size.\n\n", devname, 
-		count_blocks(devname, fs->fs_blocksize),
-		get_sb_block_count(sb), block_count_new);
-	    exit (1);
-	}
-    }
-
     /* Needed to keep idiot compiler from issuing false warning */
     sb_old = 0;		
     

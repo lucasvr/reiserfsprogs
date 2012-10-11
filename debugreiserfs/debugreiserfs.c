@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -12,6 +12,7 @@ fprintf (stderr, "Usage: %s [options] device\n\n\
 Options:\n\
   -d\t\tprint blocks details of the internal tree\n\
   -D\t\tprint blocks details of all used blocks\n\
+  -B file\textract list of badblocks\n\
   -m\t\tprint bitmap blocks\n\
   -o\t\tprint objectid map\n\n\
   -J\t\tprint journal header\n\
@@ -19,12 +20,12 @@ Options:\n\
   -p\t\tsend filesystem metadata to stdout\n\
   -S\t\thandle all blocks, not only used\n\
   -1 block\tblock to print\n\
-  -q\t\tno speed info (for -p, -s and -n)\n\n", argv[0]);\
+  -q\t\tno speed info (for -p, -s and -n)\n\
+  -V\t\tprint version and exit\n\n", argv[0]);\
   exit (16);\
 }
 
 /*
-   -B file\textract list of badblocks\n\
 
  Undocumented options:
   -a map_file\n\tstore to the file the map of file. Is used with -n, -N, -r, -f\n
@@ -55,7 +56,7 @@ struct reiserfs_fsstat {
 static void print_disk_tree (reiserfs_filsys_t * fs, unsigned long block_nr)
 {
     struct buffer_head * bh;
-    int i, count;
+    int i, j, count;
     static int level = -1;
 	
     if (level == -1)
@@ -94,9 +95,18 @@ static void print_disk_tree (reiserfs_filsys_t * fs, unsigned long block_nr)
 	
 		ih = B_N_PITEM_HEAD (bh, 0);
 		count = leaf_item_number_estimate(bh);
-		for (i = 0; i <= count; i++, ih++) {
-			if (is_indirect_ih(ih))
-				g_stat_info.nr_unformatted += I_UNFM_NUM(ih);
+		for (i = 0; i < count; i++, ih++) {
+			if (is_indirect_ih(ih)) {
+				__u32 * ind_item = (__u32 *)B_I_PITEM (bh, ih);
+				__u32 unfm_ptr;
+				
+				for (j =  0; j < (int)I_UNFM_NUM (ih); j ++) {
+					unfm_ptr = le32_to_cpu (ind_item [j]);
+					if (unfm_ptr) {
+						g_stat_info.nr_unformatted += 1;
+					}
+				}
+			}
 		}
     } else {
 		print_block (stdout, fs, bh, data (fs)->options & PRINT_TREE_DETAILS, -1, -1);
@@ -202,6 +212,7 @@ static void print_one_block (reiserfs_filsys_t * fs, unsigned long block)
 char * where_to_save;
 char * badblocks_file;
 char * corruption_list_file;
+char *program_name;
 
 static char * parse_options (struct debugreiserfs_data * data, int argc, char * argv [])
 {
@@ -210,8 +221,15 @@ static char * parse_options (struct debugreiserfs_data * data, int argc, char * 
     
     data->scan_area = USED_BLOCKS;
     data->mode = DO_DUMP;
+    
+    program_name = strrchr( argv[ 0 ], '/' );
+    
+    if (program_name)
+	program_name++;
+    else
+	program_name = argv[ 0 ];
 
-    while ((c = getopt (argc, argv, "a:b:C:F:SU1:psn:Nfr:dDomj:J:qtZl:L")) != EOF) {
+    while ((c = getopt (argc, argv, "a:b:C:F:SU1:psn:Nfr:dDomj:JqtZl:LVB:")) != EOF) {
 		switch (c) {
 		case 'a': /* -r will read this, -n and -N will write to it */
 			asprintf (&data->map_file, "%s", optarg);
@@ -314,7 +332,6 @@ static char * parse_options (struct debugreiserfs_data * data, int argc, char * 
 			
 		case 'J':
 			data->options |= PRINT_JOURNAL_HEADER;
-			data->journal_device_name = optarg;
 			break;
 			
 		case 'R': /* read block numbers from stdin and look for them in the
@@ -346,13 +363,23 @@ static char * parse_options (struct debugreiserfs_data * data, int argc, char * 
 			/* random fs corruption */
 			data->mode = DO_RANDOM_CORRUPTION;
 			break;
+		case 'V':
+			data->mode = DO_NOTHING;
+			break;
 		}
+    }
+    
+    if (data->mode == DO_NOTHING) {
+	    	print_banner(program_name);
+        	exit(0);
     }
     
     if (optind != argc - 1)
 		/* only one non-option argument is permitted */
 		print_usage_and_exit();
-	
+
+    print_banner(program_name);
+
     data->device_name = argv[optind];
     return argv[optind];
 }
@@ -473,74 +500,49 @@ static void do_dump_tree (reiserfs_filsys_t * fs)
         init_bitmap (fs);
 	
     if (data (fs)->options & PRINT_DETAILS || data (fs)->options & PRINT_TREE_DETAILS) {
-		if (data (fs)->options & PRINT_DETAILS)
+		if (data (fs)->options & PRINT_DETAILS) {
 			print_disk_blocks (fs);
-		else
+			printf("The '%s' device with reiserfs has:\n", fs->fs_file_name);
+		} else {
 			print_disk_tree (fs, get_sb_root_block (fs->fs_ondisk_sb));
+			printf("The internal reiserfs tree has:\n");
+		}
 		
 		/* print the statistic */
-		printf ("File system uses %d internal + %d leaves + %d unformatted nodes = %d blocks\n",
-				g_stat_info.nr_internals, g_stat_info.nr_leaves, g_stat_info.nr_unformatted,
-				g_stat_info.nr_internals + g_stat_info.nr_leaves + g_stat_info.nr_unformatted);
+		printf ("\t%d internal + %d leaves + %d unformatted nodes = %d blocks\n",
+			g_stat_info.nr_internals, g_stat_info.nr_leaves, g_stat_info.nr_unformatted,
+			g_stat_info.nr_internals + g_stat_info.nr_leaves + g_stat_info.nr_unformatted);
     }
 }
 
-void extract_badblock_list ()
+static void callback_badblock_print(reiserfs_filsys_t *fs, 
+				    struct path *badblock_path, 
+				    void *data) 
 {
-    FILE * fd;
-    struct key badblock_key = {-1, -1, {{0, 0}}};
-    struct key * rdkey;
-    struct path badblock_path;
-    struct item_head * tmp_ih;
-    __u32 i;
-    __u32 * ind_item;
+	struct item_head *tmp_ih;
+	FILE *fd = (FILE *)data;
+	__u32 *ind_item;
+	__u32 i;
 	
+	tmp_ih = get_ih(badblock_path);
+	ind_item = (__u32 *)get_item(badblock_path);
 	
-    fd = fopen (badblocks_file, "w");
-	
-    if (fd == NULL) {
+	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++, ind_item++)
+		fprintf (fd, "%u\n", le32_to_cpu (*ind_item));
+
+	pathrelse (badblock_path);
+}
+
+void extract_badblock_list () {
+    FILE *fd;
+
+    if (!(fd = fopen (badblocks_file, "w"))) {
         reiserfs_warning (stderr, "debugreiserfs: could not open badblock file %s\n",
-						  badblocks_file);
+			  badblocks_file);
         exit (1);
     }
-	
-    badblock_path.path_length = ILLEGAL_PATH_ELEMENT_OFFSET;
-	
-    set_type_and_offset (KEY_FORMAT_2, &badblock_key, 1, TYPE_INDIRECT);
-	
-    while (1) {
-		reiserfs_search_by_key_4 (fs, &badblock_key, &badblock_path);
-		
-		if (get_blkh_nr_items ( B_BLK_HEAD (get_bh(&badblock_path))) <= PATH_LAST_POSITION (&badblock_path)) {
-            break;
-		}
-		
-		tmp_ih = get_ih(&badblock_path);
-		
-		if (get_key_dirid(&tmp_ih->ih_key) != (__u32)-1 ||
-			get_key_objectid(&tmp_ih->ih_key) != (__u32)-1) {
-			break;
-		}
-		
-		/* even if offset or type are corrupted it could be a badblock list */
-		if (!is_indirect_ih (tmp_ih)) {
-			reiserfs_warning (stderr, "$s: a badblock item which was found has a wrong type.\n"
-							  " It probable contains not correct bad block list, check it.\n", __FUNCTION__);
-		}
-		
-		ind_item = (__u32 *)B_I_PITEM (get_bh (&badblock_path), tmp_ih);
-		for (i = 0; i < get_ih_item_len (tmp_ih) / UNFM_P_SIZE; i++, ind_item++)
-			fprintf (fd, "%u\n", le32_to_cpu (*ind_item));
-		
-		if ((rdkey = get_next_key_2 (&badblock_path)) == NULL)	
-			break;
-		else
-			badblock_key = *rdkey;
-		
-		pathrelse (&badblock_path);
-    }
-	
-    pathrelse (&badblock_path);
+
+    badblock_list(fs, callback_badblock_print, fd);
     fclose (fd);
 }
 
@@ -634,8 +636,6 @@ int main (int argc, char * argv[])
     int error;
     struct debugreiserfs_data * data;
 	
-    print_banner ("debugreiserfs");
-	
     data = getmem (sizeof (struct debugreiserfs_data));
     file_name = parse_options (data, argc, argv);
     
@@ -649,7 +649,6 @@ int main (int argc, char * argv[])
     
     if (reiserfs_open_journal (fs, data (fs)->journal_device_name, O_RDONLY)) {
 		fprintf(stderr, "\ndebugreiserfs: Failed to open the fs journal.\n");
-		exit(1);
     }
 	
     switch (debug_mode (fs)) {
@@ -706,8 +705,10 @@ int main (int argc, char * argv[])
 		/*do_test (fs);*/
 		break;
     case DO_EXTRACT_BADBLOCKS:
-        reiserfs_warning (stderr, "Will try to extract list of bad blocks and save it to '%s' file\n", badblocks_file);
-		extract_badblock_list ();
+        reiserfs_warning (stderr, "Will try to extract list of bad blocks and "
+			  "save it to '%s' file\n", badblocks_file);
+	
+	extract_badblock_list ();
         reiserfs_warning (stderr, "Done\n\n");
     	break;
     }

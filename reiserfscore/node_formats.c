@@ -1,5 +1,5 @@
 /*
- *  Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ *  Copyright 2000-2004 by Hans Reiser, licensing governed by 
  *  reiserfsprogs/README
  */
 
@@ -1299,7 +1299,7 @@ void mark_objectid_used (reiserfs_filsys_t * fs, __u32 objectid)
 
 int is_blocksize_correct (unsigned int blocksize)
 {
-    return ((blocksize == 0) || (((blocksize & -blocksize) == blocksize) 
-	&& (blocksize >=512) && (blocksize <= 8192)));
+    return ((((blocksize & -blocksize) == blocksize) 
+	&& (blocksize >= 512) && (blocksize <= 8192)));
 }
 

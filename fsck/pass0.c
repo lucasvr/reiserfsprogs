@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -559,7 +559,7 @@ static __inline__ int does_it_fit_into_dev (__u64 offset, __u64 fs_size) {
 
 static int is_wrong_short_key (struct key * key) {
     if (get_key_dirid (key) == 0 || get_key_objectid (key) == 0 || get_key_objectid (key) == 1 ||
-	get_key_dirid (key) == ~0ul || get_key_objectid (key) == ~0ul ||
+	get_key_dirid (key) == ~(__u32)0 || get_key_objectid (key) == ~(__u32)0 ||
 	get_key_dirid (key) == get_key_objectid (key) ||
 	(get_key_dirid (key) == 1 && get_key_objectid (key) != 2) ||
 	(get_key_dirid (key) != 1 && get_key_objectid (key) == 2) )
@@ -642,8 +642,12 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 
     /* Delete all safe links. */
     for (i = get_blkh_nr_items (B_BLK_HEAD (bh)) - 1; i >= 0; i--) {
-	if (get_key_dirid (&B_N_PITEM_HEAD (bh, i)->ih_key) == ~0ul) {
+	if (get_key_dirid (&B_N_PITEM_HEAD (bh, i)->ih_key) == ~(__u32)0) {
 	    delete_item (fs, bh, i);
+	}
+	if (get_key_dirid (&B_N_PITEM_HEAD (bh, i)->ih_key) == BADBLOCK_DIRID && 
+	    get_key_objectid (&B_N_PITEM_HEAD (bh, i)->ih_key) == BADBLOCK_OBJID) {
+		delete_item (fs, bh, i);
 	}
     }
 

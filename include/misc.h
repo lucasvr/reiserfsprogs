@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -13,9 +13,15 @@
 #include <linux/major.h>
 #include <signal.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+
+#include <sys/types.h>
 
 #define POSITION_FOUND          8
 #define POSITION_NOT_FOUND      9
+
+#define INVAL_PTR	(void *)-1
 
 void check_memory_msg(void);
 void die (char * fmt, ...) __attribute__ ((format (printf, 1, 2)));
@@ -25,11 +31,24 @@ void freemem (void * p);
 void checkmem (char * p, int size);
 void * expandmem (void * p, int size, int by);
 unsigned int get_mem_size (char * p);
-int is_mounted (char * device_name);
-int is_mounted_read_only (char * device_name);
 void check_and_free_mem (void);
 char * kdevname (int dev);
 
+typedef enum mount_flags {
+	MF_NOT_MOUNTED  = 0x0,
+	MF_RO		= 0x1,
+	MF_RW		= 0x2
+} mount_flags_t;
+
+typedef struct mount_hint {
+    char *point;	/* Mount point. */
+    __u32 psize;	/* Mount point buffer size. */
+    __u32 flags;	/* Mount flags. */
+} mount_hint_t;
+
+struct mntent *misc_mntent(char *device);
+int misc_device_mounted(char *device);
+	
 void misc_print_credit(FILE *out);
 
 typedef struct dma_info {
@@ -44,16 +63,15 @@ int prepare_dma_check(dma_info_t *dma_info);
 int get_dma_info(dma_info_t *dma_info);
 void clean_after_dma_check(int fd, dma_info_t *dma_info);
 
+int valid_offset( int fd, loff_t offset);
+unsigned long count_blocks (char * filename, int blocksize);
+
 void print_how_far (FILE * fp, unsigned long *passed, unsigned long total, unsigned int inc, int quiet);
 void print_how_fast (unsigned long total, 
 		     unsigned long passed, int cursor_pos, int reset_time);
 __u32 get_random (void);
-int uuid_is_null(unsigned char * uuid);
-int generate_random_uuid (unsigned char * uuid);
-int uuid_is_correct (unsigned char * uuid);
-int set_uuid (const unsigned char * text, unsigned char * UUID);
 
-//#include <asm/bitops.h>
+int user_confirmed (FILE * fp, char * q, char * yes);
 
 extern inline int misc_set_bit (unsigned long long nr, void * addr);
 extern inline int misc_clear_bit (unsigned long long nr, void * addr);
@@ -85,15 +103,13 @@ extern inline unsigned long long misc_find_first_set_bit (const void *vaddr, uns
 # error "nuxi/pdp-endian archs are not supported"
 #endif
 
+#define STAT_FIELD_H(Field, Type)	\
+inline Type misc_device_##Field(char *device);
 
-
-unsigned long count_blocks (char * filename, int blocksize);
-
-mode_t get_st_mode (char * file_name);
-dev_t get_st_rdev (char * file_name);
-off64_t get_st_size (char * file_name);
-blkcnt64_t get_st_blocks (char * file_name);
-
+STAT_FIELD_H(mode, mode_t);
+STAT_FIELD_H(rdev, dev_t);
+STAT_FIELD_H(size, off64_t);
+STAT_FIELD_H(blocks, blkcnt64_t);
 
 /* these are to access bitfield in endian safe manner */
 __u16 mask16 (int from, int count);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2002-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -29,9 +29,9 @@
 #include "../include/config.h"
 #include "../version.h"
 
-/* main.c */
-extern reiserfs_filsys_t * fs;
-
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+#  include <uuid/uuid.h>
+#endif
 
 /* 
  * options
@@ -46,5 +46,3 @@ extern reiserfs_filsys_t * fs;
 #define OPT_KEEPO  0x4000
 #define OPT_FORCE  0x8000
 #define OPT_STANDARD  0x0020
-
-extern char *program_name;

@@ -1,8 +1,9 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
+#define _FILE_OFFSET_BITS 64
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -22,28 +23,25 @@
 
 void check_memory_msg (void) {
     fprintf(stderr, 
-	"\nThe problem has occurred looks like a hardware problem (perhaps memory).\n"
-        "Send us the bug report only if the second run dies at the same place with\n"
-        "the same block number.\n");
+	"\nThe problem has occurred looks like a hardware problem (perhaps\n"
+        "memory). Send us the bug report only if the second run dies at\n"
+	"the same place with the same block number.\n");
 }
 
 void check_hd_msg (void) {
     fprintf(stderr, 
-	"\nThe problem has occurred looks like a hardware problem.\n"
-	"If you have bad blocks, we advise you to get a new hard\n"
-	"drive, because once you get one bad block that the disk\n"
-        "drive internals cannot hide from your sight, the chances\n"
-        "of getting more are generally said to become much higher\n"
-        "(precise statistics are unknown to us), and this disk drive\n"
-        "is probably not expensive enough for you to risk your time\n"
-        "and data on it. If you don't want to follow that advice,\n"
-        "then if you have just a few bad blocks, try writing to the\n"
-        "bad blocks and see if the drive remaps the bad blocks (that\n"
-        "means it takes a block it has in reserve and allocates it\n"
-        "for use for requests of that block number).  If it cannot\n"
-        "remap the block, this could be quite bad, as it may mean\n"
-        "that so many blocks have gone bad that none remain in \n"
-	"reserve to allocate.\n");
+	"\nThe problem has occurred looks like a hardware problem. If you have\n"
+	"bad blocks, we advise you to get a new hard drive, because once you\n"
+	"get one bad block  that the disk  drive internals  cannot hide from\n"
+        "your sight,the chances of getting more are generally said to become\n"
+        "much higher  (precise statistics are unknown to us), and  this disk\n"
+        "drive is probably not expensive enough  for you to you to risk your\n"
+        "time and  data on it.  If you don't want to follow that follow that\n"
+        "advice then  if you have just a few bad blocks,  try writing to the\n"
+	"bad blocks  and see if the drive remaps  the bad blocks (that means\n"
+	"it takes a block  it has  in reserve  and allocates  it for use for\n"
+	"of that block number).  If it cannot remap the block,  use badblock\n"
+	"option (-B) with  reiserfs utils to handle this block correctly.\n");
 }
 
 static int is_bad_block (unsigned long block)
@@ -514,7 +512,7 @@ struct buffer_head * bread (int dev, unsigned long block, size_t size)
     ret = f_read(bh);
     
     if (ret > 0)
-	die ("%s: End of file, cannot read the block (%lu).\n", __FUNCTION__, bh->b_blocknr);
+	die ("%s: End of file, cannot read the block (%lu).\n", __FUNCTION__, block);
     else if (ret < 0) {
 	/* BAD BLOCK LIST SUPPORT
 	 * die ("%s: Cannot read a block # %lu. Specify list of badblocks\n",*/
@@ -522,10 +520,10 @@ struct buffer_head * bread (int dev, unsigned long block, size_t size)
 	if (errno == EIO) {
 	    check_hd_msg();
 	    die ("%s: Cannot read the block (%lu): (%s).\n", __FUNCTION__, 
-		bh->b_blocknr, strerror(errno));
+		block, strerror(errno));
 	} else	{
 	    fprintf (stderr, "%s: Cannot read the block (%lu): (%s).\n", __FUNCTION__, 
-		bh->b_blocknr, strerror(errno));
+		block, strerror(errno));
 	    return NULL;
 	}
     }
@@ -533,26 +531,6 @@ struct buffer_head * bread (int dev, unsigned long block, size_t size)
     mark_buffer_uptodate (bh, 0);
     return bh;
 }
-
-
-int valid_offset( int fd, loff_t offset)
-{
-    char ch;
-    loff_t res;
-
-    /*res = reiserfs_llseek (fd, offset, 0);*/
-    res = lseek64 (fd, offset, SEEK_SET);
-    if (res < 0)
-	return 0;
-
-    /* if (read (fd, &ch, 1) < 0) does not wirk on files */
-    if (read (fd, &ch, 1) < 1)
-	return 0;
-
-
-    return 1;
-}
-
 
 #define ROLLBACK_FILE_START_MAGIC       "_RollBackFileForReiserfsFSCK"
 
@@ -985,17 +963,4 @@ void invalidate_buffers (int dev)
 {
     _invalidate_buffer_list(Buffer_list_head, dev) ;
     _invalidate_buffer_list(g_free_buffers, dev) ;
-}
-
-
-int user_confirmed (FILE * fp, char * q, char * yes)
-{
-    char * answer = 0;
-    size_t n = 0;
-
-    fprintf (fp, "%s", q);
-    if (getline (&answer, &n, stdin) != (ssize_t)strlen (yes) || strcmp (yes, answer))
-	return 0;
-
-    return 1;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -105,7 +105,7 @@ int wrong_st_size (struct key * key, unsigned long long max_file_size,
 	if (type == TYPE_DIRENTRY) {
 	    /* directory size must match to the sum of length of its entries */
 	    fsck_log ("vpf-10650: The directory %K has the wrong size in the StatData "
-		"(%Ld)%s(%Ld)\n", key, sd_size, fsck_mode(fs) == FSCK_CHECK ? 
+		"(%Lu)%s(%Lu)\n", key, sd_size, fsck_mode(fs) == FSCK_CHECK ? 
 		", should be " : " - corrected to ", *size);
 	    return 1;
 	}
@@ -115,7 +115,7 @@ int wrong_st_size (struct key * key, unsigned long long max_file_size,
 	    if (fsck_adjust_file_size (fs) || type == TYPE_SYMLINK) {
 		/* but it -o is given - fix that */
 		fsck_log ("vpf-10660: The file %K has too big size in the StatData "
-		    "(%Ld)%s(%Ld)\n", key, sd_size, fsck_mode(fs) == FSCK_CHECK ? 
+		    "(%Lu)%s(%Lu)\n", key, sd_size, fsck_mode(fs) == FSCK_CHECK ? 
 		    ", should be " : " - corrected to ", *size);
 		sem_pass_stat (fs)->fixed_sizes ++;
 		return 1;
@@ -145,7 +145,7 @@ int wrong_st_size (struct key * key, unsigned long long max_file_size,
 	}
     }
 
-    fsck_log ("vpf-10670: The file %K has the wrong size in the StatData (%Ld)%s(%Ld)\n", key, 
+    fsck_log ("vpf-10670: The file %K has the wrong size in the StatData (%Lu)%s(%Lu)\n", key, 
 	sd_size, fsck_mode(fs) == FSCK_CHECK ? ", should be " : " - corrected to ", 
 	*size);
     sem_pass_stat (fs)->fixed_sizes ++;

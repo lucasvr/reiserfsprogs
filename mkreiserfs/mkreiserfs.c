@@ -1,20 +1,16 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
-/* mkreiserfs is very simple. It supports only 4k blocks. It skips
-   first 64k of device, and then writes the super
-   block, the needed amount of bitmap blocks (this amount is calculated
-   based on file system size), and root block. Bitmap policy is
-   primitive: it assumes, that device does not have unreadable blocks,
-   and it occupies first blocks for super, bitmap and root blocks.
-   bitmap blocks are interleaved across the disk, mainly to make
-   resizing faster. */
+/* mkreiserfs is very simple. It skips first 64k of device, and then 
+   writes the super block, the needed amount of bitmap blocks (this 
+   amount is calculated based on file system size), and root block. 
+   Bitmap policy is primitive: it assumes, that device does not have 
+   unreadable blocks, and it occupies first blocks for super, bitmap 
+   and root blocks. bitmap blocks are interleaved across the disk, 
+   mainly to make resizing faster. */
 
-//
-// FIXME: not 'not-i386' safe. ? Ed
-//
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -39,6 +35,10 @@
 #include "reiserfs_lib.h"
 #include "../include/config.h"
 #include "../version.h"
+
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+#  include <uuid/uuid.h>
+#endif
 
 
 char *program_name;
@@ -73,6 +73,7 @@ static void print_usage_and_exit(void)
 	"  -o | --journal-offset N          offset of the journal from the start of\n"
 	"                                   the separate device, in blocks\n"
 	"  -t | --transaction-max-size N    maximal size of transaction, in blocks\n"
+	"  -B | --badblocks file            store all bad blocks given in file on the fs\n"
 	"  -h | --hash rupasov|tea|r5       hash function to use by default\n"
 	"  -u | --uuid UUID                 store UUID in the superblock\n"
 	"  -l | --label LABEL               store LABEL in the superblock\n"
@@ -89,7 +90,6 @@ static void print_usage_and_exit(void)
     exit (1);
 }
 
-//	"  -B badblocks-file                list of all bad blocks on the fs\n"
 
 int Create_default_journal = 1;
 int Block_size = 4096;
@@ -106,7 +106,8 @@ char * badblocks_file;
 
 enum mkfs_mode {
     DEBUG_MODE = 1 << 0,
-    QUIET_MODE = 1 << 1
+    QUIET_MODE = 1 << 1,
+    DO_NOTHING = 1 << 2
 };
 
 int mode;
@@ -118,10 +119,12 @@ static void make_super_block (reiserfs_filsys_t * fs)
     set_sb_tree_height (fs->fs_ondisk_sb, 2);
     set_sb_hash_code (fs->fs_ondisk_sb, Hash);
     if (fs->fs_format == REISERFS_FORMAT_3_6) {
-        if (!uuid_is_correct (UUID) && generate_random_uuid (UUID))
-	    reiserfs_warning (stderr, "failed to genetate UUID\n");
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+        if (uuid_is_null(UUID))
+	    uuid_generate(UUID);
 
 	memcpy (fs->fs_ondisk_sb->s_uuid, UUID, 16);
+#endif
 	if (LABEL != NULL) {
 	    if (strlen (LABEL) > 16)
 	        reiserfs_warning (stderr, "\nSpecified LABEL is longer then 16 "
@@ -140,6 +143,10 @@ static void make_super_block (reiserfs_filsys_t * fs)
     else
 	set_sb_reserved_for_journal (fs->fs_ondisk_sb,
 		get_jp_journal_size (sb_jp (fs->fs_ondisk_sb)) + 1);
+
+    if (fs->fs_badblocks_bm)
+	set_sb_free_blocks(fs->fs_ondisk_sb, get_sb_free_blocks(fs->fs_ondisk_sb) - 
+			   fs->fs_badblocks_bm->bm_set_bits);
 }
 
 
@@ -295,11 +302,9 @@ static void make_root_block (reiserfs_filsys_t * fs)
     make_sure_root_dir_exists (fs, set_root_dir_nlink, 0);
     brelse (bh);
 
-
     /**/
     mark_objectid_used (fs, REISERFS_ROOT_PARENT_OBJECTID);
     mark_objectid_used (fs, REISERFS_ROOT_OBJECTID);
-    
 }
 
 
@@ -543,12 +548,10 @@ int main (int argc, char **argv)
     else
 	program_name = argv[ 0 ];
     
-
-    if (argc < 2) {
-	print_banner (program_name);
-
+    if (argc < 2)
 	print_usage_and_exit ();
-    }
+    
+    memset(UUID, 0, 16);
     
     while (1) {
 		static struct option options[] = {
@@ -557,6 +560,7 @@ int main (int argc, char **argv)
 			{"journal-size", required_argument, 0, 's'},
 			{"transaction-max-size", required_argument, 0, 't'},
 			{"journal-offset", required_argument, 0, 'o'},
+			{"badblocks", required_argument, 0, 'B'},
 			{"hash", required_argument, 0, 'h'},
 			{"uuid", required_argument, 0, 'u'},
 			{"label", required_argument, 0, 'l'},
@@ -614,7 +618,8 @@ int main (int argc, char **argv)
 			break;
 
 		case 'V':
-			print_usage_and_exit ();
+			mode = DO_NOTHING;
+			break;
 
 		case 'f':
 			force ++;
@@ -625,11 +630,17 @@ int main (int argc, char **argv)
 			break;
 		
 		case 'u':
-			if (set_uuid (optarg, UUID)) {
-			    reiserfs_warning(stderr, "wrong UUID specified\n");
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+			if (uuid_parse(optarg, UUID) < 0) {
+			    reiserfs_warning(stderr, "Invalid UUID '%s' is "
+					     "specified\n", optarg);
 			    return 1;
 			}
-			
+#else
+			message ("Cannot set up the UUID, uuidlib was not "
+				 "found by configure.\n");
+			return 1;
+#endif
 			break;
 		
 		case 'l':
@@ -637,13 +648,22 @@ int main (int argc, char **argv)
 			break;
 		case 'q':
 			mode |= QUIET_MODE;
-			fclose(stdout);
 			break;
 		default:
 			print_usage_and_exit();
 		}
     }
 
+    print_banner (program_name);
+
+    misc_print_credit(stdout);
+    printf("\n");
+    
+    if (mode & QUIET_MODE)
+	fclose(stdout);
+    
+    if (mode == DO_NOTHING)
+	    exit(0);
 
     /* device to be formatted */
     device_name = argv [optind];
@@ -687,20 +707,24 @@ int main (int argc, char **argv)
 
     /* these fill buffers (super block, first bitmap, root block) with
        reiserfs structures */
-    if (uuid_is_correct (UUID) && fs->fs_format != REISERFS_FORMAT_3_6) {
+#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
+    if (!uuid_is_null(UUID) && fs->fs_format != REISERFS_FORMAT_3_6) {
 	reiserfs_warning(stderr, "UUID can be specified only with 3.6 format\n");
 	return 1;
     }
+#endif
 
-    if (badblocks_file)
-	create_badblock_bitmap (fs, badblocks_file);
+    if (badblocks_file) {
+	if (create_badblock_bitmap (fs, badblocks_file))
+	    exit(1);
+    }
 
 
     make_super_block (fs);
     make_bitmap (fs);
     make_root_block (fs);
-//    add_badblock_list (fs, 1);
-  
+    add_badblock_list (fs, 1);
+
     report (fs, jdevice_name);
 
     if (!force && !(mode & QUIET_MODE)) {
@@ -716,7 +740,6 @@ int main (int argc, char **argv)
 
     invalidate_other_formats (fs->fs_dev);
 
-		
     zero_journal (fs);
 
     reiserfs_close (fs);
@@ -728,9 +751,9 @@ int main (int argc, char **argv)
     if (mode & DEBUG_MODE)
 	return 0;
     
-    misc_print_credit(stdout);
-    printf("\nTell your friends to use the kernel based on 2.4.18 or later "
-	"when you use\nreiserFS. Have fun.\n\n");
+    printf("\nTell your friends to use a kernel based on 2.4.18 or "
+	"later, and especially not a\nkernel based on 2.4.9, "
+	"when you use reiserFS. Have fun.\n\n");
         
     printf("ReiserFS is successfully created on %s.\n", device_name);
 

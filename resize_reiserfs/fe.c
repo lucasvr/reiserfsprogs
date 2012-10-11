@@ -1,37 +1,28 @@
 /*
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
 #include "resize.h"
 
 /* the front-end for kernel on-line resizer */
-int resize_fs_online(char * devname, unsigned long blocks)
-{
-	static char buf[40];
-	FILE * f;
-	struct mntent * mnt;
+int resize_fs_online(char * devname, long long int blocks) {
+	struct mntent *mnt;
+	char buf[40];
 	
-	if ((f = setmntent (MOUNTED, "r")) == NULL)
-		goto fail;
+	/* Find the mount entry. */
+	if ((mnt = misc_mntent(devname)) == NULL)
+		die ("resize_reiserfs: can't find mount entry\n");
 
-    while ((mnt = getmntent (f)) != NULL)
-        if(strcmp(devname, mnt->mnt_fsname) == 0) {
+	sprintf(buf,"resize=%lld", blocks);
 
-			if (strcmp(mnt->mnt_type,"reiserfs")) 			
-				die ("resize_reiserfs: can\'t resize fs other than reiserfs\n");
-				
-			sprintf(buf,"resize=%lu", blocks);
+	if (mount(mnt->mnt_fsname, mnt->mnt_dir, mnt->mnt_type,
+		  (unsigned long)(MS_MGC_VAL << 16 | MS_REMOUNT), buf)) 
+	{
+		die ("resize_reiserfs: remount failed: %s\n", 
+		     strerror(errno));
+	}
 
-			if (mount(mnt->mnt_fsname, mnt->mnt_dir, mnt->mnt_type,
-          			  (unsigned long)(MS_MGC_VAL | MS_REMOUNT), buf)) 
-				die ("resize_reiserfs: remount failed: %s\n", strerror(errno));
-			
-			endmntent(f);
-			return 0;
-		}
-fail:
-   die ("resize_reiserfs: can't find mount entry\n");
-   return 1;
+	return 0;
 }
 

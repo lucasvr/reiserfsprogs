@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -819,9 +819,9 @@ static void scan_for_key (struct buffer_head * bh, struct key * key)
     i_num = leaf_item_number_estimate(bh);
     for (i = 0; i < i_num; i ++, ih ++) {
 	if ((get_key_dirid(&ih->ih_key) == get_key_dirid(key) || 
-	     get_key_dirid(key) == ~0ul) &&
+	     get_key_dirid(key) == ~(__u32)0) &&
 	    (get_key_objectid(&ih->ih_key) == get_key_objectid(key) || 
-	     get_key_objectid(key) == ~0ul)) 
+	     get_key_objectid(key) == ~(__u32)0)) 
 	{
 	    reiserfs_warning(log_to, "%d-th item of block %lu is item of file %K: %H\n",
 			      i, bh->b_blocknr, key, ih);

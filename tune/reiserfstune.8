@@ -1,9 +1,9 @@
 .\" -*- nroff -*-
-.\" Copyright 1996-2003 Hans Reiser.
+.\" Copyright 1996-2004 Hans Reiser.
 .\" 
-.TH REISERFSTUNE 8 "April 2003" "Reiserfsprogs-3.6.9"
+.TH REISERFSTUNE 8 "February 2004" "Reiserfsprogs-3.6.13"
 .SH NAME
-reiserfstune 
+reiserfstune \- tunning tool for the ReiserFS filesystem
 .SH SYNOPSIS
 .B reiserfstune
 [ \fB-f\fR ]
@@ -13,6 +13,8 @@ reiserfstune
 [ \fB-s\fR | \fB--journal-new-size\fR \fIN\fR ]
 [ \fB-o\fR | \fB--journal-new-offset\fR \fIN\fR ]
 [ \fB-t\fR | \fB--max-transaction-size\fR \fIN\fR ]
+[ \fB-b\fR | \fB--add-badblocks\fR \fIfile\fR ]
+[ \fB-B\fR | \fB--badblocks\fR \fIfile\fR ]
 [ \fB-u\fR | \fB--uuid \fIUUID\fR ]
 [ \fB-l\fR | \fB--label \fILABEL\fR ]
 .I device
@@ -72,10 +74,19 @@ multiple filesystems to reside on the same device, and you don't want
 to or cannot partition that device.
 .TP
 \fB \-t\fR | \fB\--maximal-transaction-size \fIN
-\fI\fR is the maximum transaction size parameter for the new
+\fIN\fR is the maximum transaction size parameter for the new
 journal. The default, and max possible, value is 1024 blocks. It
 should be less than half the size of the journal. If specifed
 incorrectly, it will be adjusted.
+.TP
+\fB \-b\fR | \fB\--add-badblocks\fR \fIfile\fR
+\fIFile\fR is the file name of the file that contains the list of blocks to be marked 
+as bad on the fs. The list is added to the fs list of bad blocks.
+.TP
+\fB \-B\fR | \fB\--badblocks\fR \fIfile\fR
+\fIFile\fR is the file name of the file that contains the list of blocks to be marked 
+as bad on the fs. The bad block list on the fs is cleared before the list specified 
+in the \fIFile\fR is added to the fs.
 .TP
 \fB\-f\fR | \fB--force\fR 
 Normally \fBreiserfstune\fR will refuse to change a journal of a

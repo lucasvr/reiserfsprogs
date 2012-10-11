@@ -1,5 +1,5 @@
 /*
- *  Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ *  Copyright 2000-2004 by Hans Reiser, licensing governed by 
  *  reiserfsprogs/README
  */
 
@@ -9,6 +9,7 @@
 struct key root_dir_key = {0, 0, {{0, 0},}};
 struct key parent_root_dir_key = {0, 0, {{0, 0},}};
 struct key lost_found_dir_key = {0, 0, {{0, 0}, }};
+struct key badblock_key = {BADBLOCK_DIRID, BADBLOCK_OBJID, {{0, 0},}};
 
 __u16 root_dir_format = 0;
 __u16 lost_found_dir_format = 0;
@@ -59,6 +60,8 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
     /* convert root dir key and parent root dir key to little endian format */
     make_const_keys ();
 
+    if (error) 
+	*error = 0;
 
     fd = open (filename, flags | O_LARGEFILE);
     if (fd == -1) {
@@ -92,8 +95,6 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
     reiserfs_warning(stderr, 
 	"\nreiserfs_open: the reiserfs superblock cannot be found on %s.\n", filename);
     
-    if (error)
-	*error = 0;
     freemem (fs);
     close (fd);
     fs = NULL;
@@ -101,19 +102,19 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
 
  found:
 
+    if (!is_blocksize_correct(get_sb_block_size(sb))) {
+	reiserfs_warning(stderr, "reiserfs_open: a superblock with wrong parameters "
+			 "was found in the block (%d).\n", i);
+	freemem (fs);
+	close (fd);
+	brelse(bh);
+	return NULL;
+    }
+
     if (check) {
 	/* A few checks of found super block. */
 	struct buffer_head *tmp_bh;
 	
-	if (!is_blocksize_correct(get_sb_block_size(sb))) {
-	    reiserfs_warning(stderr, "reiserfs_open: a superblock with wrong parameters "
-		"was found in the block (%d).\n", i);
-	    freemem (fs);
-	    close (fd);
-	    brelse(bh);
-	    return NULL;
-	}
-    
 	tmp_bh = bread (fd, get_sb_block_count(sb) - 1, get_sb_block_size(sb));
 	
 	if (!tmp_bh) {
@@ -393,7 +394,9 @@ void reiserfs_close (reiserfs_filsys_t * fs)
 
 
 int reiserfs_new_blocknrs (reiserfs_filsys_t * fs, 
-			   unsigned long * free_blocknrs, unsigned long start, int amount_needed)
+			   unsigned long * free_blocknrs, 
+			   unsigned long start, 
+			   int amount_needed)
 {
     if (fs->block_allocator)
 	return fs->block_allocator (fs, free_blocknrs, start, amount_needed);
@@ -432,6 +435,9 @@ static int reiserfs_search_by_key_x (reiserfs_filsys_t * fs, struct key * key,
     
 
     block = get_sb_root_block (fs->fs_ondisk_sb);
+    if (not_data_block(fs, block))
+	return IO_ERROR;
+    
     path->path_length = ILLEGAL_PATH_ELEMENT_OFFSET;
     while (1) {
 	curr = PATH_OFFSET_PELEMENT (path, ++ path->path_length);
@@ -457,6 +463,8 @@ static int reiserfs_search_by_key_x (reiserfs_filsys_t * fs, struct key * key,
 		return ITEM_NOT_FOUND;
 	}
 	block = get_dc_child_blocknr (B_N_CHILD (bh, curr->pe_position));
+	if (not_data_block(fs, block))
+		return IO_ERROR;
     }
     printf ("search_by_key: you can not get here\n");
     return ITEM_NOT_FOUND;
@@ -648,15 +656,7 @@ struct key * uget_rkey (struct path * path)
     return 0;
 }
 
-struct key * get_next_key_2 (struct path * path)
-{
-    if (PATH_LAST_POSITION (path) < B_NR_ITEMS (get_bh (path)) - 1)
-	return B_N_PKEY (get_bh (path), PATH_LAST_POSITION (path) + 1);
-    return uget_rkey (path);
-}
-
-struct key * reiserfs_next_key (struct path * path)
-{
+struct key * reiserfs_next_key (struct path * path) {
     if (get_item_pos (path) < B_NR_ITEMS (get_bh (path)) - 1)
 	return B_N_PKEY (get_bh (path), get_item_pos (path) + 1);
 
@@ -1141,6 +1141,7 @@ int create_dir_sd (reiserfs_filsys_t * fs,
     else
 	key_format = KEY_FORMAT_2;
 
+    memset(&sd, 0, sizeof(sd));
     make_dir_stat_data (fs->fs_blocksize, key_format, get_key_dirid (key),
 			get_key_objectid (key), &ih, &sd);
 
@@ -1196,24 +1197,24 @@ int can_we_format_it (char * device_name, int force)
     dev_t rdev;
 
 
-    if (is_mounted (device_name)) {
+    if (misc_device_mounted(device_name) > 0) {
 	/* device looks mounted */
 	reiserfs_warning (stderr, "'%s' looks mounted.", device_name);
 	check_forcing_ask_confirmation (force);
     }
 
-    mode = get_st_mode (device_name);
-    rdev = get_st_rdev (device_name);
+    mode = misc_device_mode(device_name);
+    rdev = misc_device_rdev(device_name);
 
     if (!S_ISBLK (mode)) {
 	/* file is not a block device */
-	reiserfs_warning (stderr, "%s is not a block special device", device_name);
+	reiserfs_warning (stderr, "%s is not a block special device\n", device_name);
 	check_forcing_ask_confirmation (force);
     } else {
 	if ((IDE_DISK_MAJOR (MAJOR(rdev)) && MINOR(rdev) % 64 == 0) ||
 	    (SCSI_BLK_MAJOR (MAJOR(rdev)) && MINOR(rdev) % 16 == 0)) {
 	    /* /dev/hda or similar */
-	    reiserfs_warning (stderr, "%s is entire device, not just one partition!",
+	    reiserfs_warning (stderr, "%s is entire device, not just one partition!\n",
 		    device_name);
 	    check_forcing_ask_confirmation (force);
 	}
@@ -1228,16 +1229,20 @@ int create_badblock_bitmap (reiserfs_filsys_t * fs, char * badblocks_file) {
     __u32 blocknr;
     int count;
 
+    fs->fs_badblocks_bm = reiserfs_create_bitmap(get_sb_block_count(fs->fs_ondisk_sb));
+    reiserfs_bitmap_zero (fs->fs_badblocks_bm);
+
+    if (!badblocks_file)
+	return 0;
+    
     fd = fopen (badblocks_file, "r");
 
     if (fd == NULL) {
-        fprintf (stderr, "%s: could not open badblock file %s, work without it\n",
+        fprintf (stderr, "%s: Failed to open the given badblock file '%s'.\n\n",
         	__FUNCTION__, badblocks_file);
         return 1;
     }
 
-    fs->fs_badblocks_bm = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
-    reiserfs_bitmap_zero (fs->fs_badblocks_bm);
 
     while (!feof (fd)) {
 	if (fgets(buf, sizeof(buf), fd) == NULL)
@@ -1247,12 +1252,18 @@ int create_badblock_bitmap (reiserfs_filsys_t * fs, char * badblocks_file) {
 	if (count <= 0)
 	    continue;
 
-	if (blocknr < get_sb_block_count (fs->fs_ondisk_sb) && !not_data_block (fs, blocknr)) {
-	    reiserfs_bitmap_set_bit (fs->fs_badblocks_bm, blocknr);
+	if (blocknr >= get_sb_block_count (fs->fs_ondisk_sb)) {
+	    fprintf (stderr, "%s: block number (%u) points out of fs size "
+		     "(%u).\n", __FUNCTION__, blocknr, 
+		     get_sb_block_count(fs->fs_ondisk_sb));
+	} else if (not_data_block (fs, blocknr)) {
+	    fprintf (stderr, "%s: block number (%u) belongs to system "
+		     "reiserfs area. It cannot be relocated.\n", 
+		     __FUNCTION__, blocknr);
+	    return 1;
 	} else {
-	    fprintf (stderr, "%s: block number %u belongs to internal reiserfs structures.\n", 
-		__FUNCTION__, blocknr);
-	}
+	    reiserfs_bitmap_set_bit (fs->fs_badblocks_bm, blocknr);
+	} 
     }
 
     fclose (fd);
@@ -1260,13 +1271,98 @@ int create_badblock_bitmap (reiserfs_filsys_t * fs, char * badblocks_file) {
     return 0;
 }
 
-void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet) {
-    struct tree_balance tb;
-    struct key badblock_key = {-1, -1, {{0, 0}}};
+void badblock_list(reiserfs_filsys_t * fs, badblock_func_t action, void *data) {
     struct path badblock_path;
-    struct item_head * tmp_ih;
+    struct key rd_key = badblock_key;
+    struct key *key;
+    
+    badblock_path.path_length = ILLEGAL_PATH_ELEMENT_OFFSET;
+    set_type_and_offset (KEY_FORMAT_2, &badblock_key, 1, TYPE_INDIRECT);
+    
+    while (1) {
+	    if (reiserfs_search_by_key_4 (fs, &rd_key, &badblock_path) == IO_ERROR) {
+		fprintf (stderr, "%s: Some problems while searching by the key "
+			 "occured. Probably due to tree corruptions.\n",
+			 __FUNCTION__);
+		pathrelse (&badblock_path);
+		break;
+	    }
+		    
+
+	    if (get_blkh_nr_items (B_BLK_HEAD (get_bh (&badblock_path))) <= 
+		PATH_LAST_POSITION (&badblock_path)) 
+	    {
+		pathrelse (&badblock_path);
+		break;
+	    }
+
+	    rd_key = get_ih(&badblock_path)->ih_key;
+
+	    if (get_key_dirid(&rd_key) != BADBLOCK_DIRID || 
+		get_key_objectid(&rd_key) != BADBLOCK_OBJID ||
+		!KEY_IS_INDIRECT_KEY(&rd_key)) 
+	    {
+		pathrelse (&badblock_path);
+		break;
+	    }
+	
+	    if ((key = reiserfs_next_key(&badblock_path)))
+		rd_key = *key;
+	    else
+	        memset(&rd_key, 0, sizeof(rd_key));
+	    
+	    action(fs, &badblock_path, data);
+
+	    if (get_key_dirid(&rd_key) == 0)
+		break;
+    }
+}
+
+static void callback_badblock_rm(reiserfs_filsys_t *fs,
+				 struct path *badblock_path, 
+				 void *data) 
+{
+	struct tree_balance tb;
+	struct item_head * tmp_ih;
+
+	tmp_ih = get_ih(badblock_path);
+	memset (get_item (badblock_path), 0, get_ih_item_len (tmp_ih));
+
+	init_tb_struct (&tb, fs, badblock_path, 
+			-(IH_SIZE + get_ih_item_len(PATH_PITEM_HEAD(badblock_path))));
+
+	if (fix_nodes (M_DELETE, &tb, 0) != CARRY_ON)
+		die ("%s: fix_nodes failed", __FUNCTION__);
+
+	do_balance (/*tb.transaction_handle,*/ &tb, 0, 0, M_DELETE, 0/*zero num*/);
+}
+
+void mark_badblock(reiserfs_filsys_t *fs, 
+		   struct path *badblock_path, 
+		   void *data) 
+{
+	struct item_head *tmp_ih;
+	__u32 *ind_item;
+	__u32 i;
+
+	if (!fs->fs_badblocks_bm)
+	    create_badblock_bitmap(fs, NULL);
+	
+	tmp_ih = get_ih(badblock_path);
+	ind_item = (__u32 *)get_item(badblock_path);
+
+	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++, ind_item++) {
+		reiserfs_bitmap_set_bit(fs->fs_badblocks_bm, 
+					le32_to_cpu(*ind_item));
+	}
+	
+	pathrelse (badblock_path);
+}
+
+void add_badblock_list (reiserfs_filsys_t * fs, int replace) {
+    struct tree_balance tb;
+    struct path badblock_path;
     struct item_head badblock_ih;
-//    char item[UNFM_P_SIZE];
     __u32 ni;
 
     __u64 offset;
@@ -1276,42 +1372,16 @@ void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet) {
     	return;
 
     /* delete all items with badblock_key */
-    while (1) {
-	reiserfs_search_by_key_4 (fs, &badblock_key, &badblock_path);
-	
-	if (get_blkh_nr_items ( B_BLK_HEAD (get_bh(&badblock_path))) <= PATH_LAST_POSITION (&badblock_path)) {
-	    pathrelse (&badblock_path);
-            break;
-	}
+    if (replace)
+	badblock_list(fs, callback_badblock_rm, NULL);
 
-	tmp_ih = get_ih(&badblock_path);
-	
-	if (get_key_dirid(&tmp_ih->ih_key) != (__u32)-1 ||
-	    get_key_objectid(&tmp_ih->ih_key) != (__u32)-1 || !is_indirect_ih (tmp_ih)) {
-	    pathrelse (&badblock_path);
-	    break;
-	}
-
-	if (no_badblock_in_tree_yet)
-	    reiserfs_panic ("$s: bad block list found in the tree\n", __FUNCTION__);	
-	
-	memset (get_item (&badblock_path), 0, get_ih_item_len (tmp_ih));
-	
-	
-	init_tb_struct (&tb, fs, &badblock_path, -(IH_SIZE + get_ih_item_len(PATH_PITEM_HEAD (&badblock_path))));
-	
-	if (fix_nodes (M_DELETE, &tb, 0) != CARRY_ON)
-	    die ("%s: fix_nodes failed", __FUNCTION__);
-	
-	do_balance (/*tb.transaction_handle,*/ &tb, 0, 0, M_DELETE, 0/*zero num*/);
-    }
-
+    memset(&badblock_ih, 0, sizeof(badblock_ih));
     set_ih_key_format (&badblock_ih, KEY_FORMAT_2);
     set_ih_item_len (&badblock_ih, UNFM_P_SIZE);
     set_ih_free_space (&badblock_ih, 0);
     set_ih_location (&badblock_ih, 0);
-    set_key_dirid (&badblock_ih.ih_key, -1);
-    set_key_objectid (&badblock_ih.ih_key, -1);
+    set_key_dirid (&badblock_ih.ih_key, BADBLOCK_DIRID);
+    set_key_objectid (&badblock_ih.ih_key, BADBLOCK_OBJID);
     set_type (KEY_FORMAT_2, &badblock_ih.ih_key, TYPE_INDIRECT);
 
     j = 0;
@@ -1327,21 +1397,25 @@ void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet) {
 	set_offset (KEY_FORMAT_2, &badblock_ih.ih_key, offset);
 	ni = cpu_to_le32 (i);
 	
-	retval = usearch_by_position (fs, &badblock_ih.ih_key, key_format (&badblock_ih.ih_key), &badblock_path);
+	retval = usearch_by_position (fs, &badblock_ih.ih_key, 
+				      key_format(&badblock_ih.ih_key), 
+				      &badblock_path);
 
 	switch (retval) {
 	case (FILE_NOT_FOUND):
-		init_tb_struct (&tb, fs, &badblock_path, IH_SIZE + get_ih_item_len(&badblock_ih));
-		if (fix_nodes (/*tb.transaction_handle,*/ M_INSERT, &tb, &badblock_ih/*, body*/) != CARRY_ON)
-		    die ("reiserfsck_insert_item: fix_nodes failed");
-		do_balance (/*tb.transaction_handle,*/ &tb, &badblock_ih, (void *)&ni , M_INSERT, 0/*zero num*/);
-
-//		reiserfsck_insert_item (&badblock_path, &badblock_ih, item);
+		init_tb_struct (&tb, fs, &badblock_path, 
+				IH_SIZE + get_ih_item_len(&badblock_ih));
 		
+		if (fix_nodes (M_INSERT, &tb, &badblock_ih) != CARRY_ON)
+		    die ("reiserfsck_insert_item: fix_nodes failed");
+		
+		do_balance (&tb, &badblock_ih, (void *)&ni , M_INSERT, 0);
+
 		break;
 	
 	case (POSITION_NOT_FOUND):
-		/* take unformatted pointer from an indirect item */
+	case (POSITION_FOUND):
+		/* Insert the new item to the found position. */
 	
 		init_tb_struct (&tb, fs, &badblock_path, UNFM_P_SIZE);
 		
@@ -1349,10 +1423,6 @@ void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet) {
 		    die ("reiserfsck_paste_into_item: fix_nodes failed");
 
 		do_balance (&tb, 0, (const char *)&ni, M_PASTE, 0);
-						
-//		reiserfsck_file_write (&badblock_ih, item, 1 /* was in tree to avoid problems with bitmaps */);
-//		reiserfsck_paste_into_item (path, (const char *)&ni, UNFM_P_SIZE);
-		
 		break;
 	}
 	

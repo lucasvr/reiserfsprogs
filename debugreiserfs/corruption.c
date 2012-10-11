@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -621,8 +621,8 @@ void do_one_corruption_in_one_block (reiserfs_filsys_t * fs,
 int do_one_ih_corrupt (struct item_head * ih, unsigned int nr_bytes)
 {
 	if (nr_bytes > IH_SIZE) {
-		printf ("Bad byte number %u expected not more then %d\n", nr_bytes,
-				IH_SIZE);
+		printf ("Bad byte number %u expected not more then %lu\n", nr_bytes,
+				(unsigned long)IH_SIZE);
 		exit (1);
 	}
 
@@ -662,10 +662,13 @@ int do_one_ih_random_corrupt (struct item_head * ih)
 }
 
 /* Corrupt n bytes in block header */
-int corrupt_block_header (struct block_head * blkh, unsigned int offset, unsigned int bytes ) 
+int corrupt_block_header (struct block_head * blkh, unsigned int offset, 
+			  unsigned int bytes) 
 {
 	if ((offset + bytes) > BLKH_SIZE) {
-		printf ("Bad offset number: %u or bad bytes number: %u, the suumary value expected not more then %d\n", offset, bytes, BLKH_SIZE );
+		printf ("Bad offset number: %u or bad bytes number: %u, the suumary "
+			"value expected not more then %lu\n", offset, bytes, 
+			(unsigned long)BLKH_SIZE);
 		exit (1);
 	} 
 
@@ -685,7 +688,7 @@ void do_one_blkh_random_corrupt (struct buffer_head * bh)
 	struct block_head * blkh;
 	unsigned int from;
 	unsigned int count;
-	int i;
+	unsigned int i;
 
 	from = get_rand (0, BLKH_SIZE - 1);
 	count = get_rand (1, BLKH_SIZE);
@@ -777,7 +780,7 @@ void do_one_block_random_corrupt (struct buffer_head * bh)
 {
 	unsigned int from = get_rand (0, bh->b_size - 1);
 	unsigned int count = get_rand (1, bh->b_size);
-	int i;
+	unsigned int i;
 
 	if (from + count > bh->b_size)
 		count = bh->b_size - from;
@@ -798,11 +801,11 @@ void do_one_block_random_corrupt (struct buffer_head * bh)
 void do_bitmap_corruption (reiserfs_filsys_t * fs)
 {
 
-    unsigned long first = fs->fs_super_bh->b_blocknr + 1;
+	unsigned long first = fs->fs_super_bh->b_blocknr + 1;
 	unsigned long nr_bitmap_to_corrupt;
 	unsigned long block;
-    struct buffer_head * bh;
-	int i;
+	struct buffer_head * bh;
+	unsigned int i;
 
 	nr_bitmap_to_corrupt = (unsigned long)get_rand (1, get_sb_bmap_nr (fs->fs_ondisk_sb) - 1);
 
@@ -834,7 +837,7 @@ void do_ih_random_corrupt (reiserfs_filsys_t * fs,
 							  unsigned long nr_leaves_cr) 
 {
 	unsigned int nr_ih_cr;
-	int i, j;
+	unsigned int i, j;
 	struct buffer_head * bh;
 	struct item_head * ih;
 	unsigned long nr_leaves = 0;
@@ -941,7 +944,7 @@ void do_dir_random_corrupt (reiserfs_filsys_t * fs,
 							unsigned long nr_leaves_cr) 
 {
  	unsigned int nr_ih_cr;
-	int i, j;
+	unsigned int i, j;
 	struct buffer_head * bh;
 	struct item_head * ih;
 	unsigned long nr_leaves = 0;
@@ -1022,7 +1025,7 @@ void do_sd_random_corrupt (reiserfs_filsys_t * fs,
 						   unsigned long nr_leaves_cr) 
 {
  	unsigned int nr_ih_cr;
-	int i, j;
+	unsigned int i, j;
 	struct buffer_head * bh;
 	struct item_head * ih;
 	unsigned long nr_leaves = 0;
@@ -1103,7 +1106,7 @@ void do_ind_random_corrupt (reiserfs_filsys_t * fs,
 						   unsigned long nr_leaves_cr) 
 {
  	unsigned int nr_ih_cr;
-	int i, j;
+	unsigned int i, j;
 	struct buffer_head * bh;
 	struct item_head * ih;
 	unsigned long nr_leaves = 0;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -33,7 +33,7 @@ extern reiserfs_filsys_t * fs;
                       			tree nodes */
 #define DO_CORRUPT_ONE 		2 /* used to make filesystem corruption and then test fsck */
 #define DO_CORRUPT_FILE		3 /* used to make filesystem corruption and then test fsck, the list of corruption is set on the file */
-#define DO_RANDOM_CORRUPTION 4
+#define DO_RANDOM_CORRUPTION 	4
 #define DO_SCAN    		5
 #define DO_RECOVER 		6
 #define DO_TEST    		7
@@ -45,7 +45,7 @@ extern reiserfs_filsys_t * fs;
 #define DO_EXTRACT_BADBLOCKS	13
 #define DO_FILE_MAP 		14
 #define DO_ZERO_BITMAP		15
-
+#define DO_NOTHING		16
 
 
 /*first bits are in reiserfs_fs.b*/

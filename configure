@@ -308,7 +308,7 @@ ac_includes_default="\
 # include <unistd.h>
 #endif"
 
-ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS INSTALL_PROGRAM INSTALL_SCRIPT INSTALL_DATA CYGPATH_W PACKAGE VERSION ACLOCAL AUTOCONF AUTOMAKE AUTOHEADER MAKEINFO AMTAR install_sh STRIP ac_ct_STRIP INSTALL_STRIP_PROGRAM AWK SET_MAKE CC CFLAGS LDFLAGS CPPFLAGS ac_ct_CC EXEEXT OBJEXT DEPDIR am__include am__quote AMDEP_TRUE AMDEP_FALSE AMDEPBACKSLASH CCDEPMODE am__fastdepCC_TRUE am__fastdepCC_FALSE RANLIB ac_ct_RANLIB CPP EGREP LIBOBJS LTLIBOBJS'
+ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS INSTALL_PROGRAM INSTALL_SCRIPT INSTALL_DATA CYGPATH_W PACKAGE VERSION ACLOCAL AUTOCONF AUTOMAKE AUTOHEADER MAKEINFO AMTAR install_sh STRIP ac_ct_STRIP INSTALL_STRIP_PROGRAM AWK SET_MAKE CC CFLAGS LDFLAGS CPPFLAGS ac_ct_CC EXEEXT OBJEXT DEPDIR am__include am__quote AMDEP_TRUE AMDEP_FALSE AMDEPBACKSLASH CCDEPMODE am__fastdepCC_TRUE am__fastdepCC_FALSE RANLIB ac_ct_RANLIB UUID_LIBS CPP EGREP LIBOBJS LTLIBOBJS'
 ac_subst_files=''
 
 # Initialize some variables set by options.
@@ -1264,6 +1264,9 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
+
+
+
 am__api_version="1.7"
 ac_aux_dir=
 for ac_dir in $srcdir $srcdir/.. $srcdir/../..; do
@@ -1528,7 +1531,7 @@ fi
 
 # Define the identity of the package.
  PACKAGE=reiserfsprogs
- VERSION=3.6.9
+ VERSION=3.6.13
 
 
 cat >>confdefs.h <<_ACEOF
@@ -2770,6 +2773,77 @@ fi
 
 
 
+# Check for LIBUUID
+
+
+echo "$as_me:$LINENO: checking for uuid_generate in -luuid" >&5
+echo $ECHO_N "checking for uuid_generate in -luuid... $ECHO_C" >&6
+if test "${ac_cv_lib_uuid_uuid_generate+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-luuid  $LIBS"
+cat >conftest.$ac_ext <<_ACEOF
+#line $LINENO "configure"
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>conftest.$ac_ext
+cat >>conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+/* Override any gcc2 internal prototype to avoid an error.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+/* We use char because int might match the return type of a gcc2
+   builtin and then its argument prototype would still apply.  */
+char uuid_generate ();
+int
+main ()
+{
+uuid_generate ();
+  ;
+  return 0;
+}
+_ACEOF
+rm -f conftest.$ac_objext conftest$ac_exeext
+if { (eval echo "$as_me:$LINENO: \"$ac_link\"") >&5
+  (eval $ac_link) 2>&5
+  ac_status=$?
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); } &&
+         { ac_try='test -s conftest$ac_exeext'
+  { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); }; }; then
+  ac_cv_lib_uuid_uuid_generate=yes
+else
+  echo "$as_me: failed program was:" >&5
+sed 's/^/| /' conftest.$ac_ext >&5
+
+ac_cv_lib_uuid_uuid_generate=no
+fi
+rm -f conftest.$ac_objext conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+echo "$as_me:$LINENO: result: $ac_cv_lib_uuid_uuid_generate" >&5
+echo "${ECHO_T}$ac_cv_lib_uuid_uuid_generate" >&6
+if test $ac_cv_lib_uuid_uuid_generate = yes; then
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBUUID 1
+_ACEOF
+
+  LIBS="-luuid $LIBS"
+
+else
+  { echo "$as_me:$LINENO: WARNING: libuuid could not be found" >&5
+echo "$as_me: WARNING: libuuid could not be found" >&2;}
+fi
+
+UUID_LIBS="$LIBS"
+
 
 ac_ext=c
 ac_cpp='$CPP $CPPFLAGS'
@@ -3249,7 +3323,8 @@ done
 
 
 
-for ac_header in fcntl.h limits.h malloc.h sys/ioctl.h unistd.h
+
+for ac_header in fcntl.h limits.h malloc.h sys/ioctl.h unistd.h uuid/uuid.h
 do
 as_ac_Header=`echo "ac_cv_header_$ac_header" | $as_tr_sh`
 if eval "test \"\${$as_ac_Header+set}\" = set"; then
@@ -4252,11 +4327,8 @@ echo "$as_me:$LINENO: checking for CREDITS" >&5
 echo $ECHO_N "checking for CREDITS... $ECHO_C" >&6
 
 if test "$cross_compiling" = yes; then
-  { { echo "$as_me:$LINENO: error: cannot run test program while cross compiling
-See \`config.log' for more details." >&5
-echo "$as_me: error: cannot run test program while cross compiling
-See \`config.log' for more details." >&2;}
-   { (exit 1); exit 1; }; }
+  echo $ac_n "cross compiling; assumed OK... $ac_c"
+
 else
   cat >conftest.$ac_ext <<_ACEOF
 #line $LINENO "configure"
@@ -4266,7 +4338,6 @@ cat confdefs.h >>conftest.$ac_ext
 cat >>conftest.$ac_ext <<_ACEOF
 /* end confdefs.h.  */
 
-#define _GNU_SOURSE
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -4309,7 +4380,7 @@ int main (void) {
 	    count++;
 	} else {
 	    if (!start)
-		fprintf(fout, "\t\\\" "\n");
+		fprintf(fout, "\\t\\\\\\n");
 	    else if (start == 1)
 		fprintf(fout, ",\n\n");
 
@@ -4355,8 +4426,7 @@ fi
 rm -f core core.* *.core gmon.out bb.out conftest$ac_exeext conftest.$ac_objext conftest.$ac_ext
 fi
 
-
-                                                                                                              ac_config_files="$ac_config_files include/Makefile mkreiserfs/Makefile resize_reiserfs/Makefile fsck/Makefile lib/Makefile Makefile reiserfscore/Makefile debugreiserfs/Makefile tune/Makefile tests/Makefile tests/PROGS/Makefile"
+                                                                                          ac_config_files="$ac_config_files include/Makefile mkreiserfs/Makefile resize_reiserfs/Makefile fsck/Makefile lib/Makefile Makefile reiserfscore/Makefile debugreiserfs/Makefile tune/Makefile"
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
 # tests run on this system so they can be shared between configure
@@ -4914,8 +4984,6 @@ do
   "reiserfscore/Makefile" ) CONFIG_FILES="$CONFIG_FILES reiserfscore/Makefile" ;;
   "debugreiserfs/Makefile" ) CONFIG_FILES="$CONFIG_FILES debugreiserfs/Makefile" ;;
   "tune/Makefile" ) CONFIG_FILES="$CONFIG_FILES tune/Makefile" ;;
-  "tests/Makefile" ) CONFIG_FILES="$CONFIG_FILES tests/Makefile" ;;
-  "tests/PROGS/Makefile" ) CONFIG_FILES="$CONFIG_FILES tests/PROGS/Makefile" ;;
   "depfiles" ) CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
   "include/config.h" ) CONFIG_HEADERS="$CONFIG_HEADERS include/config.h" ;;
   *) { { echo "$as_me:$LINENO: error: invalid argument: $ac_config_target" >&5
@@ -5039,6 +5107,7 @@ s,@am__fastdepCC_TRUE@,$am__fastdepCC_TRUE,;t t
 s,@am__fastdepCC_FALSE@,$am__fastdepCC_FALSE,;t t
 s,@RANLIB@,$RANLIB,;t t
 s,@ac_ct_RANLIB@,$ac_ct_RANLIB,;t t
+s,@UUID_LIBS@,$UUID_LIBS,;t t
 s,@CPP@,$CPP,;t t
 s,@EGREP@,$EGREP,;t t
 s,@LIBOBJS@,$LIBOBJS,;t t
@@ -5663,3 +5732,6 @@ if test "$no_create" != yes; then
   $ac_cs_success || { (exit 1); exit 1; }
 fi
 
+
+echo
+echo Type \'make\' to compile reiserfsprogs

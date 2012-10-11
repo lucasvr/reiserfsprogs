@@ -1,4 +1,0 @@
-SUBDIRS = PROGS
-
-sbin_PROGRAMS = 
-

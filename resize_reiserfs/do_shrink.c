@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -111,6 +111,12 @@ static unsigned long move_formatted_block(reiserfs_filsys_t * fs, unsigned long 
 		
 		for (i = 0; i < B_NR_ITEMS(bh); i++) {
 			ih = B_N_PITEM_HEAD(bh, i);
+			
+			/* skip the bad blocks. */
+			if (get_key_objectid (&ih->ih_key) == BADBLOCK_OBJID &&
+			    get_key_dirid (&ih->ih_key) == BADBLOCK_DIRID)
+				continue;
+			
 			if (is_indirect_ih(ih)) {
 				__u32 * indirect;
 
@@ -163,14 +169,27 @@ static unsigned long move_formatted_block(reiserfs_filsys_t * fs, unsigned long 
 	return new_blocknr;
 }
 
-int shrink_fs(reiserfs_filsys_t * fs, unsigned long blocks)
+int shrink_fs(reiserfs_filsys_t * fs, long long int blocks)
 {
 	unsigned long n_root_block;
 	unsigned int bmap_nr_new;
-
+	unsigned long bad_count;
 	
 	ondisk_sb = fs->fs_ondisk_sb;
 	
+	
+	bmap_nr_new = (blocks - 1) / (8 * fs->fs_blocksize) + 1;
+
+	/* is shrinking possible ? */
+	if (get_sb_block_count(ondisk_sb) - blocks > 
+	    get_sb_free_blocks(ondisk_sb) + get_sb_bmap_nr(ondisk_sb) - 
+	    bmap_nr_new) 
+	{
+	    fprintf(stderr, "resize_reiserfs: can\'t shrink fs; too many "
+		"blocks already allocated\n");
+	    return -1;
+	}
+
 	/* warn about alpha version */
 	{
 		int c;
@@ -185,18 +204,6 @@ int shrink_fs(reiserfs_filsys_t * fs, unsigned long blocks)
 		c = getchar();
 		if (c != 'y' && c != 'Y')
 			exit(1);
-	}
-
-	bmap_nr_new = (blocks - 1) / (8 * fs->fs_blocksize) + 1;
-
-	/* is shrinking possible ? */
-	if (get_sb_block_count(ondisk_sb) - blocks > 
-	    get_sb_free_blocks(ondisk_sb) + get_sb_bmap_nr(ondisk_sb) - 
-	    bmap_nr_new) 
-	{
-	    fprintf(stderr, "resize_reiserfs: can\'t shrink fs; too many "
-		"blocks already allocated\n");
-	    return -1;
 	}
 
 	reiserfs_reopen(fs, O_RDWR);
@@ -249,7 +256,6 @@ int shrink_fs(reiserfs_filsys_t * fs, unsigned long blocks)
 		    (unsigned long)total_node_cnt, blocks_used);
 	}
 
-#if 1
 	{
 	    unsigned long l;
 
@@ -263,13 +269,23 @@ int shrink_fs(reiserfs_filsys_t * fs, unsigned long blocks)
 	    }
 	    printf("\n");
 	}
-#endif
 
+	badblock_list(fs, mark_badblock, NULL);
+	
+	if (fs->fs_badblocks_bm) {
+		bad_count = reiserfs_bitmap_ones(fs->fs_badblocks_bm);
+		reiserfs_shrink_bitmap (fs->fs_badblocks_bm, blocks);
+		add_badblock_list(fs, 1);
+		bad_count -= reiserfs_bitmap_ones(fs->fs_badblocks_bm);
+	} else
+		bad_count = 0;
+	
 	reiserfs_shrink_bitmap (fs->fs_bitmap2, blocks);
 
 	set_sb_free_blocks (ondisk_sb, get_sb_free_blocks(ondisk_sb)
 			    - (get_sb_block_count(ondisk_sb) - blocks)
-			    + (get_sb_bmap_nr(ondisk_sb) - bmap_nr_new));
+			    + (get_sb_bmap_nr(ondisk_sb) - bmap_nr_new)
+			    + bad_count);
 	set_sb_block_count (ondisk_sb, blocks);
 	set_sb_bmap_nr (ondisk_sb, bmap_nr_new);
 

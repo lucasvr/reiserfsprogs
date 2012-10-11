@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2002-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -481,10 +481,11 @@ int reiserfs_open_journal (reiserfs_filsys_t * fs, char * j_filename, int flags)
     sb = fs->fs_ondisk_sb;
 
     if (!j_filename) {
+	/*
         if (is_reiserfs_jr_magic_string (sb)) {
-            /* create a special file to access journal */
+            // create a special file to access journal
             return 1;
-        } 
+        } */
 	
 	j_filename = fs->fs_file_name;
     } else if (!is_reiserfs_jr_magic_string (sb)) {
@@ -492,7 +493,7 @@ int reiserfs_open_journal (reiserfs_filsys_t * fs, char * j_filename, int flags)
 	if (strcmp (j_filename, fs->fs_file_name)) {
 	    reiserfs_warning (stderr, "Filesystem with standard journal found, "
 		"wrong name of specified journal device %s \n", j_filename);
-	    return 1;
+	    return 2;
 	}
     }
 
@@ -503,9 +504,9 @@ int reiserfs_open_journal (reiserfs_filsys_t * fs, char * j_filename, int flags)
     asprintf (&fs->fs_j_file_name, "%s", j_filename);
     
     if (get_jp_journal_size(sb_jp(sb)) < JOURNAL_MIN_SIZE) {
-	reiserfs_warning (stderr, "Journal of (%lu) block size found on specified journal "
-	    "device %s.\nMust be not less than (%lu).\nRun --rebuild-sb to rebuild journal "
-	    "parameters.\n", get_jp_journal_size (sb_jp (sb)) + 1, j_filename, 
+	reiserfs_warning (stderr, "Journal of (%lu) block size found on "
+	    "specified journal device %s.\nMust be not less than (%lu).\n",
+	    get_jp_journal_size (sb_jp (sb)) + 1, j_filename, 
 	    JOURNAL_MIN_SIZE + 1);
 	return 1;
     }
@@ -513,10 +514,9 @@ int reiserfs_open_journal (reiserfs_filsys_t * fs, char * j_filename, int flags)
     count = count_blocks (j_filename, fs->fs_blocksize);
     if (get_jp_journal_1st_block (sb_jp (sb)) + get_jp_journal_size (sb_jp (sb)) + 1 > count) {
 	reiserfs_warning (stderr, "Detected journal on specified device %s does not fit to "
-	    "the device.\nStart block (%lu) + size (%lu) less than device size (%lu).\n"
-	    "Run --rebuild-sb to rebuild journal parameters.\n", 
-	    get_jp_journal_1st_block(sb_jp (sb)), get_jp_journal_size(sb_jp (sb)) + 1,
-	    count);
+	    "the device.\nStart block (%lu) + size (%lu) less than device size (%lu).\n", 
+	    j_filename, get_jp_journal_1st_block(sb_jp (sb)), 
+	    get_jp_journal_size(sb_jp (sb)) + 1, count);
 	return 1;
     }
     
@@ -633,9 +633,9 @@ int reiserfs_create_journal(
 
     asprintf (&fs->fs_j_file_name, "%s", j_device);
 
-    if (len < JOURNAL_MIN_SIZE) {
+    if (len < JOURNAL_MIN_SIZE + 1) {
 	reiserfs_warning (stderr, "WARNING: Journal size (%u) is less, than "
-	    "minimal supported journal size (%u).", len, JOURNAL_MIN_SIZE + 1);
+	    "minimal supported journal size (%u).\n", len, JOURNAL_MIN_SIZE + 1);
         return 0;
     }
     /* get journal header */

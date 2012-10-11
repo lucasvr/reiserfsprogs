@@ -1,5 +1,5 @@
 /* 
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -31,7 +31,7 @@
 
 
 #define print_usage_and_exit() {\
- fprintf (stderr, "Usage: %s  [-s[+|-]#[G|M|K]] [-fqv] device\n\n", argv[0]);\
+ fprintf (stderr, "Usage: %s  [-s[+|-]#[G|M|K]] [-fqvV] device\n\n", argv[0]);\
  exit(16);\
 }
 
@@ -47,7 +47,7 @@ extern int opt_nowrite;
 extern int opt_safe;
 
 /* fe.c */
-int resize_fs_online(char * devname, unsigned long blocks);
+extern int resize_fs_online(char * devname, long long int blocks);
 
 /* do_shrink.c */
-int shrink_fs(reiserfs_filsys_t *, unsigned long blocks);
+extern int shrink_fs(reiserfs_filsys_t *, long long int blocks);

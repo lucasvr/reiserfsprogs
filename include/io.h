@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -55,7 +55,6 @@ struct buffer_head * find_buffer (int dev, unsigned long block, unsigned long si
 struct buffer_head * get_hash_table(dev_t dev, unsigned long block, int size);
 struct buffer_head * bread (int dev, unsigned long block, size_t size);
 struct buffer_head * reiserfs_bread (int dev, unsigned long block, int size, int *repeat);
-int valid_offset (int fd, loff_t offset);
 int bwrite (struct buffer_head * bh);
 void brelse (struct buffer_head * bh);
 void bforget (struct buffer_head * bh);
@@ -67,6 +66,3 @@ void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * log);
 void flush_buffers (int);
 void free_buffers (void);
 void invalidate_buffers (int);
-
-
-int user_confirmed (FILE * fp, char * q, char * yes);

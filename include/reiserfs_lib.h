@@ -1,5 +1,5 @@
 /*
- *  Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ *  Copyright 2000-2004 by Hans Reiser, licensing governed by 
  *  reiserfsprogs/README
  */
 
@@ -7,8 +7,10 @@
 #define REISERFS_LIB_H
 
 
-typedef struct reiserfs_filsys reiserfs_filsys_t;
+#define BADBLOCK_DIRID	1
+#define BADBLOCK_OBJID  (__u32)-1
 
+typedef struct reiserfs_filsys reiserfs_filsys_t;
 
 #include "reiserfs_fs.h"
 
@@ -86,8 +88,6 @@ void reiserfs_close (reiserfs_filsys_t *);
 void reiserfs_reopen (reiserfs_filsys_t *, int flags);
 int is_opened_rw (reiserfs_filsys_t * fs);
 
-struct key * get_next_key_2 (struct path * path);
-
 /*
 void reiserfs_read_bitmap_blocks (reiserfs_filsys_t *);
 void reiserfs_free_bitmap_blocks (reiserfs_filsys_t *);
@@ -146,9 +146,14 @@ void make_sure_root_dir_exists (reiserfs_filsys_t * fs,
 				void (*modyfy_item)(struct item_head *, void *),
 				int ih_flags);
 
+typedef void (*badblock_func_t) (reiserfs_filsys_t *fs, 
+				 struct path *badblock_path, 
+				 void *data);
+
+void mark_badblock(reiserfs_filsys_t *fs, struct path *badblock_path, void *data);
 int create_badblock_bitmap (reiserfs_filsys_t * fs, char * badblocks_file);
 void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet);
-
+void badblock_list(reiserfs_filsys_t * fs, badblock_func_t action, void *data);
 
 extern struct key root_dir_key;
 extern struct key parent_root_dir_key;

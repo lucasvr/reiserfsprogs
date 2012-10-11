@@ -1,14 +1,12 @@
 /*
- * Copyright 1996-2003 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
 #include "fsck.h"
 #include <getopt.h>
 #include <sys/resource.h>
-
-#include "../include/config.h"
-#include "../version.h"
+#include <sys/mman.h>
 
 extern int screen_width;
 extern int screen_savebuffer_len;
@@ -18,7 +16,7 @@ reiserfs_filsys_t * fs;
 char * badblocks_file;
 
 #define print_usage_and_exit() {						\
-fsck_progress ("\nUsage: %s [mode] [options] "					\
+fsck_progress ("Usage: %s [mode] [options] "					\
 " device\n"									\
 "\n"										\
 "Modes:\n"									\
@@ -32,6 +30,7 @@ fsck_progress ("\nUsage: %s [mode] [options] "					\
 "  --clean-attributes\t\tclean garbage in reserved fields in StatDatas \n"	\
 "Options:\n"									\
 "  -j | --journal device\t\tspecify journal if relocated\n"			\
+"  -B | --badblocks file\t\tfile with list of all bad blocks on the fs\n"			\
 "  -l | --logfile file\t\tmake fsck to complain to specifed file\n"		\
 "  -n | --nolog\t\t\tmake fsck to not complain\n"				\
 "  -z | --adjust-size\t\tfix file sizes to real size\n"				\
@@ -49,9 +48,6 @@ fsck_progress ("\nUsage: %s [mode] [options] "					\
 }
 
 /*
-"  -B badblocks-file\n"\
-"  \t\t\tlist of all bad blocks on the fs\n"\
-
    -B works with --fix-fixable
         fixes indirect pointers pointed to
 	badblocks, adds badblocks to badblock list in fs.
@@ -101,6 +97,7 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 	    {"clean-attributes", no_argument, &mode, FSCK_CLEAN_ATTRIBUTES},
 	    /* options */
 	    {"logfile", required_argument, 0, 'l'},
+	    {"badblocks", required_argument, 0, 'B'},
 	    {"interactive", no_argument, 0, 'i'},
 	    {"adjust-size", no_argument, 0, 'z'},
 	    {"quiet", no_argument, 0, 'q'},
@@ -124,7 +121,7 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 	    {"journal", required_argument, 0, 'j'},
 	    {"no-journal-available", no_argument, &flag, OPT_SKIP_JOURNAL},
 	    
-//	    {"bad-block-file", required_argument, 0, 'B'},
+	    {"bad-block-file", required_argument, 0, 'B'},
 
 	    /* start reiserfsck in background and exit */
 	    {"background", no_argument, 0, 'g'},
@@ -133,7 +130,7 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 	};
 	int option_index;
       
-	c = getopt_long (argc, argv, "iql:nb:Szd:R:h:j:gafVrpyt:",
+	c = getopt_long (argc, argv, "iql:nb:Szd:R:h:j:gafVrpyt:B:",
 			 options, &option_index);
 	if (c == -1)
 	    break;
@@ -280,9 +277,13 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
             print_usage_and_exit();        
     }
 
-    if ((data->options & BADBLOCKS_FILE) && ((mode == FSCK_SB)
-    	|| (mode == FSCK_CLEAN_ATTRIBUTES) || (mode == FSCK_CHECK)))
+    if ((data->options & BADBLOCKS_FILE) && mode != FSCK_REBUILD && 
+	mode != FSCK_FIX_FIXABLE)
+    {
+	fprintf(stderr, "Badblocks can be specified with --fix-fixable or "
+		"--rebuild-tree only.\n");
 	print_usage_and_exit();
+    }
 
     if ((mode == FSCK_REBUILD) && (data->options & OPT_YES))
 	data->options &= ~OPT_YES;
@@ -296,36 +297,36 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 
 
 #define REBUILD_WARNING \
-"  *************************************************************\n\
-  ** Do not  run  the  program  with  --rebuild-tree  unless **\n\
-  ** something is broken and MAKE A BACKUP  before using it. **\n\
-  ** If you have bad sectors on a drive  it is usually a bad **\n\
-  ** idea to continue using it. Then you probably should get **\n\
-  ** a working hard drive, copy the file system from the bad **\n\
-  ** drive  to the good one -- dd_rescue is  a good tool for **\n\
-  ** that -- and only then run this program.                 **\n\
-  ** If you are using the latest reiserfsprogs and  it fails **\n\
-  ** please  email bug reports to reiserfs-list@namesys.com, **\n\
-  ** providing  as  much  information  as  possible --  your **\n\
-  ** hardware,  kernel,  patches,  settings,  all reiserfsck **\n\
-  ** messages  (including version),  the reiserfsck logfile, **\n\
-  ** check  the  syslog file  for  any  related information. **\n\
-  ** If you would like advice on using this program, support **\n\
-  ** is available  for $25 at  www.namesys.com/support.html. **\n\
-  *************************************************************\n\
+"*************************************************************\n\
+** Do not  run  the  program  with  --rebuild-tree  unless **\n\
+** something is broken and MAKE A BACKUP  before using it. **\n\
+** If you have bad sectors on a drive  it is usually a bad **\n\
+** idea to continue using it. Then you probably should get **\n\
+** a working hard drive, copy the file system from the bad **\n\
+** drive  to the good one -- dd_rescue is  a good tool for **\n\
+** that -- and only then run this program.                 **\n\
+** If you are using the latest reiserfsprogs and  it fails **\n\
+** please  email bug reports to reiserfs-list@namesys.com, **\n\
+** providing  as  much  information  as  possible --  your **\n\
+** hardware,  kernel,  patches,  settings,  all reiserfsck **\n\
+** messages  (including version),  the reiserfsck logfile, **\n\
+** check  the  syslog file  for  any  related information. **\n\
+** If you would like advice on using this program, support **\n\
+** is available  for $25 at  www.namesys.com/support.html. **\n\
+*************************************************************\n\
 \nWill rebuild the filesystem (%s) tree\n"
 
 #define START_WARNING \
-"  *************************************************************\n\
-  ** If you are using the latest reiserfsprogs and  it fails **\n\
-  ** please  email bug reports to reiserfs-list@namesys.com, **\n\
-  ** providing  as  much  information  as  possible --  your **\n\
-  ** hardware,  kernel,  patches,  settings,  all reiserfsck **\n\
-  ** messages  (including version),  the reiserfsck logfile, **\n\
-  ** check  the  syslog file  for  any  related information. **\n\
-  ** If you would like advice on using this program, support **\n\
-  ** is available  for $25 at  www.namesys.com/support.html. **\n\
-  *************************************************************\n\
+"*************************************************************\n\
+** If you are using the latest reiserfsprogs and  it fails **\n\
+** please  email bug reports to reiserfs-list@namesys.com, **\n\
+** providing  as  much  information  as  possible --  your **\n\
+** hardware,  kernel,  patches,  settings,  all reiserfsck **\n\
+** messages  (including version),  the reiserfsck logfile, **\n\
+** check  the  syslog file  for  any  related information. **\n\
+** If you would like advice on using this program, support **\n\
+** is available  for $25 at  www.namesys.com/support.html. **\n\
+*************************************************************\n\
 \n"
 
 
@@ -530,7 +531,7 @@ static void reset_super_block (reiserfs_filsys_t * fs)
 		set_sb_reserved_for_journal (sb, 0);
 	    
 		set_jp_journal_dev (sb_jp(sb), 0);
-		set_jp_journal_magic (sb_jp(sb) ,0);
+		set_jp_journal_magic (sb_jp(sb), get_random());
 		set_jp_journal_1st_block (sb_jp(sb), get_journal_start_must (fs));
 		set_jp_journal_size (sb_jp(sb),
 		    journal_default_size (fs->fs_super_bh->b_blocknr, fs->fs_blocksize));	    
@@ -545,7 +546,8 @@ static void reset_super_block (reiserfs_filsys_t * fs)
 		set_jp_journal_max_trans_age (sb_jp(sb), advise_journal_max_trans_age());
 		
 		set_jp_journal_dev (&jh->jh_journal, 0);
-		set_jp_journal_magic (&jh->jh_journal ,0);
+		set_jp_journal_magic (&jh->jh_journal, 
+				      get_jp_journal_magic(sb_jp(sb)));
 		set_jp_journal_1st_block (&jh->jh_journal, 
 		    get_jp_journal_1st_block(sb_jp(sb)));
 		set_jp_journal_size (&jh->jh_journal, get_jp_journal_size(sb_jp(sb)));
@@ -722,9 +724,10 @@ static void reiserfsck_replay_journal (reiserfs_filsys_t * fs) {
     fs->fs_ondisk_sb = on_place_sb;
 }
 
-static void the_end (reiserfs_filsys_t * fs)
+static int the_end (reiserfs_filsys_t * fs)
 {
     struct reiserfs_super_block * sb;
+    int ret = EXIT_FIXED;
 
     sb = fs->fs_ondisk_sb;
 
@@ -744,41 +747,85 @@ static void the_end (reiserfs_filsys_t * fs)
     mark_filesystem_consistent (fs);
     clear_buffer_do_not_flush (fs->fs_super_bh);
 
+    if (fsck_data(fs)->mounted == MF_RO) {
+	reiserfs_warning(stderr, "\nThe partition is mounted ro. It "
+			 "is better to umount and mount it again.\n\n");
+	ret = EXIT_REBOOT;
+    }
+
     /* write all dirty blocks */
     fsck_progress ("Syncing..");
     fs->fs_dirt = 1;
     clean_after_dma_check(fs->fs_dev, &dma_info);
     reiserfs_close (fs);
     fsck_progress ("finished\n");
+
+    return ret;
 }
 
+/* check umounted or read-only mounted filesystems only */
+static void prepare_fs_for_check(reiserfs_filsys_t * fs) {
+    /* The method could be called from auto_check already. */
+    if (fs->fs_flags == O_RDWR) 
+	return;
 
-static void rebuild_tree (reiserfs_filsys_t * fs)
-{
+    reiserfs_reopen (fs, O_RDWR);
+    
+    fsck_data(fs)->mounted = misc_device_mounted(fs->fs_file_name);
+    
+    if (fsck_data(fs)->mounted > 0) {
+	if (fsck_data(fs)->mounted == MF_RW) {
+	    fsck_progress ("Partition %s is mounted with write permissions, "
+		"cannot check it\n", fs->fs_file_name);
+	    reiserfs_close(fs);
+	    exit(EXIT_USER);
+	}
+	
+	/* If not CHECK mode, lock the process in the memory. */
+	if (fsck_mode (fs) != FSCK_CHECK) {
+	    if (mlockall(MCL_CURRENT)) {
+		    reiserfs_warning (stderr, "Failed to lock the process to "
+				      "fsck the mounted ro partition. %s.\n", 
+				      strerror(errno));
+		    exit(EXIT_OPER);
+	    }
+	}
+	
+	if (!reiserfs_journal_opened (fs)) {
+	    /* just to make sure */
+	    reiserfs_panic ("Journal is not opened");
+	} else if (reiserfs_journal_params_check(fs)) {
+	    reiserfs_close (fs);
+	    exit(EXIT_FATAL);
+	}
+	
+	fsck_progress ("Filesystem seems mounted read-only. Skipping journal "
+	    "replay.\n");
+
+	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
+	    fsck_progress ("--fix-fixable ignored\n");
+	    fsck_mode (fs) = FSCK_CHECK;
+	}
+    } else if (!fsck_skip_journal (fs)) {
+	if (reiserfs_journal_params_check(fs)) {
+	    reiserfs_close (fs);
+	    exit(EXIT_FATAL);
+	}
+	
+	/* filesystem is not mounted, replay journal before checking */
+        reiserfsck_replay_journal (fs);
+    }
+}
+
+static void rebuild_tree (reiserfs_filsys_t * fs) {
     time_t t;
     int ret;
-
-    if (is_mounted (fs->fs_file_name)) {
-	fsck_progress ("rebuild_tree: Cannot rebuild tree of mounted filesystem\n");
-	exit(EXIT_USER);
-    }
 
     init_rollback_file (state_rollback_file(fs), &fs->fs_blocksize, 
 	fsck_data(fs)->log);
     
-    reiserfs_reopen (fs, O_RDWR);
-
-    if (!fsck_skip_journal (fs)) {
-       if (reiserfs_journal_params_check(fs)) {
-	    reiserfs_close(fs);
-	    exit(EXIT_FATAL);
-	}
-
-	/* rebuild starts with journal replaying */
-	if (!fsck_skip_journal (fs))
-	    reiserfsck_replay_journal (fs);
-    }
-
+    prepare_fs_for_check(fs);
+    
     ret = reiserfs_open_ondisk_bitmap (fs);
     if (ret < 0) {
         fsck_progress ("reiserfsck: Could not open bitmap\n");
@@ -818,67 +865,16 @@ static void rebuild_tree (reiserfs_filsys_t * fs)
 	/* 4. look for unaccessed items in the leaves */
 	pass_4_check_unaccessed_items ();
 	
-	the_end (fs);
+	ret = the_end (fs);
     }
 
     close_rollback_file ();
-    
+       
     time (&t);
     fsck_progress ("###########\n"
 		   "reiserfsck finished at %s"
 		   "###########\n", ctime (&t));
-    exit (EXIT_OK);
-}
-
-
-/* check umounted or read-only mounted filesystems only */
-static void prepare_fs_for_check(reiserfs_filsys_t * fs) 
-{
-    /* The method could be called from auto_check already. */
-    if (fs->fs_flags == O_RDWR) 
-	return;
-
-    reiserfs_reopen (fs, O_RDWR);
-    
-    if (is_mounted (fs->fs_file_name)) {
-	/* filesystem seems mounted. */
-        if (fsck_mode (fs) == FSCK_CLEAN_ATTRIBUTES) {
-	    fsck_progress ("Partition %s is mounted, cannot clean attributes "
-		"on mounted device\n", fs->fs_file_name);
-	    reiserfs_close (fs);
-	    exit(EXIT_USER);
-        }
-
-	if (!is_mounted_read_only (fs->fs_file_name)) {
-	    fsck_progress ("Partition %s is mounted with write permissions, "
-		"cannot check it\n", fs->fs_file_name);
-	    reiserfs_close (fs);
-	    exit(EXIT_USER);
-	}
-	if (!reiserfs_journal_opened (fs)) {
-	    /* just to make sure */
-	    reiserfs_panic ("Journal is not opened");
-	} else if (reiserfs_journal_params_check(fs)) {
-	    reiserfs_close (fs);
-	    exit(EXIT_FATAL);
-	}
-	
-	fsck_progress ("Filesystem seems mounted read-only. Skipping journal "
-	    "replay.\n");
-
-	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
-	    fsck_progress ("--fix-fixable ignored\n");
-	    fsck_mode (fs) = FSCK_CHECK;
-	}
-    } else if (!fsck_skip_journal (fs)) {
-	if (reiserfs_journal_params_check(fs)) {
-	    reiserfs_close (fs);
-	    exit(EXIT_FATAL);
-	}
-	
-	/* filesystem is not mounted, replay journal before checking */
-        reiserfsck_replay_journal (fs);
-    }
+    exit (ret);
 }
 
 static void clean_attributes (reiserfs_filsys_t * fs) {
@@ -990,6 +986,7 @@ static int auto_check (reiserfs_filsys_t *fs) {
     }
 
     check_fs_tree (fs);
+    
     if (fsck_data (fs)->check.fatal_corruptions) {		
 	fprintf(stderr, "%lu fatal corruption(s) found in the root block. Running "
 	    "with the --rebuild-tree is required.\n", 
@@ -1096,12 +1093,21 @@ static void check_fs (reiserfs_filsys_t * fs)
     } else {
 	fsck_progress ("No corruptions found\n");
 	stage_report (5, fs);
-	retval = fsck_mode(fs) == FSCK_CHECK ? EXIT_OK : EXIT_FIXED;
+
+	if (fsck_mode(fs) != FSCK_CHECK) {
+		if (misc_device_mounted(fs->fs_file_name) == MF_RO) {
+			reiserfs_warning(stderr, "\nThe partition is mounted ro. It is better "
+					 "to umount and mount it again.\n\n");
+			retval = EXIT_REBOOT;
+		} else 
+			retval = EXIT_FIXED;
+	} else
+		retval = EXIT_OK;
 
 	mark_filesystem_consistent (fs);
     }
    
-    if (fsck_mode (fs) == FSCK_FIX_FIXABLE)
+    if (fsck_mode (fs) == FSCK_FIX_FIXABLE && !fsck_data (fs)->check.fatal_corruptions)
         id_map_flush(proper_id_map (fs), fs);
         
     id_map_free(proper_id_map (fs));
@@ -1185,8 +1191,9 @@ int main (int argc, char * argv [])
     char * file_name;
     struct fsck_data * data;
     struct rlimit rlim = {0xffffffff, 0xffffffff};
-    int retval;
     char *width;
+    int retval;
+    int errno;
     
     width = getenv("COLUMNS");
     if ( width )
@@ -1250,17 +1257,22 @@ int main (int argc, char * argv [])
     	if (open_devices_for_rollback (file_name, data) == -1)
     	    exit(EXIT_OPER);
     } else {
-	fs = reiserfs_open (file_name, O_RDONLY, 0, data, 
+	fs = reiserfs_open (file_name, O_RDONLY, &errno, data, 
 	    data->mode != FSCK_SB);
 
 	if (data->mode != FSCK_SB) {
-	    if (no_reiserfs_found (fs)) 
-    	    	die ("Failed to open the filesystem.\n\n"
-		    "If the partition table has not been changed, and the partition is\n"
-		    "valid  and  it really  contains  a reiserfs  partition,  then the\n"
-		    "superblock  is corrupted and you need to run this utility with\n"
-		    "--rebuild-sb.\n");
-
+	    if (no_reiserfs_found (fs)) {
+		if (errno) {
+		    die ("Failed to open the device '%s': %s\n\n", 
+			 file_name, strerror(errno));
+		} else {
+		    die ("Failed to open the filesystem.\n\n"
+			 "If the partition table has not been changed, and the partition is\n"
+			 "valid  and  it really  contains  a reiserfs  partition,  then the\n"
+			 "superblock  is corrupted and you need to run this utility with\n"
+			 "--rebuild-sb.\n");
+		}
+	    }
 	    if (fsck_skip_journal (fs) && 
 		!is_reiserfs_jr_magic_string (fs->fs_ondisk_sb)) 
 	    {
@@ -1270,9 +1282,15 @@ int main (int argc, char * argv [])
 	    }
 	
 	    if (!fsck_skip_journal (fs)) {
-		if (reiserfs_open_journal(fs, data->journal_dev_name, O_RDONLY)) {	    
+		retval = reiserfs_open_journal(fs, data->journal_dev_name, O_RDONLY);
+		
+		if (retval) {
 	            fsck_progress ("Failed to open the journal device (%s).\n", 
 			data->journal_dev_name);
+		    
+		    if (retval == 1) {
+			    fsck_progress ("Run --rebuild-sb to rebuild journal parameters.\n");
+		    }
 		    
 		    reiserfs_close (fs);
 		    exit(EXIT_OPER);
@@ -1280,11 +1298,10 @@ int main (int argc, char * argv [])
 	    }
 	
 	    if (data->options & BADBLOCKS_FILE) {
-		if (create_badblock_bitmap (fs, badblocks_file) != 0) {
-		    badblocks_file = NULL;
-		    data->options &= ~BADBLOCKS_FILE;
-		}
+		if (create_badblock_bitmap (fs, badblocks_file) != 0) 
+		    exit(EXIT_OPER);
 	    }
+	    
 	    register_timer();
     	}
     }

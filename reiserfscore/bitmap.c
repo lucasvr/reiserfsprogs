@@ -1,5 +1,5 @@
 /* 
- * Copyright 2000-2003 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
 
@@ -56,12 +56,20 @@ int reiserfs_expand_bitmap (reiserfs_bitmap_t * bm, unsigned int bit_count)
 
 void reiserfs_shrink_bitmap (reiserfs_bitmap_t * bm, unsigned int bit_count)
 {
+    unsigned long i;
+    
     assert (bm->bm_bit_size >= bit_count);
 
     bm->bm_byte_size = (bit_count + 7) / 8;
     bm->bm_bit_size = bit_count;
-
+    bm->bm_set_bits = 0;
+    
     bm->bm_dirty = 1;
+    
+    for (i = 0; i < bm->bm_bit_size; i++) {
+	if (reiserfs_bitmap_test_bit(bm, i))
+	    bm->bm_set_bits++;
+    }
 }
 
 /* bitmap destructor */
