@@ -1,0 +1,790 @@
+/*
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by 
+ * reiserfsprogs/README
+ */
+
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
+
+#include "debugreiserfs.h"
+#include "misc/unaligned.h"
+#include "misc/malloc.h"
+#include "util/misc.h"
+#include "util/print.h"
+
+#include <getopt.h>
+#include <errno.h>
+#include <fcntl.h>
+
+reiserfs_filsys_t * fs;
+
+#define print_usage_and_exit() {\
+fprintf (stderr, "Usage: %s [options] device\n\n\
+Options:\n\
+  -d\t\tprint blocks details of the internal tree\n\
+  -D\t\tprint blocks details of all used blocks\n\
+  -B file\textract list of badblocks\n\
+  -m\t\tprint bitmap blocks\n\
+  -o\t\tprint objectid map\n\n\
+  -J\t\tprint journal header\n\
+  -j filename\n\t\tprint journal located on the device 'filename'\n\
+  \t\tstores the journal in the specified file 'filename.\n\
+  -p\t\tsend filesystem metadata to stdout\n\
+  -u\t\tread stdin and unpack the metadata\n\
+  -S\t\thandle all blocks, not only used\n\
+  -1 block\tblock to print\n\
+  -q\t\tno speed info\n\
+  -V\t\tprint version and exit\n\n", argv[0]);\
+  exit (16);\
+}
+
+/*
+
+ Undocumented options:
+  -a map_file\n\tstore to the file the map of file. Is used with -n, -N, -r, -f\n
+  -f \tprints the file map specified by -a.\n
+  -n name\n\stcan device for specific name in reiserfs directories\n\
+  -N \tscan tree for specific key in reiserfs directories\n\
+  -k \tscan device either for specific key or for any metadata\n\
+  -r name\n\trecovers the file spacified by -a to the 'name' file.\n\
+
+  -S\t\tgo through whole device when running -p, -k or -n\n\
+  -U\t\tgo through unused blocks only when running -p, -k or -n\n\
+  -D\t\tprint blocks details scanning the device, not the tree as -d does\n\
+  -b bitmap_file\n\t\trunning -p, -k or -n read blocks marked in this bitmap only\n\
+  -C\tallow to change reiserfs metadata\n\
+  -J\tsearch block numbers in the journal\n\
+  -t\tstat the device\n\
+  -v\tverboes unpack, prints the block number of every block being unpacked\n\
+  -Z\tzero all data.
+
+  To build a map of a file blocks by name: 
+  debugreiserfs device -a mapfile -n filename 
+  
+  To build a map of a file blocks by key: 
+  debugreiserfs device -a mapfile -k 
+  
+  To extract some:
+  debugreiserfs device -a mapfile -r filename > backup
+*/
+
+#if 1
+struct reiserfs_fsstat {
+    int nr_internals;
+    int nr_leaves;
+    int nr_files;
+    int nr_directories;
+    int nr_unformatted;
+} g_stat_info;
+#endif
+
+static void print_disk_tree (reiserfs_filsys_t * fs, unsigned long block_nr)
+{
+    reiserfs_bh_t * bh;
+    int i, j, count;
+    static int level = -1;
+	
+    if (level == -1)
+	    level = reiserfs_sb_get_height (fs->fs_ondisk_sb);
+
+    bh = reiserfs_buffer_read (fs->fs_dev, block_nr, fs->fs_blocksize);
+    if (!bh) {
+	    misc_die ("Could not read block %lu\n", block_nr);
+    }
+    level --;
+
+    if (level < 1)
+	    misc_die ("level too small");
+	
+    if (level != reiserfs_nh_get_level (NODE_HEAD (bh))) {
+	    printf ("%d expected, %d found in %lu\n", level, 
+		    reiserfs_nh_get_level (NODE_HEAD (bh)), bh->b_blocknr);
+    }
+
+    if (reiserfs_int_head (bh)) {
+	    reiserfs_dc_t * dc;
+
+	    g_stat_info.nr_internals ++;
+	    reiserfs_node_print (stdout, fs, bh, data(fs)->options, -1, -1);
+
+	    dc = reiserfs_int_at (bh, 0);
+	    count = reiserfs_node_items(bh);
+	    for (i = 0; i <= count; i++, dc++)
+		    print_disk_tree (fs, reiserfs_dc_get_nr (dc));
+    } else if (reiserfs_leaf_head (bh)) {
+	    reiserfs_ih_t *ih;
+
+	    g_stat_info.nr_leaves ++;
+	    reiserfs_node_print (stdout, fs, bh, data(fs)->options, -1, -1);
+
+	    ih = reiserfs_ih_at (bh, 0);
+	    count = reiserfs_leaf_estimate_items(bh);
+	    for (i = 0; i < count; i++, ih++) {
+		    if (reiserfs_ih_ext(ih)) {
+			    __u32 * ind_item = 
+				    (__u32 *)reiserfs_item_by_ih (bh, ih);
+
+			    for (j =  0; j < (int)reiserfs_ext_count (ih); j ++) {
+				    if (d32_get (ind_item, j)) {
+					    g_stat_info.nr_unformatted += 1;
+				    }
+			    }
+		    }
+	    }
+    } else {
+	    reiserfs_node_print (stdout, fs, bh, data(fs)->options, -1, -1);
+	    
+	    reiserfs_warning (stdout, "print_disk_tree: bad block "
+			      "type (%b)\n", bh);
+    }
+    reiserfs_buffer_close (bh);
+    level ++;
+}
+
+static void print_disk_blocks (reiserfs_filsys_t * fs)
+{
+    int type;
+    unsigned long done = 0, total;
+    reiserfs_bh_t * bh;
+    unsigned int j;
+	
+    total = reiserfs_bitmap_ones (input_bitmap(fs));
+	
+    for (j = 0; j < reiserfs_sb_get_blocks (fs->fs_ondisk_sb); j ++) {
+	if (!reiserfs_bitmap_test_bit (input_bitmap (fs), j))
+	    continue;
+	
+	if (!misc_test_bit(PRINT_QUIET, &data(fs)->options))
+	    util_misc_progress (stderr, &done, total, 1, 0);
+		
+	bh = reiserfs_buffer_read (fs->fs_dev, j, fs->fs_blocksize);
+	if (!bh) {
+	    reiserfs_warning (stderr, "could not read block %lu\n", j);
+	    continue;
+	}
+
+	type = reiserfs_node_type (bh);
+	if (type != NT_UNKNOWN) {
+	    reiserfs_node_print (stdout, fs, bh, 
+		(1 << LP_LEAF_DETAILS) | (1 << LP_DIRECT_ITEMS), -1, -1);
+	}
+		
+	if (type == NT_INTERNAL)
+	    g_stat_info.nr_internals ++;
+	else if (type == NT_LEAF || type == NT_IH_ARRAY)
+	    g_stat_info.nr_leaves ++;
+
+	reiserfs_buffer_close (bh);
+    }
+    
+    fprintf (stderr, "\n");
+}
+
+
+void pack_one_block (reiserfs_filsys_t * fs, unsigned long block);
+static void print_one_block (reiserfs_filsys_t * fs, unsigned long block)
+{
+    reiserfs_bh_t * bh;
+    
+    if (!fs->fs_bitmap2) {
+        reiserfs_bh_t * bm_bh;
+        unsigned long bm_block;
+        
+        if (reiserfs_bitmap_spread (fs))
+		bm_block = 
+			( block / (fs->fs_blocksize * 8) ) ? 
+			(block / (fs->fs_blocksize * 8)) * 
+			(fs->fs_blocksize * 8) : 
+			fs->fs_super_bh->b_blocknr + 1;
+        else
+		bm_block = fs->fs_super_bh->b_blocknr + 1 + 
+			(block / (fs->fs_blocksize * 8));
+
+        bm_bh = reiserfs_buffer_read (fs->fs_dev, bm_block, fs->fs_blocksize);
+        if (bm_bh) {
+		if (misc_test_bit((block % (fs->fs_blocksize * 8)), 
+				  bm_bh->b_data))
+		{
+			fprintf (stderr, "%lu is used in "
+				 "ondisk bitmap\n", block);
+		} else {
+			fprintf (stderr, "%lu is free in "
+				 "ondisk bitmap\n", block);
+		}
+	        
+            reiserfs_buffer_close (bm_bh);
+        }
+    } else {
+        if (reiserfs_bitmap_test_bit (fs->fs_bitmap2, block))
+		fprintf (stderr, "%lu is used in ondisk bitmap\n", block);
+        else
+		fprintf (stderr, "%lu is free in ondisk bitmap\n", block);
+    }
+    
+    bh = reiserfs_buffer_read (fs->fs_dev, block, fs->fs_blocksize);
+    if (!bh) {
+	    printf ("print_one_block: reiserfs_buffer_read failed\n");
+	    return;
+    }
+	
+    if (debug_mode (fs) == DO_PACK) {
+	    pack_one_block (fs, bh->b_blocknr);
+	    reiserfs_buffer_close (bh);
+	    return;
+    }
+	
+    if (reiserfs_node_type (bh) != NT_UNKNOWN)
+	    reiserfs_node_print (stdout, fs, bh, (1 << LP_LEAF_DETAILS), -1, -1);
+    else
+	    printf ("Looks like unformatted\n");
+    reiserfs_buffer_close (bh);
+    return;
+}
+
+/* debugreiserfs -p or -P compresses reiserfs meta data: super block, journal,
+   bitmap blocks and blocks looking like leaves. It may save "bitmap" of
+   blocks they packed in the file of special format. Reiserfsck can then load
+   "bitmap" saved in that file and build the tree of blocks marked used in
+   that "bitmap"
+*/
+char * where_to_save;
+char * badblocks_file;
+char * corruption_list_file;
+char *program_name;
+
+static char * parse_options (struct debugreiserfs_data * data, 
+			     int argc, char * argv [])
+{
+    int c;
+    char * tmp;
+    
+    data->scan_area = USED_BLOCKS;
+    data->mode = DO_DUMP;
+    
+    program_name = strrchr( argv[ 0 ], '/' );
+    
+    if (program_name)
+	program_name++;
+    else
+	program_name = argv[ 0 ];
+
+    while ((c = getopt (argc, argv, "a:b:C:F:SU1:pkn:Nfr:dDomj:JqtZl:LVB:uv")) 
+	   != EOF) 
+    {
+	    switch (c) {
+	    case 'a': /* -r will read this, -n and -N will write to it */
+		    strncpy(data->map_file, optarg, sizeof(data->map_file));
+		    break;
+
+	    case 'b':
+		    /* will load bitmap from a file and read only blocks
+		       marked in it. This is for -p and -k */
+		    data->input_bitmap = optarg;
+		    data->scan_area = EXTERN_BITMAP;
+		    break;
+
+	    case 'S':
+		    /* have debugreiserfs -p or -k to read all the device */
+		    data->scan_area = ALL_BLOCKS;
+		    break;
+
+	    case 'U':
+		    /* have debugreiserfs -p or -k to read unused blocks only */
+		    data->scan_area = UNUSED_BLOCKS;
+		    break;
+
+	    case '1':	/* print a single node */
+		    data->block = strtol (optarg, &tmp, 0);
+		    if (*tmp)
+			    misc_die ("parse_options: bad block number");
+		    break;
+
+	    case 'C':
+		    data->mode = DO_CORRUPT_ONE;
+		    data->block = strtol (optarg, &tmp, 0);
+		    if (*tmp) {
+			    misc_die ("parse_options: bad block number");
+		    }
+		    break;
+
+	    case 'F':
+		    data->mode = DO_CORRUPT_FILE;
+		    corruption_list_file = optarg;
+		    break;
+
+	    case 'p':
+		    data->mode = DO_PACK;
+		    break;
+
+	    case 'u':
+		    data->mode = DO_UNPACK;
+		    break;
+
+	    case 't':
+		    data->mode = DO_STAT;
+		    break;
+
+	    case 'k':
+		    /* read the device and print reiserfs blocks which contain 
+		       defined key */
+		    data->mode = DO_SCAN;
+		    break;
+
+	    case 'n': /* scan for names matching a specified pattern */
+		    data->mode = DO_SCAN_FOR_NAME;
+		    data->pattern = optarg;
+		    break;
+
+	    case 'N': /* search name in the tree */
+		    data->mode = DO_LOOK_FOR_NAME;
+		    break;
+
+	    case 'f':
+		    data->mode = DO_FILE_MAP;
+		    break;
+
+	    case 'r':
+		    data->recovery_file = optarg;
+		    data->mode = DO_RECOVER;
+		    break;
+
+	    case 'd':
+		    /*  print leaf details from internal tree */
+		    misc_set_bit(LP_LEAF_DETAILS, &data->options);
+		    break;
+
+	    case 'D':
+		    /* print leaf details accordingly the bitmap - can be used 
+		       with -S */
+		    misc_set_bit(PRINT_DETAILS, &data->options);
+		    break;
+
+	    case 'o':
+		    /* print objectid map */
+		    misc_set_bit(PRINT_OBJECTID_MAP, &data->options);
+		    break;
+
+	    case 'm':	/* print a block map */
+	    case 'M':	/* print a block map with details */
+		    misc_set_bit(PRINT_BITMAP, &data->options);
+		    break;
+
+	    case 'j': /* -j must have a parameter */
+		    misc_set_bit(PRINT_JOURNAL, &data->options);
+		    data->journal_device_name = optarg;
+		    break;
+
+	    case 'J':
+		    misc_set_bit(PRINT_JOURNAL_HEADER, &data->options);
+		    break;
+
+	    case 'R': /* read block numbers from stdin and look for them in the
+			 journal */
+		    data->mode = DO_SCAN_JOURNAL;
+		    data->JJ ++;
+		    break;
+
+	    case 'B':              /*disabled for a while*/
+		    badblocks_file = optarg;
+		    data->mode = DO_EXTRACT_BADBLOCKS;
+		    break;
+	    case 'q':
+		    /* this makes packing to not show speed info during -p or -P */
+		    misc_set_bit(PRINT_QUIET, &data->options);
+		    break;
+	    case 'Z':
+		    data->mode = DO_ZERO;
+		    break;
+
+	    case 'l': /* --logfile */
+		    data->log_file_name = optarg;
+		    data->log = fopen (optarg, "w");
+		    if (!data->log) {
+			    fprintf (stderr, "debugreiserfs: Cannot not open "
+				     "\'%s\': %s", optarg, strerror(errno));
+		    }
+		    break;
+	    case 'L' :
+		    /* random fs corruption */
+		    data->mode = DO_RANDOM_CORRUPTION;
+		    break;
+	    case 'V':
+		    data->mode = DO_NOTHING;
+		    break;
+	    case 'v':
+		    misc_set_bit(PRINT_VERBOSE, &data->options);
+		    break;
+	    }
+    }
+
+    if (data->mode == DO_NOTHING) {
+	    util_print_banner(program_name);
+	    exit(0);
+    }
+
+    if (optind != argc - 1)
+	    /* only one non-option argument is permitted */
+	    print_usage_and_exit();
+
+    util_print_banner(program_name);
+
+    data->device_name = argv[optind];
+    return argv[optind];
+}
+
+void pack_partition (reiserfs_filsys_t * fs);
+
+static void do_pack (reiserfs_filsys_t * fs)
+{
+    if (certain_block (fs))
+	    pack_one_block (fs, certain_block (fs));
+    else
+	    pack_partition (fs);
+}
+
+/*
+static int comp (const void * vp1, const void * vp2)
+{
+    const int * p1, * p2;
+
+    p1 = vp1; p2 = vp2;
+
+    if (*p1 < *p2)
+	return -1;
+    if (*p1 > *p2)
+	return 1;
+    return 0;
+}
+*/
+
+static void init_bitmap (reiserfs_filsys_t * fs)
+{
+    FILE * fp;
+    unsigned long block_count;
+	
+    if (reiserfs_bitmap_open (fs) < 0)
+	    reiserfs_exit (1, "Could not open ondisk bitmap");
+    
+    block_count = reiserfs_sb_get_blocks (fs->fs_ondisk_sb);	
+	
+    switch (scan_area (fs)) {
+    case ALL_BLOCKS:
+	    input_bitmap (fs) = reiserfs_bitmap_create (block_count);
+	    reiserfs_bitmap_fill (input_bitmap (fs));
+	    reiserfs_warning (stderr, "Whole device (%d blocks) is to be scanned\n", 
+			      reiserfs_bitmap_ones (input_bitmap (fs)));	
+	    break;
+    case USED_BLOCKS:
+	    reiserfs_warning (stderr, "Loading on-disk bitmap .. ");
+	    input_bitmap (fs) = reiserfs_bitmap_create (block_count);
+	    reiserfs_bitmap_copy (input_bitmap (fs), fs->fs_bitmap2);
+	    reiserfs_warning (stderr, "%d bits set - done\n",
+			      reiserfs_bitmap_ones (input_bitmap (fs)));
+	    break;
+    case UNUSED_BLOCKS:
+	    reiserfs_warning (stderr, "Loading on-disk bitmap .. ");
+	    input_bitmap (fs) = reiserfs_bitmap_create (block_count);
+	    reiserfs_bitmap_copy (input_bitmap (fs), fs->fs_bitmap2);
+	    reiserfs_bitmap_invert (input_bitmap (fs));
+	    reiserfs_warning (stderr, "%d bits set - done\n",
+			      reiserfs_bitmap_ones (input_bitmap (fs)));
+	    break;
+    case EXTERN_BITMAP:
+	    fp = fopen (input_bitmap_file_name(fs), "r");
+	    if (!fp) {
+		    reiserfs_exit (1, "init_bitmap: could not load bitmap: %m\n");
+	    }
+
+	    input_bitmap (fs) = reiserfs_bitmap_load (fp);
+	    if (!input_bitmap (fs)) {
+		    reiserfs_exit (1, "could not load fitmap from \"%s\"", 
+				   input_bitmap_file_name(fs));
+	    }
+	    reiserfs_warning (stderr, "%d blocks marked in the given bitmap\n",
+			      reiserfs_bitmap_ones (input_bitmap (fs)));
+	    fclose (fp);
+	    break;
+    default:
+	    reiserfs_panic ("No area to scan specified");
+    }
+}
+
+/* FIXME: statistics does not work */
+static void do_dump_tree (reiserfs_filsys_t * fs)
+{
+    if (certain_block (fs)) {
+	    print_one_block (fs, certain_block (fs));
+	    return;
+    }
+	
+    if ((misc_test_bit(PRINT_JOURNAL, &data(fs)->options) || 
+	 misc_test_bit(PRINT_JOURNAL_HEADER, &data(fs)->options)) && 
+	!reiserfs_journal_opened (fs))
+    {
+	    if (reiserfs_journal_open (fs, data(fs)->journal_device_name, 
+				       O_RDONLY)) 
+	    {
+		    printf ("Could not open journal\n");
+		    return;
+	    }
+    }
+	
+    reiserfs_super_print_state (stdout, fs);
+    reiserfs_node_print (stdout, fs, fs->fs_super_bh);
+	
+    if (misc_test_bit(PRINT_JOURNAL, &data(fs)->options))
+	    reiserfs_journal_print (fs);
+
+    if (misc_test_bit(PRINT_JOURNAL_HEADER, &data(fs)->options))
+	    reiserfs_journal_print_header (fs);
+	
+    if (misc_test_bit(PRINT_OBJECTID_MAP, &data(fs)->options))
+	    reiserfs_objmap_print (stdout, fs);
+	
+    if (misc_test_bit(PRINT_BITMAP, &data(fs)->options))
+	    reiserfs_bitmap_print (stdout, fs, 0);
+	
+    if (misc_test_bit(PRINT_DETAILS, &data(fs)->options))
+        init_bitmap (fs);
+	
+    if (misc_test_bit(PRINT_DETAILS, &data(fs)->options) || 
+	misc_test_bit(LP_LEAF_DETAILS, &data(fs)->options)) 
+    {
+	    if (misc_test_bit(PRINT_DETAILS, &data(fs)->options)) {
+		    print_disk_blocks (fs);
+		    printf("The '%s' device with reiserfs has:\n", 
+			   fs->fs_file_name);
+	    } else {
+		    /* DEBUGGING */
+		    print_disk_tree (fs, reiserfs_sb_get_root(fs->fs_ondisk_sb));
+		    printf("The internal reiserfs tree has:\n");
+	    }
+
+	    /* print the statistic */
+	    printf ("\t%d internal + %d leaves + %d "
+		    "unformatted nodes = %d blocks\n", 
+		    g_stat_info.nr_internals,   g_stat_info.nr_leaves, 
+		    g_stat_info.nr_unformatted, g_stat_info.nr_internals + 
+		    g_stat_info.nr_leaves + g_stat_info.nr_unformatted);
+    }
+}
+
+static void callback_badblock_print(reiserfs_filsys_t *fs, 
+				    reiserfs_path_t *badblock_path, 
+				    void *data) 
+{
+	reiserfs_ih_t *tmp_ih;
+	FILE *fd = (FILE *)data;
+	__u32 *ind_item;
+	__u32 i;
+	
+	tmp_ih = REISERFS_PATH_IH(badblock_path);
+	ind_item = (__u32 *)REISERFS_PATH_ITEM(badblock_path);
+	
+	for (i = 0; i < reiserfs_ext_count(tmp_ih); i++)
+		fprintf (fd, "%u\n", d32_get (ind_item, i));
+
+	reiserfs_tree_pathrelse (badblock_path);
+}
+
+void debug_badblock_print () {
+    FILE *fd;
+
+    if (!(fd = fopen (badblocks_file, "w"))) {
+	reiserfs_exit(1, "debugreiserfs: could not open badblock file %s\n",
+		      badblocks_file);
+    }
+
+    reiserfs_badblock_traverse(fs, callback_badblock_print, fd);
+    fclose (fd);
+}
+
+static int str2int (char * str, int * res)
+{
+    int val;
+    char * tmp;
+	
+    val = (int) strtol (str, &tmp, 0);
+    if (tmp == str)
+		/* could not convert string into a number */
+		return 0;
+    *res = val;
+    return 1;
+}
+
+void do_corrupt_blocks (reiserfs_filsys_t * fs)
+{
+	char line[256];
+	FILE * fd;
+	size_t n = 0;
+	int numblock;
+	
+	fd = fopen (corruption_list_file, "r");
+	if (fd == NULL) {
+		reiserfs_exit(1, "debugreiserfs: could not open corruption "
+			      "list file %s\n", corruption_list_file);
+	}
+	
+	while (1) {
+		line[0] = '\0';
+		n = 0;
+		if (fgets(line, sizeof(line), fd) == NULL ||
+		    strlen(line) <= 1)
+		{
+			break;
+		}
+		
+		/* remove '\n' */
+		line [strlen (line) - 1] = '\0';
+		
+		if (str2int(line, &numblock)) {
+			data (fs)->block = (unsigned long) numblock;
+		} else {
+			do_corrupt_one_block(fs, line);
+		}
+		printf ("before free line : %s\n", line);
+		printf ("after free\n");
+		reiserfs_fs_reopen (fs, O_RDWR);
+	}
+	
+	fclose (fd);
+	return;
+}
+
+void debugreiserfs_zero_reiserfs(reiserfs_filsys_t * fs) {
+    unsigned long done, total, i;
+    reiserfs_bh_t * bh;
+	
+    reiserfs_fs_reopen (fs, O_RDWR);
+    
+    total = reiserfs_bitmap_ones (input_bitmap (fs));
+    done = 0;
+	
+    for (i = 0; i < input_bitmap(fs)->bm_bit_size; i ++) {
+	if (!reiserfs_bitmap_test_bit (input_bitmap(fs), i))
+	    continue;
+
+	bh = reiserfs_buffer_open(fs->fs_dev, i, fs->fs_blocksize);
+
+	if (!bh)
+	    misc_die("Could not get block %lu\n", i);
+
+	memset(bh->b_data, 0, fs->fs_blocksize);
+	reiserfs_buffer_mkdirty(bh);
+	reiserfs_buffer_mkuptodate(bh, 0);
+
+	reiserfs_buffer_write(bh);
+
+	reiserfs_buffer_close (bh);
+
+	if (!misc_test_bit(PRINT_QUIET, &data(fs)->options))
+	    util_misc_progress (stderr, &done, total, 1, 0);
+    }
+	
+    fprintf(stderr, "\n");
+    fflush(stderr);
+}
+
+
+/* FIXME: need to open reiserfs filesystem first */
+int main (int argc, char * argv[])
+{
+    char * file_name;
+    int error;
+    struct debugreiserfs_data * data;
+	
+    data = misc_getmem (sizeof (struct debugreiserfs_data));
+    file_name = parse_options (data, argc, argv);
+    
+    if (data->mode == DO_UNPACK) {
+	    do_unpack(file_name, data->journal_device_name, data->input_bitmap,
+		      misc_test_bit(PRINT_VERBOSE, &data->options));
+	    return 0;
+    }
+    
+    fs = reiserfs_fs_open (file_name, O_RDONLY, &error, data, 0);
+    
+    if (fs == NULL) {
+	    reiserfs_exit (1, "\n\ndebugreiserfs: can not open reiserfs on "
+			   "\"%s\": %s\n\n", file_name, error ? strerror(error)
+			   : "no filesystem found");
+	    exit(1) ;
+    }
+    
+    if (reiserfs_journal_open (fs, data (fs)->journal_device_name, O_RDONLY)) {
+	    fprintf(stderr,"\ndebugreiserfs: Failed to open the fs journal.\n");
+    }
+	
+    switch (debug_mode (fs)) {
+    case DO_STAT:
+	    init_bitmap (fs);
+	    do_stat (fs);
+	    break;
+
+    case DO_PACK:
+	    init_bitmap (fs);
+	    do_pack (fs);
+	    break;
+
+    case DO_CORRUPT_ONE:
+	    reiserfs_fs_reopen (fs, O_RDWR);
+	    do_corrupt_one_block (fs, (char *)NULL);
+	    break;
+
+    case DO_CORRUPT_FILE:
+	    reiserfs_fs_reopen (fs, O_RDWR);
+	    do_corrupt_blocks (fs);
+	    break;
+    case DO_RANDOM_CORRUPTION:
+	    reiserfs_fs_reopen (fs, O_RDWR);
+	    /*
+	       do_leaves_corruption (fs);
+	       do_bitmap_corruption (fs);
+	     */		
+	    do_fs_random_corrupt (fs);
+	    break;
+
+    case DO_DUMP:
+	    do_dump_tree (fs);
+	    break;
+
+    case DO_SCAN:
+    case DO_SCAN_FOR_NAME:
+    case DO_LOOK_FOR_NAME:
+    case DO_SCAN_JOURNAL:
+	    init_bitmap (fs);
+	    do_scan (fs);
+	    break;
+
+    case DO_FILE_MAP:
+	    print_map(fs);
+	    break;
+
+
+    case DO_RECOVER:
+	    do_recover (fs);
+	    break;
+
+    case DO_TEST:
+	    /*do_test (fs);*/
+	    break;
+    case DO_EXTRACT_BADBLOCKS:
+	    reiserfs_warning (stderr, "Will try to extract list of bad blocks "
+			      "and save it to '%s' file\n", badblocks_file);
+
+	    debug_badblock_print ();
+	    reiserfs_warning (stderr, "Done\n\n");
+	    break;
+    case DO_ZERO:
+	    init_bitmap (fs);
+	    debugreiserfs_zero_reiserfs(fs);
+	    break;
+    }
+
+    if (data(fs)->log)
+	    fclose (data(fs)->log); 
+    reiserfs_fs_close (fs);
+    return 0;
+}
+

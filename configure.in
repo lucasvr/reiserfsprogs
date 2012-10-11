@@ -1,41 +1,87 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT(version.h)
+AC_INIT(include/reiserfs/libreiserfs.h)
 AC_CANONICAL_HOST
 AC_PREREQ(2.50)
 
+AH_TEMPLATE([PACKAGE], [Define this to be the name of the package.])
+AH_TEMPLATE([VERSION], [Define to the version of the package.])
 AH_TEMPLATE([HAVE_LIBUUID], [Define for enable libuuid using.])
 AH_TEMPLATE([ENABLE_DEBUG], [Define for enable debug info.])
 
-AM_INIT_AUTOMAKE(reiserfsprogs, 3.6.19)
+dnl AH_TEMPLATE([LIBREISERFS_MAX_INTERFACE_VERSION], [Define to the max interface version.])
+dnl AH_TEMPLATE([LIBREISERFS_MIN_INTERFACE_VERSION], [Define to the min interface version.])
+
+LIBREISERFS_MAJOR_VERSION=3
+LIBREISERFS_MINOR_VERSION=6
+LIBREISERFS_MICRO_VERSION=20
+LIBREISERFS_VERSION=$LIBREISERFS_MAJOR_VERSION.$LIBREISERFS_MINOR_VERSION.$LIBREISERFS_MICRO_VERSION
+
+dnl LIBREISERFS_INTERFACE_AGE=0
+dnl LIBREISERFS_BINARY_AGE=0
+
+dnl LT_RELEASE=$LIBREISERFS_MAJOR_VERSION.$LIBREISERFS_MINOR_VERSION
+
+dnl LT_CURRENT=`expr $LIBREISERFS_MICRO_VERSION - $LIBREISERFS_INTERFACE_AGE`
+dnl LT_REVISION=$LIBREISERFS_INTERFACE_AGE
+dnl LT_AGE=`expr $LIBREISERFS_BINARY_AGE - $LIBREISERFS_INTERFACE_AGE`
+
+PACKAGE=reiserfsprogs
+VERSION=$LIBREISERFS_VERSION
+
+AM_INIT_AUTOMAKE($PACKAGE, $VERSION)
+AM_CONFIG_HEADER(config.h)
 AM_MAINTAINER_MODE
+
+dnl AC_DEFINE_UNQUOTED(LIBREISERFS_MAX_INTERFACE_VERSION, $LIBREISERFS_BINARY_AGE)
+dnl AC_DEFINE_UNQUOTED(LIBREISERFS_MIN_INTERFACE_VERSION, $LIBREISERFS_INTERFACE_AGE)
+
+
+AC_ARG_ENABLE(debug,
+	[  --enable-debug      enable extra checks], ,
+	enable_debug=no
+)
+
+PROGS_LDFLAGS=""
+
+AC_ARG_ENABLE(static,
+    	[  --enable-static     build all static], ,
+		enable_static=no
+)
+
+if test x$enable_static = xyes; then
+	PROGS_LDFLAGS=-static
+fi
 
 dnl We install in /sbin, the utils are to be available on boot
 dnl AC_PREFIX(/)
-
-AM_CONFIG_HEADER(include/config.h)
-
-AC_SUBST(sbindir)
 
 PRESET_CFLAGS=$CFLAGS
 
 dnl Checks for programs.
 AC_PROG_CC
+AC_PROG_CPP
 AC_PROG_AWK 
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AC_PROG_RANLIB
 
+AM_ENABLE_SHARED
+dnl AM_PROG_LIBTOOL
+
 dnl Checks for libraries.
 
 # Check for LIBUUID
+LIBS=""
 AC_CHECK_LIB(uuid, uuid_generate, , AC_MSG_WARN(libuuid could not be found))
 UUID_LIBS="$LIBS"
-AC_SUBST(UUID_LIBS)
 
 dnl Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS(fcntl.h limits.h malloc.h sys/ioctl.h unistd.h uuid/uuid.h)
+AC_HEADER_DIRENT
+AC_CHECK_HEADERS(print.h errno.h fcntl.h limits.h malloc.h sys/ioctl.h unistd.h uuid/uuid.h)
+AC_CHECK_HEADERS([asm/unaligned.h])
+
 AC_HEADER_MAJOR
 
 dnl Checks for typedefs, structures, and compiler characteristics.
@@ -43,11 +89,7 @@ AC_C_CONST
 AC_C_INLINE
 AC_TYPE_SIZE_T
 AC_STRUCT_ST_RDEV
-
-AC_ARG_ENABLE(debug, [  --enable-debug          enable extra checks], 
-	      enable_debug=yes,
-	      enable_debug=no
-)
+AC_C_BIGENDIAN
 
 dnl Check for the compiler pic option.
 AC_CACHE_CHECK([whether -fPIC works], [pic], [
@@ -82,7 +124,7 @@ AC_CACHE_CHECK([whether -Wredundant-decls works], [redundant_decls], [
 # Check for large file
 AC_SYS_LARGEFILE
 
-if test -z "${ac_cv_sys_file_offset_bits}"; then
+if test x${ac_cv_sys_file_offset_bits} = xno; then
 	AC_MSG_WARN(Can't detect right _FILE_OFFSET_BITS. Will be forced to 64bit.)
 	ac_cv_sys_file_offset_bits=64
 fi
@@ -101,6 +143,7 @@ AC_CHECK_SIZEOF(blkcnt_t, 64, [
 
 dnl Checks for library functions.
 AC_PROG_GCC_TRADITIONAL
+AC_FUNC_STAT
 AC_FUNC_MEMCMP
 AC_FUNC_STRFTIME
 AC_FUNC_VPRINTF
@@ -117,7 +160,7 @@ AC_ARG_ENABLE(io-failure-emulation,
   fi
 ])
 
-credits="./CREDITS"
+credits="$srcdir/CREDITS"
 AC_MSG_CHECKING(for $credits)
 if test -r $credits ; then
     AC_MSG_RESULT(yes)
@@ -150,7 +193,7 @@ BEGIN  {in_header = 1; start = 2; count = 0}
     }
 }
 END    { print "\n};\n#define CREDITS_COUNT "  count }
-']  $credits > include/credits.h
+']  $credits > "$srcdir/include/util/credits.h"
 
 if test x$enable_debug = xyes; then
 	if test "x" = "x$PRESET_CFLAGS"; then
@@ -170,11 +213,11 @@ if test x$enable_debug = xyes; then
 	if test x$uninitialized = xyes; then
 		CFLAGS="$CFLAGS -Wuninitialized -O1"
 	else
-		CFLAGS="$CFLAGS -O2"
+		CFLAGS="$CFLAGS -O0"
 	fi
 else
 	if test "x" = "x$PRESET_CFLAGS"; then
-		CFLAGS="-g -Wall -O2"
+		CFLAGS="-Wall -O2"
 	fi
 fi
 
@@ -182,16 +225,30 @@ if test x$pic = xyes; then
 	CFLAGS="$CFLAGS -fPIC -DPIC"
 fi
 
+dnl AC_SUBST(LT_RELEASE)
+dnl AC_SUBST(LT_CURRENT)
+dnl AC_SUBST(LT_REVISION)
+dnl AC_SUBST(LT_AGE)
+
+AC_SUBST(UUID_LIBS)
+AC_SUBST(PROGS_LDFLAGS)
+
 AC_OUTPUT(
-    include/Makefile 
-    mkreiserfs/Makefile 
-    resize_reiserfs/Makefile 
-    fsck/Makefile 
-    lib/Makefile 
     Makefile 
-    reiserfscore/Makefile 
-    debugreiserfs/Makefile 
-    tune/Makefile)
+    include/Makefile 
+    include/misc/Makefile
+    include/reiserfs/Makefile 
+    include/util/Makefile
+    libmisc/Makefile
+    libreiserfs/Makefile 
+    libutil/Makefile
+    utils/Makefile
+    utils/mkfs/Makefile 
+    utils/resizer/Makefile 
+    utils/fsck/Makefile
+    utils/debugfs/Makefile
+    utils/tune/Makefile
+    reiserfsprogs.spec)
 
 echo
-echo Type \'make\' to compile reiserfsprogs
+echo Type \'make\' to compile reiserfsprogs and \'make install\' to install it.
