@@ -532,9 +532,8 @@ void unpack_partition (int fd, int jfd)
 	    continue;
 	}
 
-	fread (c + 1, 1, 1, stdin);
-	magic16 = le16_to_cpu(*(__u16 *)c);
-	/*fread16 (&magic16);*/
+	fread16 (&magic16);
+	magic16 = le16_to_cpu(magic16);
 	
 	switch (magic16 & 0xff) {
 	case LEAF_START_MAGIC:
