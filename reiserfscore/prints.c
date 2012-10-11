@@ -37,7 +37,7 @@ static int _arginfo2 (const struct printf_info *info, size_t n,
     return len;\
 
 
-/* %z */
+/* %b */
 static int print_block_head (FILE * stream,
 			     const struct printf_info *info,
 			     const void *const *args)
@@ -48,7 +48,7 @@ static int print_block_head (FILE * stream,
 
     bh = *((const struct buffer_head **)(args[0]));
     len = asprintf (&buffer, "level=%d, nr_items=%d, free_space=%d rdkey",
-		    B_LEVEL (bh), B_NR_ITEMS (bh), node_free_space (bh));
+		    B_LEVEL (bh), B_NR_ITEMS (bh), B_FREE_SPACE (bh));
     FPRINTF;
 }
 
@@ -63,7 +63,8 @@ static int print_short_key (FILE * stream,
     int len;
 
     key = *((const struct key **)(args[0]));
-    len = asprintf (&buffer, "%u %u", key->k_dir_id, key->k_objectid);
+    len = asprintf (&buffer, "%u %u", get_key_dirid (key),
+		    get_key_objectid (key));
     FPRINTF;
 }
 
@@ -78,8 +79,9 @@ static int print_key (FILE * stream,
     int len;
 
     key = *((const struct key **)(args[0]));
-    len = asprintf (&buffer, "%u %u 0x%Lx %s",  
-		    key->k_dir_id, key->k_objectid, get_offset (key), key_of_what (key));
+    len = asprintf (&buffer, "%u %u 0x%Lx %s (%d)",  
+		    get_key_dirid (key), get_key_objectid (key),
+		    (unsigned long long)get_offset (key), key_of_what (key), get_type (key));
     FPRINTF;
 }
 
@@ -94,14 +96,14 @@ static int print_item_head (FILE * stream,
     int len;
 
     ih = *((const struct item_head **)(args[0]));
-    len = asprintf (&buffer, "%u %u 0x%Lx %s, "
-		    "len %u, entry count %u, fsck need %u, format %s",
-		    ih->ih_key.k_dir_id, ih->ih_key.k_objectid, 
-		    get_offset (&ih->ih_key), key_of_what (&ih->ih_key),
-		    ih->ih_item_len, ih_entry_count (ih), 
-		    ih->ih_format.fsck_need,
-		    ih_key_format (ih) == KEY_FORMAT_2 ? "new" : 
-		    ((ih_key_format (ih) == KEY_FORMAT_1) ? "old" : "BAD"));
+    len = asprintf (&buffer, "%u %u 0x%Lx %s (%d), "
+		    "len %u, location %u entry count %u, fsck need %u, format %s",
+		    get_key_dirid (&ih->ih_key), get_key_objectid (&ih->ih_key),
+		    (unsigned long long)get_offset (&ih->ih_key), key_of_what (&ih->ih_key),
+		    get_type (&ih->ih_key), get_ih_item_len (ih), get_ih_location (ih),
+		    get_ih_entry_count (ih), get_ih_flags (ih),
+		    get_ih_key_format (ih) == KEY_FORMAT_2 ? "new" : 
+		    ((get_ih_key_format (ih) == KEY_FORMAT_1) ? "old" : "BAD"));
     FPRINTF;
 }
 
@@ -115,8 +117,8 @@ static int print_disk_child (FILE * stream,
     int len;
 
     dc = *((const struct disk_child **)(args[0]));
-    len = asprintf (&buffer, "[dc_number=%u, dc_size=%u]", le32_to_cpu (dc->dc_block_number),
-		    le16_to_cpu (dc->dc_size));
+    len = asprintf (&buffer, "[dc_number=%u, dc_size=%u]", get_dc_child_blocknr (dc),
+		    get_dc_child_size (dc));
     FPRINTF;
 }
 
@@ -156,7 +158,7 @@ static int print_sd_mode (FILE * stream,
 			  const void *const *args)
 {
     int len = 0;
-    mode_t mode;
+    __u16 mode;
 
     mode = *(mode_t *)args[0];
     len = fprintf (stream, "%c", ftypelet (mode));
@@ -166,7 +168,23 @@ static int print_sd_mode (FILE * stream,
     return len;
 }
 
-
+/* %U */
+static int print_sd_uuid (FILE * stream,
+			  const struct printf_info *info,
+			  const void *const *args)
+{
+    int i;
+    const unsigned char * uuid;
+    int len = 0;
+    
+    uuid = *((const unsigned char **)(args[0]));
+    for (i = 0; i < 16; i++) {
+        if (i == 4 || i == 6 || i == 8 || i == 10)
+            len += fprintf (stream, "-");
+        len += fprintf(stream, "%02x", uuid[i]);
+    }
+    return len;
+}
 
 void reiserfs_warning (FILE * fp, const char * fmt, ...)
 {
@@ -182,6 +200,7 @@ void reiserfs_warning (FILE * fp, const char * fmt, ...)
 	register_printf_function ('b', print_block_head, _arginfo);
 	register_printf_function ('y', print_disk_child, _arginfo);
 	register_printf_function ('M', print_sd_mode, _arginfo);
+	register_printf_function ('U', print_sd_uuid, _arginfo);
     }
 
     va_start (args, fmt);
@@ -249,35 +268,8 @@ void print_path (struct tree_balance * tb, struct path * path)
 }
 
 
-#if 0
-void print_de (struct reiserfs_dir_entry * de)
-{
-    reiserfs_warning ("entry key: [%k], object_key: [%u %u], b_blocknr=%lu, item_num=%d, pos_in_item=%d\n",
-		      &de->de_entry_key, de->de_dir_id, de->de_objectid,
-		      de->de_bh->b_blocknr, de->de_item_num, de->de_entry_num);
-}
 
-static char * item_type (struct item_head * ih)
-{
-    static char * types[] = {
-        "SD", "DIR", "DRCT", "IND", "???"
-    };
-
-    if (I_IS_STAT_DATA_ITEM(ih))
-        return types[0];
-    if (I_IS_DIRECTORY_ITEM(ih))
-        return types[1];
-    if (I_IS_DIRECT_ITEM(ih))
-        return types[2];
-    if (I_IS_INDIRECT_ITEM(ih))
-        return types[3];
-    return types[4];
-}
-
-#endif
-
-
-void print_directory_item (FILE * fp, reiserfs_filsys_t fs,
+void print_directory_item (FILE * fp, reiserfs_filsys_t * fs,
 			   struct buffer_head * bh, struct item_head * ih)
 {
     int i;
@@ -292,10 +284,10 @@ void print_directory_item (FILE * fp, reiserfs_filsys_t fs,
     //printk ("\n%2%-25s%-30s%-15s%-15s%-15s\n", "    Name", "length", "Object key", "Hash", "Gen number", "Status");
     reiserfs_warning (fp, "%3s: %-25s%s%-22s%-12s%s\n", "###", "Name", "length", "    Object key", "   Hash", "Gen number");
     deh = B_I_DEH (bh, ih);
-    for (i = 0; i < ih_entry_count (ih); i ++, deh ++) {
+    for (i = 0; i < get_ih_entry_count (ih); i ++, deh ++) {
 	if (dir_entry_bad_location (deh, ih, i == 0 ? 1 : 0)) {
 	    reiserfs_warning (fp, "%3d: wrong entry location %u, deh_offset %u\n",
-			      i, deh_location (deh), deh_offset (deh));
+			      i, get_deh_location (deh), get_deh_offset (deh));
 	    continue;
 	}
 	if (i && dir_entry_bad_location (deh - 1, ih, ((i - 1) == 0) ? 1 : 0))
@@ -303,15 +295,19 @@ void print_directory_item (FILE * fp, reiserfs_filsys_t fs,
                length */
 	    namelen = 25;
 	else
-	    namelen = name_length (ih, deh, i);
+	    namelen = name_in_entry_length (ih, deh, i);
 
 	name = name_in_entry (deh, i);
 	reiserfs_warning (fp, "%3d: \"%-25.*s\"(%3d)%20K%12d%5d, loc %u, state %x %s\n", 
 			  i, namelen, name, namelen,
-			  (struct key *)&(deh->deh_dir_id),
-			  GET_HASH_VALUE (deh->deh_offset), GET_GENERATION_NUMBER (deh->deh_offset),
-			  deh_location (deh), deh->deh_state,
-			  fs ? (is_properly_hashed (fs, name, namelen, deh_offset (deh)) ? "" : "(BROKEN)") : "??");
+			  (struct key *)&(deh->deh2_dir_id),
+			  GET_HASH_VALUE (get_deh_offset (deh)),
+			  GET_GENERATION_NUMBER (get_deh_offset (deh)),
+			  get_deh_location (deh), get_deh_state (deh),
+			  code2name (find_hash_in_use (name, namelen, 
+						       GET_HASH_VALUE (get_deh_offset (deh)),
+						       fs ? get_sb_hash_code (fs->fs_ondisk_sb) : UNSET_HASH)));
+	/*fs ? (is_properly_hashed (fs, name, namelen, deh_offset (deh)) ? "" : "(BROKEN)") : "??");*/
     }
 }
 
@@ -328,14 +324,14 @@ static void start_new_sequence (__u32 * start, int * len, __u32 new)
 
 static int sequence_finished (__u32 start, int * len, __u32 new)
 {
-    if (start == INT_MAX)
+    if (le32_to_cpu (start) == INT_MAX)
 	return 1;
 
     if (start == 0 && new == 0) {
 	(*len) ++;
 	return 0;
     }
-    if (start != 0 && (start + *len) == new) {
+    if (start != 0 && (le32_to_cpu (start) + *len) == le32_to_cpu (new)) {
 	(*len) ++;
 	return 0;
     }
@@ -348,9 +344,9 @@ static void print_sequence (FILE * fp, __u32 start, int len)
 	return;
 
     if (len == 1)
-	reiserfs_warning (fp, " %d", start);
+	reiserfs_warning (fp, " %d", le32_to_cpu (start));
     else
-	reiserfs_warning (fp, " %d(%d)", start, len);
+	reiserfs_warning (fp, " %d(%d)", le32_to_cpu (start), len);
 }
 
 
@@ -364,10 +360,11 @@ void print_indirect_item (FILE * fp, struct buffer_head * bh, int item_num)
     ih = B_N_PITEM_HEAD (bh, item_num);
     unp = (__u32 *)B_I_PITEM (bh, ih);
 
-    if (ih->ih_item_len % UNFM_P_SIZE)
+    if (get_ih_item_len (ih) % UNFM_P_SIZE)
 	reiserfs_warning (fp, "print_indirect_item: invalid item len");  
 
-    reiserfs_warning (fp, "%d pointers\n[ ", I_UNFM_NUM (ih));
+    reiserfs_warning (fp, "%d pointer%s\n[", I_UNFM_NUM (ih),
+                      I_UNFM_NUM (ih) != 1 ? "s" : "" );
     for (j = 0; j < I_UNFM_NUM (ih); j ++) {
 	if (sequence_finished (prev, &num, unp[j])) {
 	    print_sequence (fp, prev, num);
@@ -389,29 +386,58 @@ char * timestamp (time_t t)
 
 static int print_stat_data (FILE * fp, struct buffer_head * bh, struct item_head * ih, int alltimes)
 {
-    struct stat_data * sd = (struct stat_data *)B_I_PITEM (bh, ih);
-    struct stat_data_v1 * sd_v1 = (struct stat_data_v1 *)B_I_PITEM (bh, ih);
     int retval;
     
 
     /* we can not figure out whether it is new stat data or old by key_format
        macro. Stat data's key looks identical in both formats */
-    if (ih_key_format (ih) == KEY_FORMAT_1) {
-	reiserfs_warning (fp, "(OLD SD), mode %M, size %u, nlink %u, uid %d, FDB %d, mtime %s blocks %d", 
-		sd_v1->sd_mode, sd_v1->sd_size, sd_v1->sd_nlink, sd_v1->sd_uid, 
-		sd_v1->sd_first_direct_byte, timestamp (sd_v1->sd_mtime), sd_v1->u.sd_blocks);
-	retval = (S_ISLNK (sd_v1->sd_mode)) ? 1 : 0;
+    if (get_ih_key_format (ih) == KEY_FORMAT_1) {
+        struct stat_data_v1 * sd_v1 = (struct stat_data_v1 *)B_I_PITEM (bh, ih);
+	reiserfs_warning (fp, "(OLD SD), mode %M, size %u, nlink %u, uid %u, FDB %u, mtime %s blocks %u",
+		sd_v1_mode(sd_v1), sd_v1_size(sd_v1), sd_v1_nlink(sd_v1),
+                sd_v1_uid(sd_v1), sd_v1_first_direct_byte(sd_v1), timestamp
+                (sd_v1_mtime(sd_v1)), sd_v1_blocks(sd_v1));
+	retval = (S_ISLNK (sd_v1_mode(sd_v1))) ? 1 : 0;
+        if (alltimes)
+            reiserfs_warning (fp, "%s %s\n", timestamp (sd_v1_ctime(sd_v1)),
+                timestamp (sd_v1_atime(sd_v1)));
     } else {
-	reiserfs_warning (fp, "(NEW SD), mode %M, size %Lu, nlink %u, mtime %s blocks %d", 
-		sd->sd_mode, sd->sd_size, sd->sd_nlink,
-		timestamp (sd->sd_mtime), sd->sd_blocks);
-	retval = (S_ISLNK (sd->sd_mode)) ? 1 : 0;
+        struct stat_data * sd = (struct stat_data *)B_I_PITEM (bh, ih);
+	reiserfs_warning (fp, "(NEW SD), mode %M, size %Lu, nlink %u, mtime %s blocks %u, uid %u",
+		sd_v2_mode(sd), sd_v2_size(sd), sd_v2_nlink(sd),
+		timestamp (sd_v2_mtime(sd)), sd_v2_blocks(sd), sd_v2_uid(sd));
+	retval = (S_ISLNK (sd_v2_mode(sd))) ? 1 : 0;
+        if (alltimes)
+            reiserfs_warning (fp, "%s %s\n", timestamp (sd_v2_ctime(sd)),
+                timestamp (sd_v2_atime(sd)));
     }
 
-    if (alltimes)
-	reiserfs_warning (fp, "%s %s\n", timestamp (sd->sd_ctime), timestamp (sd->sd_atime));
     reiserfs_warning (fp, "\n");
     return retval;
+}
+
+
+/* used by debugreiserfs/scan.c */
+void reiserfs_print_item (FILE * fp, struct buffer_head * bh,
+			  struct item_head * ih)
+{
+    reiserfs_warning (stdout, "block %lu, item %d: %H\n",
+		      bh->b_blocknr, ih - B_N_PITEM_HEAD (bh, 0), ih);
+    if (is_stat_data_ih (ih)) {
+	print_stat_data (fp, bh, ih, 0/*all times*/);
+	return;
+    }
+    if (is_indirect_ih (ih)) {
+	print_indirect_item (fp, bh, ih - B_N_PITEM_HEAD (bh, 0));
+	return;
+    }
+    if (is_direct_ih (ih)) {
+	reiserfs_warning (fp, "direct item: block %lu, start %d, %d bytes\n",
+			  bh->b_blocknr, get_ih_location (ih), get_ih_item_len (ih));
+	return;
+    }
+
+    print_directory_item (fp, 0, bh, ih);    
 }
 
 
@@ -453,36 +479,41 @@ static int print_internal (FILE * fp, struct buffer_head * bh, int first, int la
 
 
 static int is_symlink = 0;
-static int print_leaf (FILE * fp, reiserfs_filsys_t fs, struct buffer_head * bh,
+static int print_leaf (FILE * fp, reiserfs_filsys_t * fs, struct buffer_head * bh,
 		       int print_mode, int first, int last)
 {
     struct block_head * blkh;
     struct item_head * ih;
     int i;
     int from, to;
+    int nr;
 
-    if (!is_leaf_node (bh))
+    if (!is_tree_node (bh, DISK_LEAF_NODE_LEVEL))
 	return 1;
+    
 
     blkh = B_BLK_HEAD (bh);
     ih = B_N_PITEM_HEAD (bh,0);
+    nr = get_blkh_nr_items (blkh);
 
-    reiserfs_warning (fp, "\n===================================================================\n");
-    reiserfs_warning (fp, "LEAF NODE (%ld) contains %b\n", bh->b_blocknr, bh);
+    reiserfs_warning (fp,
+		      "\n===================================================================\n");
+    reiserfs_warning (fp, "LEAF NODE (%ld) contains %b (real items %d)\n",
+		      bh->b_blocknr, bh, nr);
 
-    if (!(print_mode & PRINT_LEAF_ITEMS)) {
+    if (!(print_mode & PRINT_TREE_DETAILS)) {
 	reiserfs_warning (fp, "FIRST ITEM_KEY: %k, LAST ITEM KEY: %k\n",
-			   &(ih->ih_key), &((ih + blkh->blk_nr_item - 1)->ih_key));
+			   &(ih->ih_key), &((ih + get_blkh_nr_items (blkh) - 1)->ih_key));
 	return 0;
     }
 
-    if (first < 0 || first > blkh->blk_nr_item - 1) 
+    if (first < 0 || first > nr - 1) 
 	from = 0;
     else 
 	from = first;
 
-    if (last < 0 || last > blkh->blk_nr_item)
-	to = blkh->blk_nr_item;
+    if (last < 0 || last > nr)
+	to = nr;
     else
 	to = last;
 
@@ -493,20 +524,20 @@ static int print_leaf (FILE * fp, reiserfs_filsys_t fs, struct buffer_head * bh,
 		       "|   |    |    |e/cn|    |   |need|                                            |\n");
     for (i = from; i < to; i++) {
 	reiserfs_warning (fp,
-			   "-------------------------------------------------------------------------------\n"
+			  "-------------------------------------------------------------------------------\n"
 			  "|%3d|%30H|\n", i, ih + i);
 
-	if (I_IS_STAT_DATA_ITEM(ih+i) && print_mode & PRINT_ITEM_DETAILS) {
+	if (I_IS_STAT_DATA_ITEM(ih+i)) {
 	    is_symlink = print_stat_data (fp, bh, ih + i, 0/*all times*/);
 	    continue;
 	}
 
-	if (I_IS_DIRECTORY_ITEM(ih+i) && print_mode & PRINT_ITEM_DETAILS) {
+	if (I_IS_DIRECTORY_ITEM(ih+i)) {
 	    print_directory_item (fp, fs, bh, ih+i);
 	    continue;
 	}
 
-	if (I_IS_INDIRECT_ITEM(ih+i) && print_mode & PRINT_ITEM_DETAILS) {
+	if (I_IS_INDIRECT_ITEM(ih+i)) {
 	    print_indirect_item (fp, bh, i);
 	    continue;
 	}
@@ -515,7 +546,7 @@ static int print_leaf (FILE * fp, reiserfs_filsys_t fs, struct buffer_head * bh,
 	    int j = 0;
 	    if (is_symlink || print_mode & PRINT_DIRECT_ITEMS) {
 		reiserfs_warning (fp, "\"");
-		while (j < ih[i].ih_item_len) {
+		while (j < get_ih_item_len (&ih[i])) {
 		    if (B_I_PITEM(bh,ih+i)[j] == 10)
 			reiserfs_warning (fp, "\\n");
 		    else
@@ -532,84 +563,121 @@ static int print_leaf (FILE * fp, reiserfs_filsys_t fs, struct buffer_head * bh,
 }
 
 
+void print_journal_params (FILE * fp, struct journal_params * jp)
+{
+    reiserfs_warning (fp, "\tDevice [0x%x]\n", get_jp_journal_dev (jp));
+    reiserfs_warning (fp, "\tMagic [0x%x]\n", get_jp_journal_magic (jp));
+
+    reiserfs_warning (fp, "\tSize %u blocks (including 1 for journal header) (first block %u)\n",
+		      get_jp_journal_size (jp) + 1,
+		      get_jp_journal_1st_block (jp));
+    reiserfs_warning (fp, "\tMax transaction length %u blocks\n", get_jp_journal_max_trans_len (jp));
+    reiserfs_warning (fp, "\tMax batch size %u blocks\n", get_jp_journal_max_batch (jp));
+    reiserfs_warning (fp, "\tMax commit age %u\n", get_jp_journal_max_commit_age (jp));
+    /*reiserfs_warning (fp, "\tMax transaction age %u\n", get_jp_journal_max_trans_age (jp));*/
+}
 
 /* return 1 if this is not super block */
-static int print_super_block (FILE * fp, struct buffer_head * bh)
+int print_super_block (FILE * fp, reiserfs_filsys_t * fs, char * file_name,
+			      struct buffer_head * bh, int short_print)
 {
-    struct reiserfs_super_block * rs = (struct reiserfs_super_block *)(bh->b_data);
-    int skipped, data_blocks;
-    
-    if (is_reiser2fs_magic_string (rs))
-	reiserfs_warning (fp, "Super block of format 3.6 found on the 0x%x in block %ld\n", 
-			   bh->b_dev, bh->b_blocknr);
-    else if (is_reiserfs_magic_string (rs))
-	reiserfs_warning (fp, "Super block of format 3.5 found on the 0x%x in block %ld\n",
-			  bh->b_dev, bh->b_blocknr);
-    else if (is_prejournaled_reiserfs (rs)) {
-	reiserfs_warning (fp, "Prejournaled reiserfs super block found. Not supported here. Use proper tools instead\n");
-	return 1;
-    } else
-	// no reiserfs signature found in the block
+    struct reiserfs_super_block * sb = (struct reiserfs_super_block *)(bh->b_data);
+    dev_t rdev;
+    int format = 0;
+
+    if (!does_look_like_super_block (sb, fs->fs_blocksize))
 	return 1;
 
-    reiserfs_warning (fp, "Block count %u\n", rs_block_count (rs));
-    reiserfs_warning (fp, "Blocksize %d\n", rs_blocksize (rs));
-    reiserfs_warning (fp, "Free blocks %u\n", rs_free_blocks (rs));
-    skipped = bh->b_blocknr; // FIXME: this would be confusing if
-    // someone stores reiserfs super block in reiserfs ;)
-    data_blocks = rs_block_count (rs) - skipped - 1 -
-	rs_bmap_nr (rs) - (rs_journal_size (rs) + 1) - rs_free_blocks (rs);
-    reiserfs_warning (fp, "Busy blocks (skipped %d, bitmaps - %d, journal blocks - %d\n"
-	    "1 super blocks, %d data blocks\n", 
-	    skipped, rs_bmap_nr (rs), 
-	    (rs_journal_size (rs) + 1), data_blocks);
-    reiserfs_warning (fp, "Root block %u\n", rs_root_block (rs));
-    reiserfs_warning (fp, "Journal block (first) %d\n", rs_journal_start (rs));
-    reiserfs_warning (fp, "Journal dev %d\n", rs->s_v1.s_journal_dev);    
-    reiserfs_warning (fp, "Journal orig size %d\n", rs_journal_size (rs));
-    reiserfs_warning (fp, "Filesystem state %s\n", (rs->s_v1.s_state == REISERFS_VALID_FS) ? "VALID" : "ERROR");
-    if (fsck_state (rs) == TREE_IS_BUILT)
-	reiserfs_warning (fp, "fsck pass 2 completion code set\n");
- 
-#if 0
-    __u32 s_journal_trans_max ;           /* max number of blocks in a transaction.  */
-    __u32 s_journal_block_count ;         /* total size of the journal. can change over time  */
-    __u32 s_journal_max_batch ;           /* max number of blocks to batch into a trans */
-    __u32 s_journal_max_commit_age ;      /* in seconds, how old can an async commit be */
-    __u32 s_journal_max_trans_age ;       /* in seconds, how old can a transaction be */
-#endif
-    reiserfs_warning (fp, "Tree height %d\n", rs_tree_height (rs));
+    rdev = get_st_rdev (file_name);
+
+    reiserfs_warning (fp, "Reiserfs super block in block %lu on 0x%x of ",
+		      bh->b_blocknr, rdev);
+    switch (get_reiserfs_format (sb)) {
+    case REISERFS_FORMAT_3_5:
+	reiserfs_warning (fp, "format 3.5 with ");
+        format = 1;
+	break;
+    case REISERFS_FORMAT_3_6:
+	reiserfs_warning (fp, "format 3.6 with ");
+        format = 2;
+	break;
+    default:
+	reiserfs_warning (fp, "unknown format with ");
+	break;
+    }
+    if (is_reiserfs_jr_magic_string (sb))
+	reiserfs_warning (fp, "non-");
+    reiserfs_warning (fp, "standard journal\n");
+    if (short_print) {
+	reiserfs_warning (fp, "Blocks (total/free): %u/%u by %d bytes\n",
+		get_sb_block_count (sb), get_sb_free_blocks (sb), get_sb_block_size (sb));
+    } else {
+	reiserfs_warning (fp, "Count of blocks on the device: %u\n", get_sb_block_count (sb));
+	reiserfs_warning (fp, "Number of bitmaps: %u\n", get_sb_bmap_nr (sb));
+	reiserfs_warning (fp, "Blocksize: %d\n", get_sb_block_size (sb));
+	reiserfs_warning (fp, "Free blocks (count of blocks - used [journal, "
+		      "bitmaps, data, reserved] blocks): %u\n", get_sb_free_blocks (sb));
+	reiserfs_warning (fp, "Root block: %u\n", get_sb_root_block (sb));
+    }
+    reiserfs_warning (fp, "Filesystem is %scleanly umounted\n",
+		      (get_sb_umount_state (sb) == REISERFS_CLEANLY_UMOUNTED) ? "" : "NOT ");
+
+    if (short_print)
+    	return 0;
+    reiserfs_warning (fp, "Tree height: %d\n", get_sb_tree_height (sb));
     reiserfs_warning (fp, "Hash function used to sort names: %s\n",
-		      code2name (rs_hash (rs)));
-    reiserfs_warning (fp, "Objectid map size %d, max %d\n", rs_objectid_map_size (rs),
-		       rs_objectid_map_max_size (rs));
-    reiserfs_warning (fp, "Version %d\n", rs_version (rs));
+		      code2name (get_sb_hash_code (sb)));
+    reiserfs_warning (fp, "Objectid map size %d, max %d\n", get_sb_oid_cursize (sb),
+		      get_sb_oid_maxsize (sb));
+    reiserfs_warning (fp, "Journal parameters:\n");
+    print_journal_params (fp, sb_jp (sb));
+    reiserfs_warning (fp, "Blocks reserved by journal: %u\n",
+		      get_sb_reserved_for_journal (sb));
+    reiserfs_warning (fp, "Fs state field: 0x%x\n", get_sb_fs_state (sb));
+    reiserfs_warning (fp, "sb_version: %u\n", get_sb_version (sb));
+    if (format == 2) {
+        reiserfs_warning (fp, "inode generation number: %u\n", get_sb_v2_inode_generation (sb));
+        reiserfs_warning (fp, "UUID: %U\n", sb->s_uuid);
+        reiserfs_warning (fp, "LABEL: %.16s\n", sb->s_label);
+        reiserfs_warning (fp, "Set flags in SB:\n");
+        reiserfs_warning (fp, "\t%s\n", ((get_sb_v2_flag (sb, reiserfs_attrs_cleared)) ? "ATTRIBUTES CLEAN" : ""));
+    }
+
     return 0;
 }
+
+
+void print_filesystem_state (FILE * fp, reiserfs_filsys_t * fs)
+{
+    reiserfs_warning (fp, "\nFilesystem state: ");
+    if (reiserfs_is_fs_consistent (fs))
+	reiserfs_warning (fp, "consistent\n\n");
+    else
+	reiserfs_warning (fp, "consistency is not checked after last mounting\n\n");
+}
+
 
 
 static int print_desc_block (FILE * fp, struct buffer_head * bh)
 {
-    struct reiserfs_journal_desc * desc;
-
-    desc = (struct reiserfs_journal_desc *)(bh->b_data);
-
-    if (memcmp(desc->j_magic, JOURNAL_DESC_MAGIC, 8))
+    if (memcmp(get_jd_magic (bh), JOURNAL_DESC_MAGIC, 8))
 	return 1;
 
-    reiserfs_warning (fp, "Desc block %lu (j_trans_id %ld, j_mount_id %ld, j_len %ld)",
-		       bh->b_blocknr, desc->j_trans_id, desc->j_mount_id, desc->j_len);
+    reiserfs_warning (fp, "Desc block %lu (j_trans_id %ld, j_mount_id %ld, j_len %ld)\n",
+		      bh->b_blocknr, get_desc_trans_id (bh),
+		      get_desc_mount_id (bh), get_desc_trans_len (bh));
 
     return 0;
 }
 
 
-void print_block (FILE * fp, reiserfs_filsys_t fs, 
+void print_block (FILE * fp, reiserfs_filsys_t * fs, 
 		  struct buffer_head * bh, ...)//int print_mode, int first, int last)
 {
     va_list args;
     int mode, first, last;
-    
+    char * file_name;
+
     va_start (args, bh);
 
     if ( ! bh ) {
@@ -620,8 +688,9 @@ void print_block (FILE * fp, reiserfs_filsys_t fs,
     mode = va_arg (args, int);
     first = va_arg (args, int);
     last = va_arg (args, int);
+    file_name = (fs) ? fs->fs_file_name : NULL ;
     if (print_desc_block (fp, bh))
-	if (print_super_block (fp, bh))
+        if (print_super_block (fp, fs, file_name, bh, 0))
 	    if (print_leaf (fp, fs, bh, mode, first, last))
 		if (print_internal (fp, bh, first, last))
 		    reiserfs_warning (fp, "Block %ld contains unformatted data\n", bh->b_blocknr);
@@ -709,21 +778,24 @@ void print_tb (int mode, int item_pos, int pos_in_item, struct tree_balance * tb
 }
 
 
-static void print_bmap_block (FILE * fp, int i, struct buffer_head * bmap, int blocks, int silent)
+static void print_bmap_block (FILE * fp, int i, unsigned long block, char * map, int blocks, int silent, int blocksize)
 {
     int j, k;
-    int bits = bmap->b_size * 8;
+    int bits = blocksize * 8;
     int zeros = 0, ones = 0;
   
-    reiserfs_warning (fp, "#%d: block %lu: ", i, bmap->b_blocknr);
 
-    if (test_bit (0, bmap->b_data)) {
+    reiserfs_warning (fp, "#%d: block %lu: ", i, block);
+
+    blocks = blocksize * 8;
+
+    if (test_bit (0, map)) {
 	/* first block addressed by this bitmap block is used */
 	ones ++;
 	if (!silent)
 	    reiserfs_warning (fp, "Busy (%d-", i * bits);
 	for (j = 1; j < blocks; j ++) {
-	    while (test_bit (j, bmap->b_data)) {
+	    while (test_bit (j, map)) {
 		ones ++;
 		if (j == blocks - 1) {
 		    if (!silent)
@@ -735,7 +807,7 @@ static void print_bmap_block (FILE * fp, int i, struct buffer_head * bmap, int b
 	    if (!silent)
 		reiserfs_warning (fp, "%d) Free(%d-", j - 1 + i * bits, j + i * bits);
 
-	    while (!test_bit (j, bmap->b_data)) {
+	    while (!test_bit (j, map)) {
 		zeros ++;
 		if (j == blocks - 1) {
 		    if (!silent)
@@ -757,7 +829,7 @@ static void print_bmap_block (FILE * fp, int i, struct buffer_head * bmap, int b
 	    reiserfs_warning (fp, "Free (%d-", i * bits);
 	for (j = 1; j < blocks; j ++) {
 	    k = 0;
-	    while (!test_bit (j, bmap->b_data)) {
+	    while (!test_bit (j, map)) {
 		k ++;
 		if (j == blocks - 1) {
 		    if (!silent)
@@ -772,7 +844,7 @@ static void print_bmap_block (FILE * fp, int i, struct buffer_head * bmap, int b
 		reiserfs_warning (fp, "%d) Busy(%d-", j - 1 + i * bits, j + i * bits);
 	    
 	    k = 0;
-	    while (test_bit (j, bmap->b_data)) {
+	    while (test_bit (j, map)) {
 		ones ++;
 		if (j == blocks - 1) {
 		    if (!silent)
@@ -795,155 +867,137 @@ static void print_bmap_block (FILE * fp, int i, struct buffer_head * bmap, int b
 }
 
 
-/* if silent == 1, do not print details */
-void print_bmap (FILE * fp, reiserfs_filsys_t s, int silent)
+/* read bitmap of disk and print details */
+void print_bmap (FILE * fp, reiserfs_filsys_t * fs, int silent)
 {
-    int bmapnr = SB_BMAP_NR (s);
+    struct reiserfs_super_block * sb;
+    int bmap_nr;
     int i;
-    int blocks = s->s_blocksize * 8; /* adressed by bitmap */
+    int bits_per_block;
+    int blocks;
+    unsigned long block;
+    struct buffer_head * bh;
+
+
+    sb = fs->fs_ondisk_sb;
+    bmap_nr = get_sb_bmap_nr (sb);
+    bits_per_block = fs->fs_blocksize * 8;
+    blocks = bits_per_block;
 
     reiserfs_warning (fp, "Bitmap blocks are:\n");
-    for (i = 0; i < bmapnr; i ++) {
-
-	if (i == bmapnr - 1)
-	    if (SB_BLOCK_COUNT (s) % (s->s_blocksize * 8))
-		blocks = SB_BLOCK_COUNT (s) % (s->s_blocksize * 8);
-	print_bmap_block (fp, i, SB_AP_BITMAP(s)[i], blocks, silent);
-    }
-
-    /* check unused part of last bitmap */
-    {
-	int bad_unused_bitmap = 0;
-	int ones;
-
-	ones = s->s_blocksize * 8 - SB_BLOCK_COUNT (s) % (s->s_blocksize * 8);
-	if (ones == s->s_blocksize * 8)
-	    ones = 0;
-      
-	for (i = s->s_blocksize * 8; --i >= blocks; )
-	    if (!test_bit (i, SB_AP_BITMAP (s)[bmapnr - 1]->b_data))
-		bad_unused_bitmap ++;
-
-	if (bad_unused_bitmap) {
-	    reiserfs_warning (fp, "Unused part of bitmap is wrong: should be %d ones, found %d zeros\n",
-			       ones, bad_unused_bitmap);
+    block = fs->fs_super_bh->b_blocknr + 1;
+    for (i = 0; i < bmap_nr; i ++) {
+	bh = bread (fs->fs_dev, block, fs->fs_blocksize);
+	if (!bh) {
+	    reiserfs_warning (stderr, "print_bmap: bread failed for %d: %lu\n", i, block);
+	    continue;
 	}
+	if (i == bmap_nr - 1)
+	    if (get_sb_block_count (sb) % bits_per_block)
+		blocks = get_sb_block_count (sb) % bits_per_block;
+	print_bmap_block (fp, i, block, bh->b_data, blocks, silent, fs->fs_blocksize);
+	brelse (bh);
+
+	if (spread_bitmaps (fs))
+	    block = (block / (fs->fs_blocksize * 8) + 1) * (fs->fs_blocksize * 8);
+	else
+	    block ++;
+	
     }
-    
 }
 
 
 
-void print_objectid_map (FILE * fp, reiserfs_filsys_t fs)
+void print_objectid_map (FILE * fp, reiserfs_filsys_t * fs)
 {
     int i;
-    struct reiserfs_super_block * rs;
+    struct reiserfs_super_block * sb;
     __u32 * omap;
 
-    rs = fs->s_rs;
-    if (fs->s_version == REISERFS_VERSION_2)
-	omap = (__u32 *)(rs + 1);
-    else if (fs->s_version == REISERFS_VERSION_1)
-	omap = (__u32 *)((struct reiserfs_super_block_v1 *)rs + 1);
+
+    sb = fs->fs_ondisk_sb;
+    if (fs->fs_format == REISERFS_FORMAT_3_6)
+	omap = (__u32 *)(sb + 1);
+    else if (fs->fs_format == REISERFS_FORMAT_3_5)
+	omap = (__u32 *)((struct reiserfs_super_block_v1 *)sb + 1);
     else {
 	reiserfs_warning (fp, "print_objectid_map: proper signature is not found\n");
 	return;
     }
 	
-    reiserfs_warning (fp, "Map of objectids (super block size %d)\n", (char *)omap - (char *)rs);
+    reiserfs_warning (fp, "Map of objectids (super block size %d)\n",
+		      (char *)omap - (char *)sb);
       
-    for (i = 0; i < SB_OBJECTID_MAP_SIZE (fs); i ++) {
+    for (i = 0; i < get_sb_oid_cursize (sb); i ++) {
 	if (i % 2 == 0)
-	    reiserfs_warning (fp, "busy(%u-%u) ", omap[i], omap[i+1] - 1); 
+	    reiserfs_warning (fp, "busy(%u-%u) ", le32_to_cpu (omap[i]),
+			      le32_to_cpu (omap[i+1]) - 1); 
 	else
 	    reiserfs_warning (fp, "free(%u-%u) ", 
-			       omap[i], ((i+1) == SB_OBJECTID_MAP_SIZE (fs)) ? -1 : omap[i+1] - 1);
+			      le32_to_cpu (omap[i]),
+			      ((i+1) == get_sb_oid_cursize (sb)) ? -1 : (le32_to_cpu (omap[i+1]) - 1));
     }
 
-    reiserfs_warning (fp, "\nObject id array has size %d (max %d):", SB_OBJECTID_MAP_SIZE (fs), 
-		       SB_OBJECTID_MAP_MAXSIZE (fs));
+    reiserfs_warning (fp, "\nObject id array has size %d (max %d):", 
+		      get_sb_oid_cursize (sb), get_sb_oid_maxsize (sb));
   
-    for (i = 0; i < SB_OBJECTID_MAP_SIZE (fs); i ++)
-	reiserfs_warning (fp, "%s%u ", i % 2 ? "" : "*", omap[i]); 
+    for (i = 0; i < get_sb_oid_cursize (sb); i ++)
+	reiserfs_warning (fp, "%s%u ", i % 2 ? "" : "*", le32_to_cpu (omap[i])); 
     reiserfs_warning (fp, "\n");
 
 }
 
-#if 0
-/* the below is from fileutils-4.0-66 (shortened) */
 
-/* Look at read, write, and execute bits in BITS and set
-   flags in CHARS accordingly.  */
-
-static void
-rwx (short unsigned int bits, char *chars)
+void print_journal_header (reiserfs_filsys_t * fs)
 {
-  chars[0] = (bits & S_IRUSR) ? 'r' : '-';
-  chars[1] = (bits & S_IWUSR) ? 'w' : '-';
-  chars[2] = (bits & S_IXUSR) ? 'x' : '-';
-}
+    struct reiserfs_journal_header * j_head;
 
-/* snip */
 
-/* Return a character indicating the type of file described by
-   file mode BITS:
-   'd' for directories
-   'b' for block special files
-   'c' for character special files
-   'l' for symbolic links
-   's' for sockets
-   'p' for fifos
-   '-' for regular files
-   '?' for any other file type.  */
-
-static char
-ftypelet (long int bits)
-{
-#ifdef S_ISBLK
-  if (S_ISBLK (bits))
-    return 'b';
-#endif
-  if (S_ISCHR (bits))
-    return 'c';
-  if (S_ISDIR (bits))
-    return 'd';
-  if (S_ISREG (bits))
-    return '-';
-#ifdef S_ISFIFO
-  if (S_ISFIFO (bits))
-    return 'p';
-#endif
-#ifdef S_ISLNK
-  if (S_ISLNK (bits))
-    return 'l';
-#endif
-#ifdef S_ISSOCK
-  if (S_ISSOCK (bits))
-    return 's';
-#endif
-
-  return '?';
-}
-
-/* Like filemodestring, but only the relevant part of the `struct stat'
-   is given as an argument.  */
-
-static void
-mode_string (short unsigned int mode, char *str)
-{
-  str[0] = ftypelet ((long) mode);
-  rwx ((mode & 0700) << 0, &str[1]);
-  rwx ((mode & 0070) << 3, &str[4]);
-  rwx ((mode & 0007) << 6, &str[7]);
+    j_head = (struct reiserfs_journal_header *)(fs->fs_jh_bh->b_data);
+    reiserfs_warning (stdout, "Journal header (block #%lu of %s):\n"
+		      "\tj_last_flush_trans_id %ld\n"
+		      "\tj_first_unflushed_offset %ld\n"
+		      "\tj_mount_id %ld\n", 
+		      fs->fs_jh_bh->b_blocknr, fs->fs_j_file_name,
+		      get_jh_last_flushed (j_head),
+		      get_jh_replay_start_offset (j_head),
+		      get_jh_mount_id (j_head));
+    print_journal_params (stdout, &j_head->jh_journal);
 }
 
 
-char * st_mode2string (short unsigned int mode, char * buf)
+static void print_trans_element (reiserfs_filsys_t * fs, reiserfs_trans_t * trans,
+				 int index, unsigned long in_journal, unsigned long in_place)
 {
-    mode_string (mode, buf);
-    buf[10] = 0;
-    return buf;
+    if (index % 8 == 0)
+	reiserfs_warning (stdout, "#%d\t", index);
+
+    reiserfs_warning (stdout, "%lu->%lu%s ",  in_journal, in_place,
+		      block_of_bitmap (fs, in_place) ? "B" : "");
+    if ((index + 1) % 8 == 0 || index == trans->trans_len - 1)
+	reiserfs_warning (stdout, "\n");
 }
 
 
-#endif
+void print_one_transaction (reiserfs_filsys_t * fs, reiserfs_trans_t * trans)
+{
+    reiserfs_warning (stdout, "Mountid %u, transid %u, desc %lu, length %u, commit %lu\n",
+		      trans->mount_id, trans->trans_id,
+		      trans->desc_blocknr,
+		      trans->trans_len, trans->commit_blocknr);
+    for_each_block (fs, trans, print_trans_element);
+}
+
+
+/* print all valid transactions and found dec blocks */
+void print_journal (reiserfs_filsys_t * fs)
+{
+    if (!reiserfs_journal_opened (fs)) {
+	reiserfs_warning (stderr, "print_journal: journal is not opened\n");
+	return;
+    }
+    print_journal_header (fs);
+
+    for_each_transaction (fs, print_one_transaction);
+}
+

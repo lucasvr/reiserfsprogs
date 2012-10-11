@@ -1,5 +1,5 @@
 /*
- * Copyright 2000 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
  */
   
 #include "debugreiserfs.h"
@@ -8,39 +8,50 @@
 
 #define print_usage_and_exit() die ("Usage: %s [-v] [-b filename] device\n\
 -v		prints blocks number of every block unpacked\n\
--b filename	makes unpack to save bitmap of blocks unpacked\n", argv[0]);
-
+-b filename	makes unpack to save bitmap of blocks unpacked\n\
+-j filename     makes unpack to store journal in specified file\n", argv[0]);
 
 
 /* when super block gets unpacked for the first time - create a bitmap
    and mark in it what have been unpacked. Save that bitmap at the end */
-reiserfs_bitmap_t what_unpacked = 0;
+reiserfs_bitmap_t * what_unpacked = 0;
 
 
-int unpacked, data_blocks_unpacked;
+int leaves, full;
 
 int verbose = 0;
 
+int Default_journal = 1;
 
-
-static void unpack_offset (struct packed_item * pi, struct item_head * ih)
+static void unpack_offset (struct packed_item * pi, struct item_head * ih, int blocksize)
 {
-    if (pi->mask & OFFSET_BITS_64) {
+
+    if (get_pi_mask(pi) & OFFSET_BITS_64) {
 	__u64 v64;
 
-	if (ih_key_format (ih) != KEY_FORMAT_2)
+	if (get_ih_key_format (ih) != KEY_FORMAT_2)
 	    die ("unpack_offset: key format is not set or wrong");
-	fread64 (&v64);
+	fread_le64 (&v64);
 	set_offset (KEY_FORMAT_2, &ih->ih_key, v64);
 	return;
     }
 
-    if (pi->mask & OFFSET_BITS_32) {
+    if (get_pi_mask(pi) & OFFSET_BITS_32) {
 	__u32 v32;
 
-	fread32 (&v32);
-	set_offset (ih_key_format (ih), &ih->ih_key, v32);
+	fread_le32 (&v32);
+	set_offset (get_ih_key_format (ih), &ih->ih_key, v32);
 	return;
+    }
+
+    if ((get_pi_mask(pi) & DIR_ID) == 0 && (get_pi_mask(pi) & OBJECT_ID) == 0) {
+	/* offset was not sent, as it can be calculated looking at the
+           previous item */
+	if (is_stat_data_ih (ih - 1))
+	    set_offset (get_ih_key_format (ih), &ih->ih_key, 1);
+	if (is_indirect_ih (ih - 1))
+	    set_offset (get_ih_key_format (ih), &ih->ih_key, 
+			get_offset (&(ih - 1)->ih_key) + get_bytes_number (ih - 1, blocksize));
     }
 
     // offset is 0
@@ -50,21 +61,14 @@ static void unpack_offset (struct packed_item * pi, struct item_head * ih)
 
 static void unpack_type (struct packed_item * pi, struct item_head * ih)
 {
-    if (pi->mask & DIRECT_ITEM)
-	set_type (ih_key_format (ih), &ih->ih_key, TYPE_DIRECT);
-    else if (pi->mask & STAT_DATA_ITEM)
-	set_type (ih_key_format (ih), &ih->ih_key, TYPE_STAT_DATA);
-    else if (pi->mask & INDIRECT_ITEM)
-	set_type (ih_key_format (ih), &ih->ih_key, TYPE_INDIRECT);
-    else if (pi->mask & DIRENTRY_ITEM)
-	set_type (ih_key_format (ih), &ih->ih_key, TYPE_DIRENTRY);
-    else
-	reiserfs_panic (0, "%h, mask 0%o\n", ih, pi->mask);
+    set_type (get_ih_key_format (ih), &ih->ih_key, get_pi_type(pi));
+    if (type_unknown (&ih->ih_key))
+	reiserfs_panic ("unpack_type: unknown type %d unpacked for %H\n",
+			get_pi_type(pi), ih);
 }
 
 
 /* direntry item comes in the following format: 
-   entry count - 16 bits
    for each entry
       mask - 8 bits
       entry length - 16 bits
@@ -87,17 +91,21 @@ static void unpack_direntry (struct packed_item * pi, struct buffer_head * bh,
     if (!hash_func)
 	die ("unpack_direntry: hash function is not set");
 
-    fread16 (&entry_count);
-    set_entry_count (ih, entry_count);
+    if (!(get_pi_mask(pi) & IH_FREE_SPACE))
+        die ("ih_entry_count must be packed for directory items");
 
-    item = bh->b_data + ih_location (ih);
+    entry_count = get_ih_entry_count (ih);
+/*    if (!entry_count)
+	reiserfs_panic ("unpack_direntry: entry count should be set already");*/
+
+    item = bh->b_data + get_ih_location (ih);
     deh = (struct reiserfs_de_head *)item;
-    location = pi->item_len;
+    location = get_pi_item_len(pi);
     for (i = 0; i < entry_count; i ++, deh ++) {
 	fread8 (&mask);
-	fread16 (&entry_len);
+	fread_le16 (&entry_len);
 	location -= entry_len;
-	deh->deh_location = location;
+	set_deh_location (deh, location);
 	fread (item + location, entry_len, 1, stdin);
 
 	/* find name length */
@@ -106,29 +114,30 @@ static void unpack_direntry (struct packed_item * pi, struct buffer_head * bh,
 	else
 	    namelen = strlen (item + location);
 
-	fread32 (&deh->deh_objectid);
+	fread32 (&deh->deh2_objectid);
 	if (mask & HAS_DIR_ID)
-	    fread32 (&deh->deh_dir_id);
+	    fread32 (&deh->deh2_dir_id);
 	else
-	    deh->deh_dir_id = ih->ih_key.k_objectid;
+	    set_deh_dirid (deh, get_key_objectid (&ih->ih_key));
+
 	if (*(item + location) == '.' && namelen == 1)
 	    /* old or new "." */
-	    deh->deh_offset = DOT_OFFSET;
+	    set_deh_offset (deh, DOT_OFFSET);
 	else if (*(item + location) == '.' && *(item + location + 1) == '.' && namelen == 2)
 	    /* old or new ".." */
-	    deh->deh_offset = DOT_DOT_OFFSET;
+	    set_deh_offset (deh, DOT_DOT_OFFSET);
 	else
-	    deh->deh_offset = GET_HASH_VALUE (hash_func (item + location,
-							 namelen));
+	    set_deh_offset (deh, GET_HASH_VALUE (hash_func (item + location,
+							    namelen)));
 	if (mask & HAS_GEN_COUNTER) {
-	    fread16 (&gen_counter);
-	    deh->deh_offset |= gen_counter;
+	    fread_le16 (&gen_counter);
+	    set_deh_offset (deh, get_deh_offset (deh) | gen_counter);
 	}
 
 	if (mask & HAS_STATE)
-	    fread16 (&deh->deh_state);
+	    fread16 (&deh->deh2_state);
 	else
-	    deh->deh_state = (1 << DEH_Visible);
+	    set_deh_state (deh, (1 << DEH_Visible2));
     }
 
     return;
@@ -139,9 +148,12 @@ static void unpack_direntry (struct packed_item * pi, struct buffer_head * bh,
 static void unpack_stat_data (struct packed_item * pi, struct buffer_head * bh,
 			      struct item_head * ih)
 {
-    set_entry_count (ih, 0xffff);
+    if (!(get_pi_mask(pi) & IH_FREE_SPACE)) {
+        /* ih_free_space was not packed - set default */
+        set_ih_entry_count (ih, 0xffff);
+    }
 
-    if (ih_key_format (ih) == KEY_FORMAT_1) {
+    if (get_ih_key_format (ih) == KEY_FORMAT_1) {
 	/* stat data comes in the following format:
 	   if this is old stat data:
 	   mode - 16 bits
@@ -160,7 +172,7 @@ static void unpack_stat_data (struct packed_item * pi, struct buffer_head * bh,
 	fread32 (&sd->sd_size);
 	fread32 (&sd->u.sd_blocks);
 	
-	if (pi->mask & WITH_SD_FIRST_DIRECT_BYTE) {
+	if (get_pi_mask(pi) & WITH_SD_FIRST_DIRECT_BYTE) {
 	    fread32 (&sd->sd_first_direct_byte);
 	} else {
 	    sd->sd_first_direct_byte = 0xffffffff;
@@ -179,22 +191,23 @@ static void unpack_stat_data (struct packed_item * pi, struct buffer_head * bh,
 	
 	fread16 (&sd->sd_mode);
 
-	if (pi->mask & NLINK_BITS_32) {
+	if (get_pi_mask(pi) & NLINK_BITS_32) {
 	    fread32 (&sd->sd_nlink);
 	} else {
 	    __u16 nlink16;
 
 	    fread16 (&nlink16);
-	    sd->sd_nlink = nlink16;
+            set_sd_v2_nlink (sd, le16_to_cpu(nlink16));
 	}
 
-	if (pi->mask & SIZE_BITS_64) {
+	if (get_pi_mask(pi) & SIZE_BITS_64) {
 	    fread64 (&sd->sd_size);
 	} else {
 	    __u32 size32;
 
-	    fread32 (&size32);
-	    sd->sd_size = size32;
+            /* We need the endian conversions since sd->sd_size is 64 bit */
+	    fread_le32 (&size32);
+            set_sd_v2_size (sd, size32 );
 	}
 
 	fread32 (&sd->sd_blocks);
@@ -213,25 +226,33 @@ static void unpack_indirect (struct packed_item * pi, struct buffer_head * bh,
     int i;
     __u16 v16;
 
-    v16 = 0;
-    if (pi->mask & ENTRY_COUNT)
-	fread16 (&v16);
-
-    set_entry_count (ih, v16);
+    if (!(get_pi_mask(pi) & IH_FREE_SPACE)) {
+        /* ih_free_space was not packed - set default */
+        set_ih_entry_count (ih, 0);
+    }
 
     ind_item = (__u32 *)B_I_PITEM (bh, ih);
-    if (pi->mask & WHOLE_INDIRECT) {
-	fread (ind_item, pi->item_len, 1, stdin);
+
+    if (get_pi_mask(pi) & SAFE_LINK) {
+        *ind_item = cpu_to_le32(get_key_dirid(&ih->ih_key));
+	set_key_dirid(&ih->ih_key, (__u32)-1);
+	return;
+    }
+
+    if (get_pi_mask(pi) & WHOLE_INDIRECT) {
+	fread (ind_item, get_pi_item_len(pi), 1, stdin);
 	return;
     }
 
     end = ind_item + I_UNFM_NUM (ih);
     while (ind_item < end) {
+        __u32 base;
 	fread32 (ind_item);
-	fread16 (&v16);
+	fread_le16 (&v16);
+        base = le32_to_cpu(ind_item[0]);
 	for (i = 1; i < v16; i ++) {
-	    if (ind_item[0])
-		ind_item [i] = ind_item[0] + i;
+	    if (ind_item[0] != 0)
+		ind_item [i] = cpu_to_le32(base + i);
 	    else
 		ind_item [i] = 0;
 	}
@@ -245,13 +266,23 @@ static void unpack_indirect (struct packed_item * pi, struct buffer_head * bh,
 static void unpack_direct (struct packed_item * pi, struct buffer_head * bh,
 			   struct item_head * ih)
 {
-    set_entry_count (ih, 0xffff);
-    memset (bh->b_data + ih_location (ih), 'a', pi->item_len);
+    __u32 * d_item = (__u32 *)B_I_PITEM (bh, ih);
+
+    if (!(get_pi_mask(pi) & IH_FREE_SPACE))
+        /* ih_free_space was not packed - set default */
+        set_ih_entry_count (ih, 0xffff);
+
+    if (get_pi_mask(pi) & SAFE_LINK) {
+        *d_item = cpu_to_le32(get_key_dirid(&ih->ih_key));
+	set_key_dirid(&ih->ih_key, (__u32)-1);
+    } else {
+	memset (d_item, 'a', get_pi_item_len(pi));
+    }
     return;
 }
 
 
-static void unpack_leaf (int dev, hashf_t hash_func)
+static void unpack_leaf (int dev, hashf_t hash_func, __u16 blocksize)
 {
     static int unpacked_leaves = 0;
     struct buffer_head * bh;
@@ -262,28 +293,26 @@ static void unpack_leaf (int dev, hashf_t hash_func)
     __u32 v32;
     
     /* block number */
-    fread32 (&v32);
+    fread_le32 (&v32);
 
 
     /* item number */
-    fread16 (&v16);
+    fread_le16 (&v16);
 
     if (verbose)
-	fprintf (stderr, "leaf %d\n", v32);
+	reiserfs_warning (stderr, "leaf %d: %d items\n", v32, v16);
 
-    
- 
-    bh = getblk (dev, v32, 4096);
+    bh = getblk (dev, v32, blocksize);
     if (!bh)
 	die ("unpack_leaf: getblk failed");
 
-    set_node_item_number (bh, v16);
-    set_node_level (bh, DISK_LEAF_NODE_LEVEL);
-    set_node_free_space (bh, bh->b_size - BLKH_SIZE);
+    set_blkh_nr_items (B_BLK_HEAD (bh), v16);
+    set_blkh_level (B_BLK_HEAD (bh), DISK_LEAF_NODE_LEVEL);
+    set_blkh_free_space (B_BLK_HEAD (bh), MAX_FREE_SPACE (bh->b_size));
     
 
     ih = B_N_PITEM_HEAD (bh, 0);
-    for (i = 0; i < v16; i ++, ih ++) {
+    for (i = 0; i < get_blkh_nr_items (B_BLK_HEAD (bh)); i ++, ih ++) {
 #if 0
 	fread32 (&v32);
 	if (v32 != ITEM_START_MAGIC)
@@ -294,37 +323,46 @@ static void unpack_leaf (int dev, hashf_t hash_func)
 	fread (&pi, sizeof (struct packed_item), 1, stdin);
 	
 	/* dir_id - if it is there */
-	if (pi.mask & DIR_ID) {
+	if (get_pi_mask(&pi) & DIR_ID) {
 	    fread32 (&v32);
-	    ih->ih_key.k_dir_id = v32;
+            set_key_dirid (&ih->ih_key, le32_to_cpu(v32));
 	} else {
 	    if (!i)
 		die ("unpack_leaf: dir_id is not set");
-	    ih->ih_key.k_dir_id = (ih - 1)->ih_key.k_dir_id;
+	    set_key_dirid (&ih->ih_key, get_key_dirid (&(ih - 1)->ih_key));
 	}
 
 	/* object_id - if it is there */
-	if (pi.mask & OBJECT_ID) {
+	if (get_pi_mask(&pi) & OBJECT_ID) {
 	    fread32 (&v32);
-	    ih->ih_key.k_objectid = v32;
+            set_key_objectid (&ih->ih_key, le32_to_cpu(v32));
 	} else {
 	    if (!i)
 		die ("unpack_leaf: object_id is not set");
-	    ih->ih_key.k_objectid = (ih - 1)->ih_key.k_objectid;
+	    set_key_objectid (&ih->ih_key, get_key_objectid (&(ih - 1)->ih_key));
 	}
 
 	// we need to set item format before offset unpacking
-	set_key_format (ih, (pi.mask & NEW_FORMAT) ? KEY_FORMAT_2 : KEY_FORMAT_1);
+	set_ih_key_format (ih, (get_pi_mask(&pi) & NEW_FORMAT) ? KEY_FORMAT_2 : KEY_FORMAT_1);
 
 	// offset
-	unpack_offset (&pi, ih);
+	unpack_offset (&pi, ih, bh->b_size);
 
 	/* type */
 	unpack_type (&pi, ih);
 
+	/* ih_free_space and ih_format */
+	if (get_pi_mask(&pi) & IH_FREE_SPACE) {
+	    fread16 (&v16);
+	    set_ih_entry_count (ih, le16_to_cpu(v16));
+	}
+
+	if (get_pi_mask(&pi) & IH_FORMAT)
+	    fread16 (&ih->ih_format);
+
 	/* item length and item location */
-	set_ih_item_len (ih, pi.item_len);
-	set_ih_location (ih, (i ? ih_location (ih - 1) : bh->b_size) - pi.item_len);
+	set_ih_item_len (ih, get_pi_item_len(&pi));
+	set_ih_location (ih, (i ? get_ih_location (ih - 1) : bh->b_size) - get_pi_item_len(&pi));
 
 	// item itself
 	if (is_direct_ih (ih)) {
@@ -336,16 +374,20 @@ static void unpack_leaf (int dev, hashf_t hash_func)
 	} else if (is_stat_data_ih (ih)) {
 	    unpack_stat_data (&pi, bh, ih);
 	}
-	set_node_free_space (bh, node_free_space (bh) - (IH_SIZE + ih_item_len (ih)));
+	set_blkh_free_space (B_BLK_HEAD (bh), get_blkh_free_space (B_BLK_HEAD (bh)) -
+			     (IH_SIZE + get_ih_item_len (ih)));
+
 #if 0
 	fread32 (&v32);
 	if (v32 != ITEM_END_MAGIC)
 	    die ("unpack_leaf: no end item magic found: block %lu, item %i",
 		 bh->b_blocknr, i);
+	if (verbose)
+	    reiserfs_warning (stderr, "%d: %H\n", i, ih);
 #endif
     }
 
-    fread16 (&v16);
+    fread_le16 (&v16);
     if (v16 != LEAF_END_MAGIC)
 	die ("unpack_leaf: wrong end signature found - %x, block %lu", 
 	     v16, bh->b_blocknr);
@@ -361,7 +403,7 @@ static void unpack_leaf (int dev, hashf_t hash_func)
 
     if (what_unpacked)
 	reiserfs_bitmap_set_bit (what_unpacked, bh->b_blocknr);
-    unpacked ++;
+    /*unpacked ++;*/
 
     if (!(++ unpacked_leaves % 10))
 	fprintf (stderr, "#");
@@ -374,7 +416,7 @@ static void unpack_full_block (int dev, int blocksize)
     __u32 block;
     struct buffer_head * bh;
 
-    fread32 (&block);
+    fread_le32 (&block);
 
     if (verbose)
 	fprintf (stderr, "full #%d\n", block);
@@ -387,10 +429,18 @@ static void unpack_full_block (int dev, int blocksize)
 
     if (who_is_this (bh->b_data, bh->b_size) == THE_SUPER && !what_unpacked) {
 	unsigned long blocks;
+	struct buffer_head * tmp;
 	
-	blocks = rs_block_count ((struct reiserfs_super_block *)(bh->b_data));
+	blocks = get_sb_block_count ((struct reiserfs_super_block *)(bh->b_data));
 	fprintf (stderr, "There were %lu blocks on the device\n", blocks);
 	what_unpacked = reiserfs_create_bitmap (blocks);
+
+	/* make file as long as filesystem is */
+	tmp = getblk (dev, blocks - 1, blocksize);
+	mark_buffer_dirty (tmp);
+	mark_buffer_uptodate (tmp, 0);
+	bwrite (tmp);
+	brelse (tmp);
     }
 
     mark_buffer_uptodate (bh, 1);
@@ -404,7 +454,7 @@ static void unpack_full_block (int dev, int blocksize)
 
     if (what_unpacked)
 	reiserfs_bitmap_set_bit (what_unpacked, block);
-    unpacked ++;
+    /*unpacked ++;*/
 
     if (!(++ full_blocks_unpacked % 50))
 	fprintf (stderr, ".");
@@ -419,8 +469,8 @@ static void unpack_unformatted_bitmap (int dev, int blocksize)
     int i;
     char * buf;
  
-    fread16 (&bmap_num);
-    fread32 (&block_count);
+    fread_le16 (&bmap_num);
+    fread_le32 (&block_count);
     
     buf = malloc (blocksize);
     if (!buf)
@@ -436,17 +486,19 @@ static void unpack_unformatted_bitmap (int dev, int blocksize)
 
 
 // read packed reiserfs partition metadata from stdin
-void unpack_partition (int dev)
+void unpack_partition (int fd, int jfd)
 {
     __u32 magic32;
     __u16 magic16;
     __u16 blocksize;
+    int dev = fd;
     
-    fread32 (&magic32);
+    fread_le32 (&magic32);
     if (magic32 != REISERFS_SUPER_MAGIC)
-	die ("unpack_partition: reiserfs magic number not found");
+	die ("unpack_partition: reiserfs magic number (0x%x) not found - %x\n",
+             REISERFS_SUPER_MAGIC, magic32);
     
-    fread16 (&blocksize);
+    fread_le16 (&blocksize);
     
     if (verbose)
 	fprintf (stderr, "Blocksize %d\n", blocksize);
@@ -480,15 +532,27 @@ void unpack_partition (int dev)
 	}
 
 	fread (c + 1, 1, 1, stdin);
-	magic16 = *(__u16 *)c;
+	magic16 = le16_to_cpu(*(__u16 *)c);
 	/*fread16 (&magic16);*/
 	
 	switch (magic16 & 0xff) {
 	case LEAF_START_MAGIC:
-	    unpack_leaf (dev, code2func (magic16 >> 8));
+	    leaves ++;
+	    unpack_leaf (dev, code2func (magic16 >> 8), blocksize);
+	    break;
+	    
+	case SEPARATED_JOURNAL_START_MAGIC:
+	    if (Default_journal)
+		die ("file name for separated journal has to be specified");	
+	    dev = jfd;
+	    break;    
+
+	case SEPARATED_JOURNAL_END_MAGIC:
+	    dev = fd;
 	    break;
 	    
 	case FULL_BLOCK_START_MAGIC:
+	    full ++;
 	    unpack_full_block (dev, blocksize);
 	    break;
 
@@ -505,7 +569,7 @@ void unpack_partition (int dev)
 	}
     }
 
-    fprintf (stderr, "Unpacked %d (%d) blocks\n", unpacked, what_unpacked ? reiserfs_bitmap_ones (what_unpacked) : 0);
+    fprintf (stderr, "Unpacked %d leaves, %d full blocks\n", leaves, full);
 
 
     /*    fclose (block_list);*/
@@ -514,8 +578,9 @@ void unpack_partition (int dev)
 
 int main (int argc, char ** argv)
 {
-    int fd;
+    int fd, fdj = -2;
     int c;
+    char * j_filename;
     char * filename = ".bitmap";
     struct rlimit lim = {0xffffffff, 0xffffffff};
 
@@ -526,13 +591,18 @@ int main (int argc, char ** argv)
 	fprintf  (stderr, "sertlimit failed: %m\n");
     }
 
-    while ((c = getopt (argc, argv, "vb:")) != EOF) {
+    while ((c = getopt (argc, argv, "vb:j:")) != EOF) {
 	switch (c) {
 	case 'v':
 	    verbose = 1;
+	    break;
 	case 'b':
 	    asprintf (&filename, "%s", optarg);
 	    break;
+	case 'j':
+	    Default_journal = 0;
+	    asprintf (&j_filename, "%s", optarg);
+	    break;    
 	}
     }
     if (optind != argc - 1)
@@ -548,11 +618,24 @@ int main (int argc, char ** argv)
 	return 0;
     }
 
-    unpack_partition (fd);
+    if (!Default_journal) {
+	fdj = open (j_filename, O_RDWR | O_LARGEFILE);
+	if (fdj == -1) {
+	    perror ("open failed");
+	    return 0;
+	}
+    }
 
-    if (what_unpacked && filename)
-	reiserfs_bitmap_save (filename, what_unpacked);
+    unpack_partition (fd, fdj);
+
+    if (what_unpacked && filename) {
+        FILE * file = open_file(filename, "w+");
+        reiserfs_bitmap_save (file,  what_unpacked);
+        close_file(file);
+    }
 
     close (fd);
+    if (!Default_journal)
+	close (fdj);	
     return 0;
 }

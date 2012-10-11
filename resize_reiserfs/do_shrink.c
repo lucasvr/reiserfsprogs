@@ -1,8 +1,8 @@
 /*
- * Copyright 2000 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
  */
-#include <time.h>
 #include "resize.h"
+#include <time.h>
 
 
 static unsigned long int_node_cnt   = 0, int_moved_cnt   = 0;
@@ -15,33 +15,31 @@ static unsigned long unused_block;
 static unsigned long blocks_used;
 static int block_count_mismatch = 0;
 
-static reiserfs_bitmap_t  bmp;
-static reiserfs_filsys_t fs;
-static struct reiserfs_super_block * rs;
+static reiserfs_bitmap_t * bmp;
+static struct reiserfs_super_block * ondisk_sb;
 
 /* abnornal exit from block reallocation process */
-static void quit_resizer()
+static void quit_resizer(reiserfs_filsys_t * fs)
 {
 	/* save changes to bitmap blocks */
-	reiserfs_flush_bitmap (bmp, fs);
 	reiserfs_close (fs);
 	/* leave fs in ERROR state */
-	die ("resize_reiserfs: fs shrinking was not completed successfully, run reiserfsck.\n");
+	DIE ("fs shrinking was not completed successfully, run reiserfsck.");
 }
 
 /* block moving */
-static unsigned long move_generic_block(unsigned long block, unsigned long bnd, int h)
+static unsigned long move_generic_block(reiserfs_filsys_t * fs, unsigned long block, unsigned long bnd, int h)
 {
     struct buffer_head * bh, * bh2;
 
 	/* primitive fsck */
-	if (block > rs_block_count(rs)) {
+	if (block > get_sb_block_count(ondisk_sb)) {
 		fprintf(stderr, "resize_reiserfs: invalid block number (%lu) found.\n", block);
-		quit_resizer();
+		quit_resizer(fs);
 	}
 	/* progress bar, 3D style :) */
 	if (opt_verbose)
-	    print_how_far(&total_node_cnt, blocks_used, 1, 0);
+	    print_how_far(stderr, &total_node_cnt, blocks_used, 1, 0);
 	else
 	    total_node_cnt ++;
 
@@ -55,16 +53,16 @@ static unsigned long move_generic_block(unsigned long block, unsigned long bnd, 
 		return 0;
 	
 	/* move wrong block */ 
-	bh = bread(fs->s_dev, block, fs->s_blocksize);
+	bh = bread(fs->fs_dev, block, fs->fs_blocksize);
 
 	reiserfs_bitmap_find_zero_bit(bmp, &unused_block);
 	if (unused_block == 0 || unused_block >= bnd) {
 		fputs ("resize_reiserfs: can\'t find free block\n", stderr);
-		quit_resizer();
+		quit_resizer(fs);
 	}
 
 	/* blocknr changing */
-	bh2 = getblk(fs->s_dev, unused_block, fs->s_blocksize);
+	bh2 = getblk(fs->fs_dev, unused_block, fs->fs_blocksize);
 	memcpy(bh2->b_data, bh->b_data, bh2->b_size);
 	reiserfs_bitmap_clear_bit(bmp, block);
 	reiserfs_bitmap_set_bit(bmp, unused_block);
@@ -79,11 +77,11 @@ static unsigned long move_generic_block(unsigned long block, unsigned long bnd, 
 	return unused_block;
 }
 
-static unsigned long move_unformatted_block(unsigned long block, unsigned long bnd, int h)
+static unsigned long move_unformatted_block(reiserfs_filsys_t * fs, unsigned long block, unsigned long bnd, int h)
 {
 	unsigned long b;
 	unfm_node_cnt++;
-	b = move_generic_block(block, bnd, h);
+	b = move_generic_block(fs, block, bnd, h);
 	if (b)
 		unfm_moved_cnt++;
 	return b;		
@@ -91,7 +89,7 @@ static unsigned long move_unformatted_block(unsigned long block, unsigned long b
 
 
 /* recursive function processing all tree nodes */
-static unsigned long move_formatted_block(unsigned long block, unsigned long bnd, int h)
+static unsigned long move_formatted_block(reiserfs_filsys_t * fs, unsigned long block, unsigned long bnd, int h)
 {
 	struct buffer_head * bh;
 	struct item_head *ih;
@@ -99,7 +97,9 @@ static unsigned long move_formatted_block(unsigned long block, unsigned long bnd
 	int node_is_internal = 0;
 	int i, j;
 	
-	bh = bread(fs->s_dev, block, fs->s_blocksize);
+	bh = bread(fs->fs_dev, block, fs->fs_blocksize);
+	if (!bh)
+	    reiserfs_panic ("move_formatted_block: bread failed");
 	
 	if (is_leaf_node (bh)) {
 		
@@ -116,7 +116,7 @@ static unsigned long move_formatted_block(unsigned long block, unsigned long bnd
 
 					if (indirect [j] == 0) /* hole */
 						continue;
-					unfm_block = move_unformatted_block(le32_to_cpu (indirect [j]), bnd, h + 1);
+					unfm_block = move_unformatted_block(fs, le32_to_cpu (indirect [j]), bnd, h + 1);
 					if (unfm_block) {
 						indirect [j] = cpu_to_le32 (unfm_block);
 						mark_buffer_dirty(bh);
@@ -131,14 +131,14 @@ static unsigned long move_formatted_block(unsigned long block, unsigned long bnd
 		
 		for (i=0; i <= B_NR_ITEMS(bh); i++) {
 			unsigned long moved_block;
-			moved_block = move_formatted_block(B_N_CHILD_NUM(bh, i), bnd, h+1);
+			moved_block = move_formatted_block(fs, get_dc_child_blocknr (B_N_CHILD (bh, i)), bnd, h+1);
 			if (moved_block) {
-				set_dc_block_number (bh, i, moved_block);
+			    	set_dc_child_blocknr (B_N_CHILD (bh, i), moved_block);
 				mark_buffer_dirty(bh);
 			}
 		}	
 	} else {
-		die ("resize_reiserfs: block (%lu) has invalid format\n", block);
+		DIE ("block (%lu) has invalid format\n", block);
 	}
 	
 	if (buffer_dirty(bh)) {
@@ -148,7 +148,7 @@ static unsigned long move_formatted_block(unsigned long block, unsigned long bnd
 	
 	brelse(bh);	
 	
-	new_blocknr = move_generic_block(block, bnd, h);
+	new_blocknr = move_generic_block(fs, block, bnd, h);
 	if (new_blocknr) {
 		if (node_is_internal)
 			int_moved_cnt++;
@@ -159,14 +159,13 @@ static unsigned long move_formatted_block(unsigned long block, unsigned long bnd
 	return new_blocknr;
 }
 
-int shrink_fs(reiserfs_filsys_t reiserfs, unsigned long blocks)
+int shrink_fs(reiserfs_filsys_t * fs, unsigned long blocks)
 {
 	unsigned long n_root_block;
 	unsigned int bmap_nr_new;
-	unsigned long int i;
+
 	
-	fs = reiserfs;
-	rs = fs->s_rs;
+	ondisk_sb = fs->fs_ondisk_sb;
 	
 	/* warn about alpha version */
 	{
@@ -178,36 +177,39 @@ int shrink_fs(reiserfs_filsys_t reiserfs, unsigned long blocks)
 			"Backup of you data is recommended.\n\n"
 			"Do you want to continue? [y/N]:"
 			);
+		fflush(stdout);
 		c = getchar();
 		if (c != 'y' && c != 'Y')
 			exit(1);
 	}
 
-	bmap_nr_new = (blocks - 1) / (8 * fs->s_blocksize) + 1;
-	
+	bmap_nr_new = (blocks - 1) / (8 * fs->fs_blocksize) + 1;
+
 	/* is shrinking possible ? */
-	if (rs_block_count(rs) - blocks > rs_free_blocks(rs) + rs_bmap_nr(rs) - bmap_nr_new) {
+	if (get_sb_block_count(ondisk_sb) - blocks > get_sb_free_blocks(ondisk_sb) + get_sb_bmap_nr(ondisk_sb) - bmap_nr_new) {
 	    fprintf(stderr, "resize_reiserfs: can\'t shrink fs; too many blocks already allocated\n");
 	    return -1;
 	}
 
 	reiserfs_reopen(fs, O_RDWR);
-	set_state (fs->s_rs, REISERFS_ERROR_FS);
-	mark_buffer_uptodate(SB_BUFFER_WITH_SB(fs), 1);
-	mark_buffer_dirty(SB_BUFFER_WITH_SB(fs));
-	bwrite(SB_BUFFER_WITH_SB(fs));
+	if (!reiserfs_open_ondisk_bitmap (fs))
+	    DIE("cannot open ondisk bitmap");
+	bmp = fs->fs_bitmap2;
+	ondisk_sb = fs->fs_ondisk_sb;
+
+	set_sb_fs_state (fs->fs_ondisk_sb, REISERFS_CORRUPTED);
+	mark_buffer_uptodate(fs->fs_super_bh, 1);
+	mark_buffer_dirty(fs->fs_super_bh);
+	bwrite(fs->fs_super_bh);
 
 	/* calculate number of data blocks */		
 	blocks_used = 
-	    SB_BLOCK_COUNT(fs)
-	    - SB_FREE_BLOCKS(fs)
-	    - SB_BMAP_NR(fs)
-	    - SB_JOURNAL_SIZE(fs)
-	    - REISERFS_DISK_OFFSET_IN_BYTES / fs->s_blocksize
+	    get_sb_block_count(fs->fs_ondisk_sb)
+	    - get_sb_free_blocks(fs->fs_ondisk_sb)
+	    - get_sb_bmap_nr(fs->fs_ondisk_sb)
+	    - get_jp_journal_size(sb_jp (fs->fs_ondisk_sb))
+	    - REISERFS_DISK_OFFSET_IN_BYTES / fs->fs_blocksize
 	    - 2; /* superblock itself and 1 descriptor after the journal */
-
-	bmp = reiserfs_create_bitmap(rs_block_count(rs));
-	reiserfs_fetch_disk_bitmap(bmp, fs);
 
 	unused_block = 1;
 
@@ -216,9 +218,9 @@ int shrink_fs(reiserfs_filsys_t reiserfs, unsigned long blocks)
 		fflush(stdout);
 	}
 
-	n_root_block = move_formatted_block(rs_root_block(rs), blocks, 0);
+	n_root_block = move_formatted_block(fs, get_sb_root_block(ondisk_sb), blocks, 0);
 	if (n_root_block) {
-		set_root_block (rs, n_root_block);
+		set_sb_root_block (ondisk_sb, n_root_block);
 	}
 
 	if (opt_verbose)
@@ -237,33 +239,30 @@ int shrink_fs(reiserfs_filsys_t reiserfs, unsigned long blocks)
 		    " doesn\'t match data block count %lu from super block\n",
 		    (unsigned long)total_node_cnt, blocks_used);
 	}
-#if 0
-	printf("check for used blocks in truncated region\n");
+
+#if 1
 	{
-		unsigned long l;
-		for (l = blocks; l < rs_block_count(rs); l++)
-			if (is_block_used(bmp, l))
-				printf("<%lu>", l);
-		printf("\n");
+	    unsigned long l;
+
+	    /* make sure that none of truncated block are in use */
+	    printf("check for used blocks in truncated region\n");
+	    for (l = blocks; l < fs->fs_bitmap2->bm_bit_size; l ++) {
+		if ((l % (fs->fs_blocksize * 8)) == 0)
+		    continue;
+		if (reiserfs_bitmap_test_bit (fs->fs_bitmap2, l))
+		    printf ("<%lu>", l);
+	    }
+	    printf("\n");
 	}
-#endif /* 0 */
-
-	reiserfs_free_bitmap_blocks(fs);
-	
-	set_free_blocks (rs, rs_free_blocks(rs) - (rs_block_count(rs) - blocks) + (rs_bmap_nr(rs) - bmap_nr_new));
-	set_block_count (rs, blocks);
-	set_bmap_nr (rs, bmap_nr_new);
-
-	reiserfs_read_bitmap_blocks(fs);
-	
-	for (i = blocks; i < bmap_nr_new * fs->s_blocksize; i++)
-		reiserfs_bitmap_set_bit(bmp, i);
-#if 0
-	PUT_SB_FREE_BLOCKS(s, SB_FREE_BLOCKS(s) - (SB_BLOCK_COUNT(s) - blocks) + (SB_BMAP_NR(s) - bmap_nr_new));
-	PUT_SB_BLOCK_COUNT(s, blocks);
-	PUT_SB_BMAP_NR(s, bmap_nr_new);
 #endif
-	reiserfs_flush_bitmap(bmp, fs);
+
+	reiserfs_shrink_bitmap (fs->fs_bitmap2, blocks);
+
+	set_sb_free_blocks (ondisk_sb, get_sb_free_blocks(ondisk_sb)
+			    - (get_sb_block_count(ondisk_sb) - blocks)
+			    + (get_sb_bmap_nr(ondisk_sb) - bmap_nr_new));
+	set_sb_block_count (ondisk_sb, blocks);
+	set_sb_bmap_nr (ondisk_sb, bmap_nr_new);
 
 	return 0;
 }

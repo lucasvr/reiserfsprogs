@@ -34,10 +34,6 @@ static void	internal_define_dest_src_infos (
 						struct buffer_head ** cf
 						)
 {
-#ifdef CONFIG_REISERFS_CHECK
-  memset (dest_bi, 0, sizeof (struct buffer_info));
-  memset (src_bi, 0, sizeof (struct buffer_info));
-#endif
   /* define dest, src, dest parent, dest position */
   switch (shift_mode) {
   case INTERNAL_SHIFT_FROM_S_TO_L:	/* used in internal_shift_left */
@@ -111,13 +107,14 @@ static void	internal_define_dest_src_infos (
  * Insert count items into buffer cur before position to.
  * Items and node pointers are specified by inserted and bh respectively.
  */ 
-static void internal_insert_childs (reiserfs_filsys_t fs, 
+static void internal_insert_childs (reiserfs_filsys_t * fs, 
 				    struct buffer_info * cur_bi,
 				    int to, int count,
 				    struct item_head * inserted,
 				    struct buffer_head ** bh)
 {
     struct buffer_head * cur = cur_bi->bi_bh;
+    struct block_head * blkh;
     int nr;
     struct key * key;
     struct disk_child new_dc[2];
@@ -128,15 +125,8 @@ static void internal_insert_childs (reiserfs_filsys_t fs,
     if (count <= 0)
 	return;
     
-    nr = node_item_number (cur);
-    
-#ifdef CONFIG_REISERFS_CHECK
-    if (count > 2)
-	reiserfs_panic (0, "internal_insert_childs", "too many children (%d) are to be inserted", count);
-    if (node_free_space (cur) < count * (KEY_SIZE + DC_SIZE))
-	reiserfs_panic (0, "internal_insert_childs", "no enough free space (%d), needed %d bytes", 
-			node_free_space (cur), count * (KEY_SIZE + DC_SIZE));
-#endif /* CONFIG_REISERFS_CHECK */
+    blkh = B_BLK_HEAD (cur);
+    nr = get_blkh_nr_items (blkh);
     
     /* prepare space for count disk_child */
     dc = B_N_CHILD (cur,to+1);
@@ -145,9 +135,10 @@ static void internal_insert_childs (reiserfs_filsys_t fs,
     
     /* make disk child array for insertion */
     for (i = 0; i < count; i ++) {
-	new_dc[i].dc_size = cpu_to_le16 (MAX_CHILD_SIZE(bh[i]) - 
-					 node_free_space (bh[i]));
-	new_dc[i].dc_block_number = cpu_to_le32 (bh[i]->b_blocknr);
+	set_dc_child_size (new_dc + i,
+			   MAX_CHILD_SIZE(bh[i]->b_size) - 
+			   get_blkh_free_space (B_BLK_HEAD (bh[i])));
+	set_dc_child_blocknr (new_dc + i, bh[i]->b_blocknr);
     }
     memcpy (dc, new_dc, DC_SIZE * count);
     
@@ -163,13 +154,14 @@ static void internal_insert_childs (reiserfs_filsys_t fs,
 	memcpy (key + 1, inserted + 1, KEY_SIZE);
     
     /* sizes, item number */
-    set_node_item_number (cur, nr + count);
-    set_node_free_space (cur, node_free_space (cur) - 
-			 count * (DC_SIZE + KEY_SIZE));
+    set_blkh_nr_items (blkh, nr + count);
+    set_blkh_free_space (blkh, get_blkh_free_space (blkh) - count * (DC_SIZE + KEY_SIZE));
+
     mark_buffer_dirty (cur);
     
     if (cur_bi->bi_parent) {
-	B_N_CHILD (cur_bi->bi_parent,cur_bi->bi_position)->dc_size += count * (DC_SIZE + KEY_SIZE);
+	dc = B_N_CHILD (cur_bi->bi_parent,cur_bi->bi_position);
+	set_dc_child_size (dc, get_dc_child_size (dc) + count * (DC_SIZE + KEY_SIZE));
 	mark_buffer_dirty (cur_bi->bi_parent);
     }
     
@@ -178,7 +170,7 @@ static void internal_insert_childs (reiserfs_filsys_t fs,
 
 /* Delete del_num items and node pointers from buffer cur starting from *
  * the first_i'th item and first_p'th pointers respectively.		*/
-static void internal_delete_pointers_items (reiserfs_filsys_t fs,
+static void internal_delete_pointers_items (reiserfs_filsys_t * fs,
 					    struct buffer_info * cur_bi,
 					    int first_p, int first_i, 
 					    int del_num)
@@ -189,45 +181,16 @@ static void internal_delete_pointers_items (reiserfs_filsys_t fs,
     struct key * key;
     struct disk_child * dc;
 
-
-#ifdef CONFIG_REISERFS_CHECK
-    if (cur == NULL)
-	reiserfs_panic (0, "internal_delete_pointers_items1: buffer is 0");
-	
-    if (del_num < 0)
-	reiserfs_panic (0, "internal_delete_pointers_items2",
-			"negative number of items (%d) can not be deleted", del_num);
-
-    if (first_p < 0 || first_p + del_num > B_NR_ITEMS (cur) + 1 || first_i < 0)
-	reiserfs_panic (0, "internal_delete_pointers_items3",
-			"first pointer order (%d) < 0 or "
-			"no so many pointers (%d), only (%d) or "
-			"first key order %d < 0", first_p, 
-			first_p + del_num, B_NR_ITEMS (cur) + 1, first_i);
-#endif /* CONFIG_REISERFS_CHECK */
     if ( del_num == 0 )
 	return;
 
-    nr = (blkh = B_BLK_HEAD(cur))->blk_nr_item;
+    blkh = B_BLK_HEAD(cur);
+    nr = get_blkh_nr_items (blkh);
 
     if ( first_p == 0 && del_num == nr + 1 ) {
-#ifdef CONFIG_REISERFS_CHECK
-	if ( first_i != 0 )
-	    reiserfs_panic (0, "internal_delete_pointers_items5",
-			    "first deleted key must have order 0, not %d", first_i);
-#endif /* CONFIG_REISERFS_CHECK */
 	make_empty_node (cur_bi);
 	return;
     }
-
-#ifdef CONFIG_REISERFS_CHECK
-    if (first_i + del_num > B_NR_ITEMS (cur)) {
-	printk("first_i = %d del_num = %d\n",first_i,del_num);
-	reiserfs_panic (0, "internal_delete_pointers_items4: :"
-			"no so many keys (%d) in the node (%b)(%z)", first_i + del_num, cur, cur);
-    }
-#endif /* CONFIG_REISERFS_CHECK */
-
 
     /* deleting */
     dc = B_N_CHILD (cur, first_p);
@@ -237,21 +200,23 @@ static void internal_delete_pointers_items (reiserfs_filsys_t fs,
     memmove (key, key + del_num, (nr - first_i - del_num) * KEY_SIZE + (nr + 1 - del_num) * DC_SIZE);
 
 
-  /* sizes, item number */
-    blkh->blk_nr_item -= del_num;
-    blkh->blk_free_space += del_num * (KEY_SIZE +  DC_SIZE);
+    /* sizes, item number */
+    set_blkh_nr_items (blkh, get_blkh_nr_items (blkh) - del_num);
+    set_blkh_free_space (blkh, get_blkh_free_space (blkh) +
+			 del_num * (KEY_SIZE +  DC_SIZE));
 
     mark_buffer_dirty (cur);
  
     if (cur_bi->bi_parent) {
-	B_N_CHILD (cur_bi->bi_parent, cur_bi->bi_position)->dc_size -= del_num * (KEY_SIZE +  DC_SIZE);
+	dc = B_N_CHILD (cur_bi->bi_parent, cur_bi->bi_position);
+	set_dc_child_size (dc, get_dc_child_size (dc) - del_num * (KEY_SIZE +  DC_SIZE));
 	mark_buffer_dirty (cur_bi->bi_parent);
     }
 }
 
 
 /* delete n node pointers and items starting from given position */
-static void internal_delete_childs (reiserfs_filsys_t fs,
+static void internal_delete_childs (reiserfs_filsys_t * fs,
 				    struct buffer_info * cur_bi, 
 				    int from, int n)
 {
@@ -270,7 +235,7 @@ static void internal_delete_childs (reiserfs_filsys_t fs,
 * last_first == FIRST_TO_LAST means, that we copy first items from src to tail of dest
  * last_first == LAST_TO_FIRST means, that we copy last items from src to head of dest 
  */
-static void internal_copy_pointers_items (reiserfs_filsys_t fs,
+static void internal_copy_pointers_items (reiserfs_filsys_t * fs,
 					  struct buffer_info * dest_bi,
 					  struct buffer_head * src,
 					  int last_first, int cpy_num)
@@ -286,31 +251,12 @@ static void internal_copy_pointers_items (reiserfs_filsys_t fs,
 
     nr_src = B_NR_ITEMS (src);
 
-#ifdef CONFIG_REISERFS_CHECK
-    if ( dest == NULL || src == NULL )
-	reiserfs_panic (0, "internal_copy_pointers_items", "src (%p) or dest (%p) buffer is 0", src, dest);
-
-    if (last_first != FIRST_TO_LAST && last_first != LAST_TO_FIRST)
-	reiserfs_panic (0, "internal_copy_pointers_items",
-			"invalid last_first parameter (%d)", last_first);
-
-    if ( nr_src < cpy_num - 1 )
-	reiserfs_panic (0, "internal_copy_pointers_items", "no so many items (%d) in src (%d)", cpy_num, nr_src);
-
-    if ( cpy_num < 0 )
-	reiserfs_panic (0, "internal_copy_pointers_items", "cpy_num less than 0 (%d)", cpy_num);
-
-    if (cpy_num - 1 + B_NR_ITEMS(dest) > (int)MAX_NR_KEY(dest))
-	reiserfs_panic (0, "internal_copy_pointers_items",
-			"cpy_num (%d) + item number in dest (%d) can not be more than MAX_NR_KEY(%d)",
-			cpy_num, B_NR_ITEMS(dest), MAX_NR_KEY(dest));
-#endif
-
     if ( cpy_num == 0 )
 	return;
 
-	/* coping */
-    nr_dest = (blkh = B_BLK_HEAD(dest))->blk_nr_item;
+    /* coping */
+    blkh = B_BLK_HEAD (dest);
+    nr_dest = get_blkh_nr_items (blkh);
 
     /*dest_order = (last_first == LAST_TO_FIRST) ? 0 : nr_dest;*/
     /*src_order = (last_first == LAST_TO_FIRST) ? (nr_src - cpy_num + 1) : 0;*/
@@ -336,13 +282,14 @@ static void internal_copy_pointers_items (reiserfs_filsys_t fs,
     memcpy (key, B_N_PDELIM_KEY (src, src_order), KEY_SIZE * (cpy_num - 1));
 
     /* sizes, item number */
-    blkh->blk_nr_item += cpy_num - 1;
-    blkh->blk_free_space -= KEY_SIZE * (cpy_num - 1) + DC_SIZE * cpy_num;
+    set_blkh_nr_items (blkh, get_blkh_nr_items (blkh) + cpy_num - 1);
+    set_blkh_free_space (blkh, get_blkh_free_space (blkh) -
+			 (KEY_SIZE * (cpy_num - 1) + DC_SIZE * cpy_num));
 
     mark_buffer_dirty (dest);
     if (dest_bi->bi_parent) {
-	B_N_CHILD(dest_bi->bi_parent,dest_bi->bi_position)->dc_size +=
-	    KEY_SIZE * (cpy_num - 1) + DC_SIZE * cpy_num;
+	dc = B_N_CHILD(dest_bi->bi_parent,dest_bi->bi_position);
+	set_dc_child_size (dc, get_dc_child_size (dc) + KEY_SIZE * (cpy_num - 1) + DC_SIZE * cpy_num);
 	mark_buffer_dirty (dest_bi->bi_parent);
     }
 
@@ -354,7 +301,7 @@ static void internal_copy_pointers_items (reiserfs_filsys_t fs,
  * last_first == FIRST_TO_LAST means, that we copy/delete first items from src.
  * last_first == LAST_TO_FIRST means, that we copy/delete last items from src.
  */
-static void internal_move_pointers_items (reiserfs_filsys_t fs,
+static void internal_move_pointers_items (reiserfs_filsys_t * fs,
 					  struct buffer_info * dest_bi, 
 					  struct buffer_info * src_bi, 
 					  int last_first, int cpy_num, int del_par)
@@ -380,7 +327,7 @@ static void internal_move_pointers_items (reiserfs_filsys_t fs,
 }
 
 /* Insert n_src'th key of buffer src before n_dest'th key of buffer dest. */
-static void internal_insert_key (reiserfs_filsys_t fs,
+static void internal_insert_key (reiserfs_filsys_t * fs,
 				 struct buffer_info * dest_bi, 
 				 int dest_position_before,                 /* insert key before key with n_dest number */
 				 struct buffer_head * src, 
@@ -391,26 +338,8 @@ static void internal_insert_key (reiserfs_filsys_t fs,
     struct block_head * blkh;
     struct key * key;
 
-
-#ifdef CONFIG_REISERFS_CHECK
-    if (dest == NULL || src == NULL)
-	reiserfs_panic (0, "internal_insert_key", "sourse(%p) or dest(%p) buffer is 0", src, dest);
-
-    if (dest_position_before < 0 || src_position < 0)
-	reiserfs_panic (0, "internal_insert_key", "source(%d) or dest(%d) key number less than 0", 
-			src_position, dest_position_before);
-
-    if (dest_position_before > B_NR_ITEMS (dest) || src_position >= B_NR_ITEMS(src))
-	reiserfs_panic (0, "internal_insert_key", 
-			"invalid position in dest (%d (key number %d)) or in src (%d (key number %d))",
-			dest_position_before, B_NR_ITEMS (dest), src_position, B_NR_ITEMS(src));
-
-    if (B_BLK_HEAD(dest)->blk_free_space < KEY_SIZE)
-	reiserfs_panic (0, "internal_insert_key", 
-			"no enough free space (%d) in dest buffer", B_BLK_HEAD(dest)->blk_free_space);
-#endif
-
-    nr = (blkh=B_BLK_HEAD(dest))->blk_nr_item;
+    blkh = B_BLK_HEAD(dest);
+    nr = get_blkh_nr_items (blkh);
 
     /* prepare space for inserting key */
     key = B_N_PDELIM_KEY (dest, dest_position_before);
@@ -420,13 +349,16 @@ static void internal_insert_key (reiserfs_filsys_t fs,
     memcpy (key, B_N_PDELIM_KEY(src, src_position), KEY_SIZE);
 
     /* Change dirt, free space, item number fields. */
-    blkh->blk_nr_item ++;
-    blkh->blk_free_space -= KEY_SIZE;
+    set_blkh_nr_items (blkh, get_blkh_nr_items (blkh) + 1);
+    set_blkh_free_space (blkh, get_blkh_free_space (blkh) - KEY_SIZE);
 
     mark_buffer_dirty (dest);
 
     if (dest_bi->bi_parent) {
-	B_N_CHILD(dest_bi->bi_parent,dest_bi->bi_position)->dc_size += KEY_SIZE;
+	struct disk_child * dc;
+	
+	dc = B_N_CHILD(dest_bi->bi_parent,dest_bi->bi_position);
+	set_dc_child_size (dc, get_dc_child_size (dc) + KEY_SIZE);
 	mark_buffer_dirty (dest_bi->bi_parent);
     }
 }
@@ -453,16 +385,16 @@ static void internal_shift_left (int mode,	/* INTERNAL_FROM_S_TO_L | INTERNAL_FR
 
     if (pointer_amount) {
 	/* insert delimiting key from common father of dest and src to node dest into position B_NR_ITEM(dest) */
-	internal_insert_key (tb->tb_sb, &dest_bi, B_NR_ITEMS(dest_bi.bi_bh), cf, d_key_position);
+	internal_insert_key (tb->tb_fs, &dest_bi, B_NR_ITEMS(dest_bi.bi_bh), cf, d_key_position);
 
 	if (B_NR_ITEMS(src_bi.bi_bh) == pointer_amount - 1) {
 	    if (src_bi.bi_position/*src->b_item_order*/ == 0)
-		replace_key (tb->tb_sb, cf, d_key_position, src_bi.bi_parent/*src->b_parent*/, 0);
+		replace_key (tb->tb_fs, cf, d_key_position, src_bi.bi_parent/*src->b_parent*/, 0);
 	} else
-	    replace_key (tb->tb_sb, cf, d_key_position, src_bi.bi_bh, pointer_amount - 1);
+	    replace_key (tb->tb_fs, cf, d_key_position, src_bi.bi_bh, pointer_amount - 1);
     }
     /* last parameter is del_parameter */
-    internal_move_pointers_items (tb->tb_sb, &dest_bi, &src_bi, FIRST_TO_LAST, pointer_amount, 0);
+    internal_move_pointers_items (tb->tb_fs, &dest_bi, &src_bi, FIRST_TO_LAST, pointer_amount, 0);
 
 }
 
@@ -481,10 +413,10 @@ static void internal_shift1_left (struct tree_balance * tb,
     internal_define_dest_src_infos (INTERNAL_SHIFT_FROM_S_TO_L, tb, h, &dest_bi, &src_bi, &d_key_position, &cf);
     
     if ( pointer_amount > 0 ) /* insert lkey[h]-th key  from CFL[h] to left neighbor L[h] */
-	internal_insert_key (tb->tb_sb, &dest_bi, B_NR_ITEMS(dest_bi.bi_bh), cf, d_key_position);
+	internal_insert_key (tb->tb_fs, &dest_bi, B_NR_ITEMS(dest_bi.bi_bh), cf, d_key_position);
     
     /* last parameter is del_parameter */
-    internal_move_pointers_items (tb->tb_sb, &dest_bi, &src_bi, FIRST_TO_LAST, pointer_amount, 1);
+    internal_move_pointers_items (tb->tb_fs, &dest_bi, &src_bi, FIRST_TO_LAST, pointer_amount, 1);
 }
 
 
@@ -509,22 +441,17 @@ static void internal_shift_right (int mode,	/* INTERNAL_FROM_S_TO_R | INTERNAL_F
 
     if (pointer_amount > 0) {
 	/* insert delimiting key from common father of dest and src to dest node into position 0 */
-	internal_insert_key (tb->tb_sb, &dest_bi, 0, cf, d_key_position);
+	internal_insert_key (tb->tb_fs, &dest_bi, 0, cf, d_key_position);
 	if (nr == pointer_amount - 1) {
-#ifdef CONFIG_REISERFS_CHECK
-	    if ( src_bi.bi_bh != PATH_H_PBUFFER (tb->tb_path, h)/*tb->S[h]*/ || dest_bi.bi_bh != tb->R[h])
-		reiserfs_panic (tb->tb_sb, "internal_shift_right", "src (%p) must be == tb->S[h](%p) when it disappears",
-				src_bi.bi_bh, PATH_H_PBUFFER (tb->tb_path, h));
-#endif
 	    /* when S[h] disappers replace left delemiting key as well */
 	    if (tb->CFL[h])
-		replace_key(tb->tb_sb, cf, d_key_position, tb->CFL[h], tb->lkey[h]);
+		replace_key(tb->tb_fs, cf, d_key_position, tb->CFL[h], tb->lkey[h]);
 	} else
-	    replace_key(tb->tb_sb, cf, d_key_position, src_bi.bi_bh, nr - pointer_amount);
+	    replace_key(tb->tb_fs, cf, d_key_position, src_bi.bi_bh, nr - pointer_amount);
     }      
 
     /* last parameter is del_parameter */
-    internal_move_pointers_items (tb->tb_sb, &dest_bi, &src_bi, LAST_TO_FIRST, pointer_amount, 0);
+    internal_move_pointers_items (tb->tb_fs, &dest_bi, &src_bi, LAST_TO_FIRST, pointer_amount, 0);
 }
 
 /* Insert delimiting key to R[h].
@@ -542,10 +469,10 @@ static void internal_shift1_right (struct tree_balance * tb,
     internal_define_dest_src_infos (INTERNAL_SHIFT_FROM_S_TO_R, tb, h, &dest_bi, &src_bi, &d_key_position, &cf);
     
     if (pointer_amount > 0) /* insert rkey from CFR[h] to right neighbor R[h] */
-	internal_insert_key (tb->tb_sb, &dest_bi, 0, cf, d_key_position);
+	internal_insert_key (tb->tb_fs, &dest_bi, 0, cf, d_key_position);
     
     /* last parameter is del_parameter */
-    internal_move_pointers_items (tb->tb_sb, &dest_bi, &src_bi, LAST_TO_FIRST, pointer_amount, 1);
+    internal_move_pointers_items (tb->tb_fs, &dest_bi, &src_bi, LAST_TO_FIRST, pointer_amount, 1);
 }
 
 
@@ -568,13 +495,7 @@ static void balance_internal_when_delete (struct tree_balance * tb,
 
     bi.bi_position = PATH_H_POSITION (tb->tb_path, h + 1);
 
-    internal_delete_childs (tb->tb_sb, &bi, child_pos, -insert_num);
-
-#ifdef CONFIG_REISERFS_CHECK
-    if ( tb->blknum[h] > 1 )
-	reiserfs_panic (tb->tb_sb, "balance_internal_when_delete", "tb->blknum[%d]=%d when insert_size < 0",
-			h, tb->blknum[h]);
-#endif /* CONFIG_REISERFS_CHECK */
+    internal_delete_childs (tb->tb_fs, &bi, child_pos, -insert_num);
 
     n = B_NR_ITEMS(tbSh);
 
@@ -582,16 +503,8 @@ static void balance_internal_when_delete (struct tree_balance * tb,
 	if ( tb->blknum[h] == 0 ) {
 	    /* node S[h] (root of the tree) is empty now */
 	    struct buffer_head *new_root;
+	    struct reiserfs_super_block * sb;
 
-#ifdef CONFIG_REISERFS_CHECK
-	    if (n || B_BLK_HEAD (tbSh)->blk_free_space != MAX_CHILD_SIZE(tbSh) - DC_SIZE)
-		reiserfs_panic (tb->tb_sb, "balance_internal_when_delete", "buffer must have only 0 keys (%d)",
-				n);
-
-	    if (bi.bi_parent)
-		reiserfs_panic (tb->tb_sb, "balance_internal_when_delete", "root has parent (%p)", bi.bi_parent);
-#endif /* CONFIG_REISERFS_CHECK */
-		
 	    /* choose a new root */
 	    if ( ! tb->L[h-1] || ! B_NR_ITEMS(tb->L[h-1]) )
 		new_root = tb->R[h-1];
@@ -599,11 +512,12 @@ static void balance_internal_when_delete (struct tree_balance * tb,
 		new_root = tb->L[h-1];
 
 	    /* update super block's tree height and pointer to a root block */
-	    tb->tb_sb->s_rs->s_v1.s_root_block = cpu_to_le32 (new_root->b_blocknr);
-	    tb->tb_sb->s_rs->s_v1.s_tree_height = SB_TREE_HEIGHT (tb->tb_sb) - 1;
+	    sb = tb->tb_fs->fs_ondisk_sb;
+	    set_sb_root_block (sb, new_root->b_blocknr);
+	    set_sb_tree_height (sb, get_sb_tree_height (sb) - 1);
 
-	    mark_buffer_dirty (tb->tb_sb->s_sbh);
-	    tb->tb_sb->s_dirt = 1;
+	    mark_buffer_dirty (tb->tb_fs->fs_super_bh);
+	    tb->tb_fs->fs_dirt = 1;
 
 	    /* mark buffer S[h] not uptodate and put it in free list */
 	    reiserfs_invalidate_buffer(tb, tbSh, 1);
@@ -613,13 +527,6 @@ static void balance_internal_when_delete (struct tree_balance * tb,
     }
 
     if ( tb->L[h] && tb->lnum[h] == -B_NR_ITEMS(tb->L[h]) - 1 ) { /* join S[h] with L[h] */
-
-#ifdef CONFIG_REISERFS_CHECK
-	if ( tb->rnum[h] != 0 )
-	    reiserfs_panic (tb->tb_sb, "balance_internal_when_delete", "invalid tb->rnum[%d]==%d when joining S[h] with L[h]",
-			    h, tb->rnum[h]);
-#endif /* CONFIG_REISERFS_CHECK */
-
 	internal_shift_left (INTERNAL_SHIFT_FROM_S_TO_L, tb, h, n + 1);/*tb->L[h], tb->CFL[h], tb->lkey[h], tb->S[h], n+1);*/
 	reiserfs_invalidate_buffer(tb, tbSh, 1); /* preserve not needed, internal, 1 mean free block */
 
@@ -627,46 +534,22 @@ static void balance_internal_when_delete (struct tree_balance * tb,
     }
 
     if ( tb->R[h] &&  tb->rnum[h] == -B_NR_ITEMS(tb->R[h]) - 1 ) { /* join S[h] with R[h] */
-#ifdef CONFIG_REISERFS_CHECK
-	if ( tb->lnum[h] != 0 )
-	    reiserfs_panic (tb->tb_sb, "balance_internal_when_delete", "invalid tb->lnum[%d]==%d when joining S[h] with R[h]",
-			    h, tb->lnum[h]);
-#endif /* CONFIG_REISERFS_CHECK */
-
 	internal_shift_right (INTERNAL_SHIFT_FROM_S_TO_R, tb, h, n + 1);
 	reiserfs_invalidate_buffer (tb, tbSh, 1);
 	return;
     }
 
     if ( tb->lnum[h] < 0 ) { /* borrow from left neighbor L[h] */
-#ifdef CONFIG_REISERFS_CHECK
-	if ( tb->rnum[h] != 0 )
-	    reiserfs_panic (tb->tb_sb, "balance_internal_when_delete", "invalid tb->rnum[%d]==%d when borrow from L[h]",
-			    h, tb->rnum[h]);
-#endif /* CONFIG_REISERFS_CHECK */
-
 	internal_shift_right (INTERNAL_SHIFT_FROM_L_TO_S, tb, h, -tb->lnum[h]);
 	return;
     }
 
     if ( tb->rnum[h] < 0 ) { /* borrow from right neighbor R[h] */
-#ifdef CONFIG_REISERFS_CHECK
-	if ( tb->lnum[h] != 0 )
-	    reiserfs_panic (tb->tb_sb, "balance_internal_when_delete", "invalid tb->lnum[%d]==%d when borrow from R[h]",
-			    h, tb->lnum[h]);
-#endif /* CONFIG_REISERFS_CHECK */
 	internal_shift_left (INTERNAL_SHIFT_FROM_R_TO_S, tb, h, -tb->rnum[h]);/*tb->S[h], tb->CFR[h], tb->rkey[h], tb->R[h], -tb->rnum[h]);*/
 	return;
     }
 
     if ( tb->lnum[h] > 0 ) { /* split S[h] into two parts and put them into neighbors */
-#ifdef CONFIG_REISERFS_CHECK
-	if ( tb->rnum[h] == 0 || tb->lnum[h] + tb->rnum[h] != n + 1 )
-	    reiserfs_panic (tb->tb_sb, "balance_internal_when_delete", 
-			    "invalid tb->lnum[%d]==%d or tb->rnum[%d]==%d when S[h](item number == %d) is split between them",
-			    h, tb->lnum[h], h, tb->rnum[h], n);
-#endif /* CONFIG_REISERFS_CHECK */
-
 	internal_shift_left (INTERNAL_SHIFT_FROM_S_TO_L, tb, h, tb->lnum[h]);/*tb->L[h], tb->CFL[h], tb->lkey[h], tb->S[h], tb->lnum[h]);*/
 	internal_shift_right (INTERNAL_SHIFT_FROM_S_TO_R, tb, h, tb->rnum[h]);
 	reiserfs_invalidate_buffer (tb, tbSh, 1);
@@ -682,12 +565,6 @@ static void balance_internal_when_delete (struct tree_balance * tb,
 void replace_lkey (struct tree_balance * tb,
 		   int h, struct item_head * key)
 {
-#ifdef CONFIG_REISERFS_CHECK
-    if (tb->L[h] == NULL || tb->CFL[h] == NULL)
-	reiserfs_panic (tb->tb_sb, "replace_lkey: 12255: "
-			"L[h](%p) and CFL[h](%p) must exist in replace_lkey", tb->L[h], tb->CFL[h]);
-#endif
-
     if (B_NR_ITEMS(PATH_H_PBUFFER(tb->tb_path, h)) == 0)
 	return;
 
@@ -701,16 +578,6 @@ void replace_lkey (struct tree_balance * tb,
 void replace_rkey (struct tree_balance * tb,
 		   int h, struct item_head * key)
 {
-#ifdef CONFIG_REISERFS_CHECK
-    if (tb->R[h] == NULL || tb->CFR[h] == NULL)
-	reiserfs_panic (tb->tb_sb, "replace_rkey: 12260: "
-			"R[h](%p) and CFR[h](%p) must exist in replace_rkey", tb->R[h], tb->CFR[h]);
-
-    if (B_NR_ITEMS(tb->R[h]) == 0)
-	reiserfs_panic (tb->tb_sb, "replace_rkey: 12265: "
-			"R[h] can not be empty if it exists (item number=%d)", B_NR_ITEMS(tb->R[h]));
-#endif
-
     memcpy (B_N_PDELIM_KEY(tb->CFR[h],tb->rkey[h]), key, KEY_SIZE);
     
     mark_buffer_dirty (tb->CFR[h]);
@@ -747,11 +614,6 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
     struct buffer_head * new_insert_ptr = NULL;
     struct item_head * new_insert_key_addr = insert_key;
 
-#ifdef CONFIG_REISERFS_CHECK
-    if ( h < 1 )      
-	reiserfs_panic (tb->tb_sb, "balance_internal", "h (%d) can not be < 1 on internal level", h);
-#endif /* CONFIG_REISERFS_CHECK */
-
     order = ( tbSh ) ? PATH_H_POSITION (tb->tb_path, h + 1)/*tb->S[h]->b_item_order*/ : 0;
 
   /* Using insert_size[h] calculate the number insert_num of items
@@ -759,17 +621,6 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
     insert_num = tb->insert_size[h]/((int)(KEY_SIZE + DC_SIZE));
 
     /* Check whether insert_num is proper **/
-#ifdef CONFIG_REISERFS_CHECK
-    if ( insert_num < -2  ||  insert_num > 2 )
-	reiserfs_panic (tb->tb_sb, "balance_internal",
-			"incorrect number of items inserted to the internal node (%d)", insert_num);
-
-    if ( h > 1  && (insert_num > 1 || insert_num < -1) )
-	reiserfs_panic (tb->tb_sb, "balance_internal",
-			"incorrect number of items (%d) inserted to the internal node on a level (h=%d) higher than last internal level", 
-			insert_num, h);
-#endif /* CONFIG_REISERFS_CHECK */
-
     /* Make balance in case insert_num < 0 */
     if ( insert_num < 0 ) {
 	balance_internal_when_delete (tb, h, child_pos);
@@ -780,7 +631,7 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
     if ( tb->lnum[h] > 0 ) {
 	/* shift lnum[h] items from S[h] to the left neighbor L[h].
 	   check how many of new items fall into L[h] or CFL[h] after shifting */
-	n = B_BLK_HEAD(tb->L[h])->blk_nr_item; /* number of items in L[h] */
+	n = get_blkh_nr_items (B_BLK_HEAD(tb->L[h])); /* number of items in L[h] */
 	if ( tb->lnum[h] <= child_pos ) {
 	    /* new items don't fall into L[h] or CFL[h] */
 	    internal_shift_left (INTERNAL_SHIFT_FROM_S_TO_L, tb, h, tb->lnum[h]);
@@ -793,7 +644,7 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	    bi.bi_bh = tb->L[h];
 	    bi.bi_parent = tb->FL[h];
 	    bi.bi_position = get_left_neighbor_position (tb, h);
-	    internal_insert_childs (tb->tb_sb, &bi,/*tb->L[h], tb->S[h-1]->b_next*/ n + child_pos + 1,
+	    internal_insert_childs (tb->tb_fs, &bi,/*tb->L[h], tb->S[h-1]->b_next*/ n + child_pos + 1,
 				    insert_num,insert_key,insert_ptr);
 
 	    insert_num = 0; 
@@ -808,16 +659,16 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	    bi.bi_bh = tb->L[h];
 	    bi.bi_parent = tb->FL[h];
 	    bi.bi_position = get_left_neighbor_position (tb, h);
-	    internal_insert_childs (tb->tb_sb, &bi,/*tb->L[h], tb->S[h-1]->b_next,*/ n + child_pos + 1,k,
+	    internal_insert_childs (tb->tb_fs, &bi,/*tb->L[h], tb->S[h-1]->b_next,*/ n + child_pos + 1,k,
 				    insert_key,insert_ptr);
 
 	    replace_lkey(tb, h, insert_key + k);
 
 	    /* replace the first node-ptr in S[h] by node-ptr to insert_ptr[k] */
-	    (dc = B_N_CHILD(tbSh, 0))->dc_size =
-		MAX_CHILD_SIZE(insert_ptr[k]) -
-		B_BLK_HEAD(insert_ptr[k])->blk_free_space;
-	    dc->dc_block_number = insert_ptr[k]->b_blocknr; 
+	    dc = B_N_CHILD(tbSh, 0);
+	    set_dc_child_size (dc, MAX_CHILD_SIZE(insert_ptr[k]->b_size) -
+			       get_blkh_free_space (B_BLK_HEAD(insert_ptr[k])));
+	    set_dc_child_blocknr (dc, insert_ptr[k]->b_blocknr);
 
 	    mark_buffer_dirty (tbSh);
 
@@ -832,7 +683,7 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
     if ( tb->rnum[h] > 0 ) {
 	/*shift rnum[h] items from S[h] to the right neighbor R[h]*/
 	/* check how many of new items fall into R or CFR after shifting */
-	n = B_BLK_HEAD (tbSh)->blk_nr_item; /* number of items in S[h] */
+	n = get_blkh_nr_items (B_BLK_HEAD (tbSh)); /* number of items in S[h] */
 	if ( n - tb->rnum[h] >= child_pos )
 	    /* new items fall into S[h] */
 	    /*internal_shift_right(tb,h,tbSh,tb->CFR[h],tb->rkey[h],tb->R[h],tb->rnum[h]);*/
@@ -847,7 +698,7 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 		bi.bi_bh = tb->R[h];
 		bi.bi_parent = tb->FR[h];
 		bi.bi_position = get_right_neighbor_position (tb, h);
-		internal_insert_childs (tb->tb_sb, &bi, /*tb->R[h],tb->S[h-1]->b_next*/ child_pos - n - insert_num + tb->rnum[h] - 1,
+		internal_insert_childs (tb->tb_fs, &bi, /*tb->R[h],tb->S[h-1]->b_next*/ child_pos - n - insert_num + tb->rnum[h] - 1,
 					insert_num,insert_key,insert_ptr);
 		insert_num = 0;
 	    }
@@ -863,15 +714,15 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 		bi.bi_bh = tb->R[h];
 		bi.bi_parent = tb->FR[h];
 		bi.bi_position = get_right_neighbor_position (tb, h);
-		internal_insert_childs (tb->tb_sb, &bi, /*tb->R[h], tb->R[h]->b_child,*/ 0, k, insert_key + 1, insert_ptr + 1);
+		internal_insert_childs (tb->tb_fs, &bi, /*tb->R[h], tb->R[h]->b_child,*/ 0, k, insert_key + 1, insert_ptr + 1);
 
 		replace_rkey(tb, h, insert_key + insert_num - k - 1);
 
 		/* replace the first node-ptr in R[h] by node-ptr insert_ptr[insert_num-k-1]*/
-		(dc = B_N_CHILD(tb->R[h], 0))->dc_size =
-		    MAX_CHILD_SIZE(insert_ptr[insert_num-k-1]) -
-		    B_BLK_HEAD(insert_ptr[insert_num-k-1])->blk_free_space;
-		dc->dc_block_number = insert_ptr[insert_num-k-1]->b_blocknr;
+		dc = B_N_CHILD(tb->R[h], 0);
+		set_dc_child_size (dc, MAX_CHILD_SIZE(insert_ptr[insert_num-k-1]->b_size) -
+				   get_blkh_free_space (B_BLK_HEAD(insert_ptr[insert_num-k-1])));
+		set_dc_child_blocknr (dc, insert_ptr[insert_num-k-1]->b_blocknr);
 
 		mark_buffer_dirty (tb->R[h]);
 		    
@@ -880,20 +731,8 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
     }
 
     /** Fill new node that appears instead of S[h] **/
-#ifdef CONFIG_REISERFS_CHECK
-    if ( tb->blknum[h] > 2 )
-	reiserfs_panic(0, "balance_internal", "blknum can not be > 2 for internal level");
-    if ( tb->blknum[h] < 0 )
-	reiserfs_panic(0, "balance_internal", "blknum can not be < 0");
-#endif /* CONFIG_REISERFS_CHECK */
-
     if ( ! tb->blknum[h] )
     { /* node S[h] is empty now */
-#ifdef CONFIG_REISERFS_CHECK
-	if ( ! tbSh )
-	    reiserfs_panic(0,"balance_internal", "S[h] is equal NULL");
-#endif /* CONFIG_REISERFS_CHECK */
-
 	/* Mark buffer as invalid and put it to head of free list. */
 	reiserfs_invalidate_buffer(tb, tbSh, 1);/* do not preserve, internal node*/
 	return order;
@@ -903,21 +742,23 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	/* create new root */
 	struct disk_child  * dc;
 	struct buffer_head * tbSh_1 = PATH_H_PBUFFER (tb->tb_path, h - 1);
-
+	struct reiserfs_super_block * sb;
 
 	if ( tb->blknum[h] != 1 )
 	    reiserfs_panic(0, "balance_internal", "One new node required for creating the new root");
 	/* S[h] = empty buffer from the list FEB. */
 	tbSh = get_FEB (tb);
-	B_BLK_HEAD(tbSh)->blk_level = h + 1;
+	set_blkh_level (B_BLK_HEAD(tbSh), h + 1);
 	
 	/* Put the unique node-pointer to S[h] that points to S[h-1]. */
 
-	(dc = B_N_CHILD(tbSh, 0))->dc_block_number = tbSh_1->b_blocknr;
-	dc->dc_size = MAX_CHILD_SIZE (tbSh_1) - B_BLK_HEAD(tbSh_1)->blk_free_space;
+	dc = B_N_CHILD(tbSh, 0);
+	set_dc_child_size (dc, MAX_CHILD_SIZE (tbSh_1->b_size) - get_blkh_free_space (B_BLK_HEAD(tbSh_1)));
+	set_dc_child_blocknr (dc, tbSh_1->b_blocknr);
 	
 	tb->insert_size[h] -= DC_SIZE;
-	B_BLK_HEAD(tbSh)->blk_free_space -= DC_SIZE;
+	set_blkh_free_space (B_BLK_HEAD(tbSh),
+			     get_blkh_free_space (B_BLK_HEAD(tbSh)) - DC_SIZE);
 
 	mark_buffer_dirty (tbSh);
 	
@@ -925,11 +766,12 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	PATH_OFFSET_PBUFFER(tb->tb_path, ILLEGAL_PATH_ELEMENT_OFFSET) = tbSh;
 	
 	/* Change root in structure super block. */
-	tb->tb_sb->s_rs->s_v1.s_root_block = cpu_to_le32 (tbSh->b_blocknr);
-	tb->tb_sb->s_rs->s_v1.s_tree_height = cpu_to_le16 (SB_TREE_HEIGHT (tb->tb_sb) + 1);
+	sb = tb->tb_fs->fs_ondisk_sb;
+	set_sb_root_block (sb, tbSh->b_blocknr);
+	set_sb_tree_height (sb, get_sb_tree_height (sb) + 1);
 	
-	mark_buffer_dirty (tb->tb_sb->s_sbh);
-	tb->tb_sb->s_dirt = 1;
+	mark_buffer_dirty (tb->tb_fs->fs_super_bh);
+	tb->tb_fs->fs_dirt = 1;
     }
     
     if ( tb->blknum[h] == 2 ) {
@@ -940,8 +782,7 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	/* S_new = free buffer from list FEB */
 	S_new = get_FEB(tb);
 
-	B_BLK_HEAD(S_new)->blk_level = h + 1;
-    
+	set_blkh_level (B_BLK_HEAD(S_new), h + 1);
 
 	dest_bi.bi_bh = S_new;
 	dest_bi.bi_parent = 0;
@@ -950,7 +791,7 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	src_bi.bi_parent = PATH_H_PPARENT (tb->tb_path, h);
 	src_bi.bi_position = PATH_H_POSITION (tb->tb_path, h + 1);
 		
-	n = B_BLK_HEAD(tbSh)->blk_nr_item; /* number of items in S[h] */
+	n = get_blkh_nr_items (B_BLK_HEAD(tbSh)); /* number of items in S[h] */
 	snum = (insert_num + n + 1)/2;
 	if ( n - snum >= child_pos ) {
 	    /* new items don't fall into S_new */
@@ -959,7 +800,7 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	    memcpy (&new_insert_key,B_N_PDELIM_KEY(tbSh,n - snum),
 		    KEY_SIZE);
 	    /* last parameter is del_par */
-	    internal_move_pointers_items (tb->tb_sb, &dest_bi, &src_bi, LAST_TO_FIRST, snum, 0);
+	    internal_move_pointers_items (tb->tb_fs, &dest_bi, &src_bi, LAST_TO_FIRST, snum, 0);
 	} else if ( n + insert_num - snum < child_pos ) {
 	    /* all new items fall into S_new */
 	    /*	store the delimiting key for the next level */
@@ -967,11 +808,11 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	    memcpy(&new_insert_key,B_N_PDELIM_KEY(tbSh,n + insert_num - snum),
 		   KEY_SIZE);
 	    /* last parameter is del_par */
-	    internal_move_pointers_items (tb->tb_sb, &dest_bi, &src_bi, LAST_TO_FIRST, snum - insert_num, 0);
+	    internal_move_pointers_items (tb->tb_fs, &dest_bi, &src_bi, LAST_TO_FIRST, snum - insert_num, 0);
 	    /*			internal_move_pointers_items(S_new,tbSh,1,snum - insert_num,0);*/
 
 	    /* insert insert_num keys and node-pointers into S_new */
-	    internal_insert_childs (tb->tb_sb, &dest_bi, /*S_new,tb->S[h-1]->b_next,*/child_pos - n - insert_num + snum - 1,
+	    internal_insert_childs (tb->tb_fs, &dest_bi, /*S_new,tb->S[h-1]->b_next,*/child_pos - n - insert_num + snum - 1,
 				    insert_num,insert_key,insert_ptr);
 
 	    insert_num = 0;
@@ -980,22 +821,22 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 
 	    /* some items fall into S_new, but some don't fall */
 	    /* last parameter is del_par */
-	    internal_move_pointers_items (tb->tb_sb, &dest_bi, &src_bi, LAST_TO_FIRST, n - child_pos + 1, 1);
+	    internal_move_pointers_items (tb->tb_fs, &dest_bi, &src_bi, LAST_TO_FIRST, n - child_pos + 1, 1);
 	    /*			internal_move_pointers_items(S_new,tbSh,1,n - child_pos + 1,1);*/
 	    /* calculate number of new items that fall into S_new */
 	    k = snum - n + child_pos - 1;
 
-	    internal_insert_childs (tb->tb_sb, &dest_bi, /*S_new,*/ 0, k, insert_key + 1, insert_ptr+1);
+	    internal_insert_childs (tb->tb_fs, &dest_bi, /*S_new,*/ 0, k, insert_key + 1, insert_ptr+1);
 
 	    /* new_insert_key = insert_key[insert_num - k - 1] */
 	    memcpy(&new_insert_key,insert_key + insert_num - k - 1,
 		   KEY_SIZE);
 	    /* replace first node-ptr in S_new by node-ptr to insert_ptr[insert_num-k-1] */
 
-	    (dc = B_N_CHILD(S_new,0))->dc_size =
-		MAX_CHILD_SIZE(insert_ptr[insert_num-k-1]) -
-		B_BLK_HEAD(insert_ptr[insert_num-k-1])->blk_free_space;
-	    dc->dc_block_number =	insert_ptr[insert_num-k-1]->b_blocknr; 
+	    dc = B_N_CHILD(S_new,0);
+	    set_dc_child_size (dc, MAX_CHILD_SIZE(insert_ptr[insert_num-k-1]->b_size) -
+			       get_blkh_free_space (B_BLK_HEAD(insert_ptr[insert_num-k-1])));
+	    set_dc_child_blocknr (dc, insert_ptr[insert_num-k-1]->b_blocknr);
 
 	    mark_buffer_dirty (S_new);
 			
@@ -1003,50 +844,34 @@ int balance_internal (struct tree_balance * tb,			/* tree_balance structure 		*/
 	}
 	/* new_insert_ptr = node_pointer to S_new */
 	new_insert_ptr = S_new;
-
-#ifdef CONFIG_REISERFS_CHECK
-	if ( buffer_locked(S_new) )
-	    reiserfs_panic (tb->tb_sb, "balance_internal", "locked buffer S_new[]");
-	if (S_new->b_count != 1)
-	    if (!(buffer_journaled(S_new) && S_new->b_count == 2)) {
-		printk ("REISERFS: balance_internal: S_new->b_count != 1 (%u)\n", S_new->b_count);
-	    }
-#endif /* CONFIG_REISERFS_CHECK */
-
 	/*
 	  S_new->b_count --;
 	*/
 	/*brelse(S_new);*/
     }
 
-    n = B_BLK_HEAD(tbSh)->blk_nr_item; /*number of items in S[h] */
+    n = get_blkh_nr_items (B_BLK_HEAD(tbSh)); /*number of items in S[h] */
 
-#ifndef FU //REISERFS_FSCK
     if ( -1 <= child_pos && child_pos <= n && insert_num > 0 ) {
-#else
-	if ( 0 <= child_pos && child_pos <= n && insert_num > 0 ) {
-#endif
-	    bi.bi_bh = tbSh;
-	    bi.bi_parent = PATH_H_PPARENT (tb->tb_path, h);
-	    bi.bi_position = PATH_H_POSITION (tb->tb_path, h + 1);
-#ifndef FU //REISERFS_FSCK
-	    if (child_pos == -1) {
-		/* this is a little different from original do_balance: 
-		   here we insert the minimal keys in the tree, that has never happened when file system works */
-		if (tb->CFL[h-1] || insert_num != 1 || h != 1)
-		    die ("balance_internal: invalid child_pos");
-/*      insert_child (tb->S[h], tb->S[h-1], child_pos, insert_num, B_N_ITEM_HEAD(tb->S[0],0), insert_ptr);*/
-		internal_insert_childs (tb->tb_sb, &bi, child_pos, insert_num, B_N_PITEM_HEAD (PATH_PLAST_BUFFER (tb->tb_path), 0), insert_ptr);
-	    } else
-#endif
-		internal_insert_childs (tb->tb_sb, 
-					&bi, child_pos,insert_num,insert_key,insert_ptr);
-	}
-
-
-	memcpy (new_insert_key_addr,&new_insert_key,KEY_SIZE);
-	insert_ptr[0] = new_insert_ptr;
-
-	return order;
+	bi.bi_bh = tbSh;
+	bi.bi_parent = PATH_H_PPARENT (tb->tb_path, h);
+	bi.bi_position = PATH_H_POSITION (tb->tb_path, h + 1);
+	if (child_pos == -1) {
+	    /* this is a little different from original do_balance:
+	       here we insert the minimal keys in the tree, that has never happened when file system works */
+	    if (tb->CFL[h-1] || insert_num != 1 || h != 1)
+		die ("balance_internal: invalid child_pos");
+	    /* insert_child (tb->S[h], tb->S[h-1], child_pos, insert_num, B_N_ITEM_HEAD(tb->S[0],0), insert_ptr);*/
+	    internal_insert_childs (tb->tb_fs, &bi, child_pos, insert_num,
+			B_N_PITEM_HEAD (PATH_PLAST_BUFFER (tb->tb_path), 0), insert_ptr);
+	} else
+	    internal_insert_childs (tb->tb_fs, &bi, child_pos,insert_num,insert_key,insert_ptr);
     }
+
+
+    memcpy (new_insert_key_addr,&new_insert_key,KEY_SIZE);
+    insert_ptr[0] = new_insert_ptr;
+
+    return order;
+}
 

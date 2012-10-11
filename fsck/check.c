@@ -18,8 +18,8 @@ static void check_directory_item (struct item_head * ih, struct buffer_head * bh
     int i;
     struct reiserfs_de_head * deh;
     
-    for (i = 0, deh = B_I_DEH (bh, ih); i < ih_entry_count (ih) - 1; i ++)
-	if (deh_offset(&deh[i]) > deh_offset(&deh[i + 1]))
+    for (i = 0, deh = B_I_DEH (bh, ih); i < get_ih_entry_count (ih) - 1; i ++)
+	if (get_deh_offset(&deh[i]) > get_deh_offset(&deh[i + 1]))
 	    die ("check_directory_item: entries are not sorted properly");
 }
 
@@ -74,8 +74,9 @@ static void is_there_unaccessed_items (struct buffer_head * bh)
     
     ih = B_N_PITEM_HEAD (bh, 0);
     for (i = 0; i < B_NR_ITEMS (bh); i ++, ih ++) {
-	if (is_objectid_used (fs, ih->ih_key.k_objectid) == 0)
-	    die ("is_there_unaccessed_items: %lu is not marked as used", ih->ih_key.k_objectid);
+	if (is_objectid_used (fs, get_key_objectid (&ih->ih_key)) == 0)
+	    die ("is_there_unaccessed_items: %lu is not marked as used",
+		 ( long unsigned ) get_key_objectid (&ih->ih_key));
 	
 	if (!is_item_reachable (ih)) {
 	    die ("is_there_unaccessed_items: block %lu - unaccessed item found",
@@ -136,7 +137,7 @@ static int is_leaf_bad_xx (struct buffer_head * bh)
 }
 
 
-static void reiserfsck_check_tree (int dev, int block, int size, check_function_t comp_func)
+static void reiserfsck_check_tree (int dev, unsigned long block, int size, check_function_t comp_func)
 {
     struct buffer_head * bh;
     int what_node;
@@ -158,7 +159,7 @@ static void reiserfsck_check_tree (int dev, int block, int size, check_function_
 	die ("Not marked as used");
 
     if (is_leaf_node (bh) && is_leaf_bad_xx (bh))
-	die ("Bad leaf");
+	die ("Bad leaf %lu", bh->b_blocknr);
 
     if (is_internal_node(bh) && is_internal_bad (bh))
 	die ("bad internal");
@@ -169,7 +170,7 @@ static void reiserfsck_check_tree (int dev, int block, int size, check_function_
 	
 	dc = B_N_CHILD (bh, 0);
 	for (i = 0; i <= B_NR_ITEMS (bh); i ++, dc ++) {
-	    reiserfsck_check_tree (dev, dc->dc_block_number, size, comp_func);
+	    reiserfsck_check_tree (dev, get_dc_child_blocknr (dc), size, comp_func);
 	    g_dkey = B_N_PDELIM_KEY (bh, i);
 	}
     } else if (is_leaf_node (bh)) {
@@ -187,7 +188,7 @@ static void reiserfsck_check_tree (int dev, int block, int size, check_function_
     brelse (bh);
 }
 
-static void reiserfsck_check_cached_tree (int dev, int block, int size)
+static void reiserfsck_check_cached_tree (int dev, unsigned long block, int size)
 {
     struct buffer_head * bh;
     int what_node;
@@ -202,7 +203,7 @@ static void reiserfsck_check_cached_tree (int dev, int block, int size)
     bh->b_count ++;
     
     if (!B_IS_IN_TREE (bh)) {
-	die ("reiserfsck_check_cached_tree: buffer (%b %z) not in tree", bh, bh);
+	reiserfs_panic ("reiserfsck_check_cached_tree: buffer (%b %z) not in tree", bh, bh);
     }
 
     what_node = who_is_this (bh->b_data, bh->b_size);
@@ -217,7 +218,7 @@ static void reiserfsck_check_cached_tree (int dev, int block, int size)
 	
 	dc = B_N_CHILD (bh, 0);
 	for (i = 0; i <= B_NR_ITEMS (bh); i ++, dc ++) {
-	    reiserfsck_check_cached_tree (dev, dc->dc_block_number, size);
+	    reiserfsck_check_cached_tree (dev, get_dc_child_blocknr (dc), size);
 	    g_dkey = B_N_PDELIM_KEY (bh, i);
 	}
     } else if (is_leaf_node (bh)) {
@@ -235,7 +236,8 @@ void reiserfsck_tree_check (check_function_t how_to_compare_neighbors)
 {
     g_left = 0;
     g_dkey = 0;
-    reiserfsck_check_tree (fs->s_dev, SB_ROOT_BLOCK(fs), fs->s_blocksize, how_to_compare_neighbors);
+    reiserfsck_check_tree (fs->fs_dev, get_sb_root_block (fs->fs_ondisk_sb),
+			   fs->fs_blocksize, how_to_compare_neighbors);
     brelse (g_right);
 }
 
@@ -248,7 +250,8 @@ void reiserfsck_check_pass1 ()
 
 void check_cached_tree ()
 {
-    reiserfsck_check_cached_tree (fs->s_dev, SB_ROOT_BLOCK (fs), fs->s_blocksize);
+    reiserfsck_check_cached_tree (fs->fs_dev, get_sb_root_block (fs->fs_ondisk_sb),
+				  fs->fs_blocksize);
 }
 
 void reiserfsck_check_after_all ()
@@ -277,9 +280,9 @@ static int is_bad_sd (struct item_head * ih, char * item)
 #include <sys/mount.h>
 
 
-int blocks_on_device (int dev, int blocksize)
+unsigned long blocks_on_device (int dev, int blocksize)
 {
-    int size;
+    unsigned long size;
 
     if (ioctl (dev, BLKGETSIZE, &size) >= 0) {
 	return  size / (blocksize / 512);
@@ -309,21 +312,12 @@ int is_internal_bad (struct buffer_head * bh)
 	return 0;
     for (i = 0; i < B_NR_ITEMS (bh); i ++) {
 	key = B_N_PDELIM_KEY (bh, i);
-	if (//key->k_dir_id >= key->k_objectid ||
-	    key->u.k_offset_v1.k_uniqueness != V1_DIRENTRY_UNIQUENESS && key->u.k_offset_v1.k_uniqueness != V1_DIRECT_UNIQUENESS &&
-	    key->u.k_offset_v1.k_uniqueness != V1_INDIRECT_UNIQUENESS && key->u.k_offset_v1.k_uniqueness != V1_SD_UNIQUENESS &&
-	    key->u.k_offset_v2.k_type != TYPE_DIRENTRY && key->u.k_offset_v2.k_type != TYPE_DIRECT &&
-	    key->u.k_offset_v2.k_type != TYPE_INDIRECT && key->u.k_offset_v2.k_type != TYPE_STAT_DATA //&&
-	    //	key->u.k_offset_v1.k_uniqueness != V1_ANY_UNIQUENESS && key->u.k_offset_v2.k_type != TYPE_ANY	
-	    )
+	if (!KEY_IS_STAT_DATA_KEY (key) && !KEY_IS_DIRECTORY_KEY (key) &&
+	    !KEY_IS_DIRECT_KEY (key) && !KEY_IS_INDIRECT_KEY (key))
+	    /* key of unknown item */
 	    return 1;
     }
     return 0;
 }
-
-
-
-
-
 
 

@@ -1,5 +1,5 @@
 /* 
- * Copyright 2000 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
  */
  
 /*  
@@ -10,29 +10,15 @@
  */
 
 #include "resize.h"
+#include <libgen.h>
 
 int opt_force = 0;
 int opt_verbose = 1;			/* now "verbose" option is default */
 int opt_nowrite = 0;
 int opt_safe = 0;
+int opt_skipj = 0;
 
-#if 0
-/* Given a file descriptor and an offset, check whether the offset is
-   a valid offset for the file - return 0 if it isn't valid or 1 if it
-   is */
-int valid_offset( int fd, loff_t offset )
-{
-    char ch;
-
-    if (lseek64 (fd, offset, 0) < 0)
-	return 0;
-
-    if (read (fd, &ch, 1) < 1)
-	return 0;
-
-    return 1;
-}
-#endif
+char * g_progname;
 
 /* calculate the new fs size (in blocks) from old fs size and the string
    representation of new size */
@@ -76,10 +62,10 @@ static void sb_report(struct reiserfs_super_block * sb1,
 	"block count           %d (%d)\n"
 	"free blocks           %d (%d)\n"
 	"bitmap block count    %d (%d)\n", 
-	rs_blocksize(sb1),
-	rs_block_count(sb1), rs_block_count(sb2),
-	rs_free_blocks(sb1), rs_free_blocks(sb2),
-	rs_bmap_nr(sb1), rs_bmap_nr(sb2));
+	get_sb_block_size(sb1),
+	get_sb_block_count(sb1), get_sb_block_count(sb2),
+	get_sb_free_blocks(sb1), get_sb_free_blocks(sb2),
+	get_sb_bmap_nr(sb1), get_sb_bmap_nr(sb2));
 };
 
 /* conditional bwrite */
@@ -94,63 +80,64 @@ static int bwrite_cond (struct buffer_head * bh)
 }
 
 
-/* the first one of the mainest functions */
-int expand_fs (reiserfs_filsys_t fs, unsigned long block_count_new) {
-    int block_r, block_r_new;
+/* the first one of the most important functions */
+static int expand_fs (reiserfs_filsys_t * fs, unsigned long block_count_new) {
     unsigned int bmap_nr_new, bmap_nr_old;
     int i;
+    struct reiserfs_super_block * sb;
 
-    reiserfs_bitmap_t bmp;
-    struct reiserfs_super_block * rs = fs->s_rs;
 
     reiserfs_reopen(fs, O_RDWR);
-    set_state (fs->s_rs, REISERFS_ERROR_FS);
-    bwrite_cond(SB_BUFFER_WITH_SB(fs));
-	
-    bmp = reiserfs_create_bitmap(rs_block_count(rs));
-    if (!bmp)
-	die ("cannot create bitmap\n");
-    reiserfs_fetch_disk_bitmap(bmp, fs);
-    reiserfs_free_bitmap_blocks(fs);
-    if (reiserfs_expand_bitmap(bmp, block_count_new))
-	die ("cannot expand bitmap\n");
+    if (!reiserfs_open_ondisk_bitmap (fs))
+	DIE("cannot open ondisk bitmap");
 
-    /* clean bits in old bitmap tail */
-    for (i = rs_block_count(rs);
-	 i < rs_bmap_nr(rs) * rs_blocksize(rs) * 8 && i < block_count_new;
-	 i++) {
-	reiserfs_bitmap_clear_bit(bmp, i);
-    }
-    
-    /* count used bits in last bitmap block */
-    block_r = rs_block_count(rs) - ((rs_bmap_nr(rs) - 1) * rs_blocksize(rs) * 8);
+    sb = fs->fs_ondisk_sb;
+
+    set_sb_fs_state (fs->fs_ondisk_sb, REISERFS_CORRUPTED);
+
+    bwrite_cond(fs->fs_super_bh);
+
+
+    if (reiserfs_expand_bitmap(fs->fs_bitmap2, block_count_new))
+	DIE("cannot expand bitmap\n");
+
 
     /* count bitmap blocks in new fs */
-    bmap_nr_new = (block_count_new - 1) / (rs_blocksize(rs) * 8) + 1;
-    block_r_new = block_count_new - (bmap_nr_new - 1) * rs_blocksize(rs) * 8;
-
-    bmap_nr_old = rs_bmap_nr(rs);
+    bmap_nr_new = (block_count_new - 1) / (fs->fs_blocksize * 8) + 1;
+    bmap_nr_old = get_sb_bmap_nr(sb);
 	
     /* update super block buffer*/
-    set_free_blocks (rs, rs_free_blocks(rs) + block_count_new
-		     - rs_block_count(rs) - (bmap_nr_new - rs_bmap_nr(rs)));
-    set_block_count (rs, block_count_new);
-    set_bmap_nr (rs, bmap_nr_new);
+    set_sb_free_blocks (sb, get_sb_free_blocks(sb) + 
+			(block_count_new - get_sb_block_count(sb)) - 
+			(bmap_nr_new - bmap_nr_old));
+    set_sb_block_count (sb, block_count_new);
+    set_sb_bmap_nr (sb, bmap_nr_new);
 
-    reiserfs_read_bitmap_blocks(fs); 
-    for (i = bmap_nr_old; i < bmap_nr_new; i++) /* fix new bitmap blocks */
-	reiserfs_bitmap_set_bit(bmp, SB_AP_BITMAP(fs)[i]->b_blocknr);
-    reiserfs_flush_bitmap(bmp, fs);
+    /* mark new bitmap blocks as used */
+    for (i = bmap_nr_old; i < bmap_nr_new; i++)
+	reiserfs_bitmap_set_bit (fs->fs_bitmap2, i * fs->fs_blocksize * 8);
+
+    /* normally, this is done by reiserfs_bitmap_set_bit, but if we
+    ** haven't actually added any bitmap blocks, the bitmap won't be dirtied.
+    **
+    ** In memory, reiserfsprogs puts zeros for the bits past the end of
+    ** the old filesystem.  But, on disk that bitmap is full of ones.  
+    ** we explicitly dirty the bitmap here to make sure the zeros get written
+    ** to disk
+    */
+    fs->fs_bitmap2->bm_dirty = 1 ;
     
     return 0;
 }
 
+
 int main(int argc, char *argv[]) {
     char * bytes_count_str = NULL;
     char * devname;
-    reiserfs_filsys_t fs;
-    struct reiserfs_super_block * rs;
-	
+    char * jdevice_name = NULL;
+    reiserfs_filsys_t * fs;
+    struct reiserfs_super_block * sb;
+
     int c;
     int error;
 
@@ -158,15 +145,20 @@ int main(int argc, char *argv[]) {
 
     unsigned long block_count_new;
 
-    print_banner ("resize_reiserfs");
+    g_progname = basename(argv[0]);
+    print_banner (g_progname);
 	
-    while ((c = getopt(argc, argv, "fvcqs:")) != EOF) {
+    while ((c = getopt(argc, argv, "fvcqks:j:")) != EOF) {
 	switch (c) {
 	case 's' :
-	    if (!optarg) 
-		die("%s: Missing argument to -s option", argv[0]);		
+	    if (!optarg)
+		DIE("Missing argument to -s option");
 	    bytes_count_str = optarg;
 	    break;
+	case 'j' :
+	    if (!optarg) 
+		DIE("Missing argument to -j option");
+	    jdevice_name = optarg;
 	case 'f':
 	    opt_force = 1;
 	    break;		 
@@ -183,6 +175,9 @@ int main(int argc, char *argv[]) {
 	case 'q':
 	    opt_verbose = 0;
 	    break;
+	case 'k':
+	    opt_skipj = 1;
+	    break;
 	default:
 	    print_usage_and_exit ();
 	}
@@ -194,56 +189,78 @@ int main(int argc, char *argv[]) {
 
     fs = reiserfs_open(devname, O_RDONLY, &error, 0);
     if (!fs)
-	die ("%s: can not open '%s': %s", argv[0], devname, strerror(error));
+	DIE ("cannot open '%s': %s", devname, strerror(error));
+    if (!reiserfs_open_journal (fs, jdevice_name, O_RDONLY)) {
+	if (!opt_skipj)
+	    DIE ("can not open journal of '%s'", devname);
+    }
+
+    /* forced to continue without journal available/specified */
 
     if (no_reiserfs_found (fs)) {
-	die ("resize_reiserfs: no reiserfs found on the device");
+	DIE ("no reiserfs found on the device.");
     }
     if (!spread_bitmaps (fs)) {
-	die ("resize_reiserfs: cannot resize reiserfs in old (not spread bitmap) format.\n");
+	DIE ("cannot resize reiserfs in old (not spread bitmap) format.");
     }
 
-    rs = fs->s_rs;
+    sb = fs->fs_ondisk_sb;
 	
     if(bytes_count_str) {	/* new fs size is specified by user */
-	block_count_new = calc_new_fs_size(rs_block_count(rs), fs->s_blocksize, bytes_count_str);
+	block_count_new = calc_new_fs_size(get_sb_block_count(sb), fs->fs_blocksize, bytes_count_str);
     } else {		/* use whole device */
-	block_count_new = count_blocks(devname, fs->s_blocksize, -1);
+	block_count_new = count_blocks(devname, fs->fs_blocksize);
     }
 
     if (is_mounted (devname)) {
 	reiserfs_close(fs);
 	return resize_fs_online(devname, block_count_new);
-    }	
-	
-    if (rs_state(rs) != REISERFS_VALID_FS)
-	die ("%s: the file system isn't in valid state\n", argv[0]);
+    }
+
+    if (!reiserfs_is_fs_consistent (fs)) {
+	reiserfs_warning (stderr, "\n\nresize_reiserfs: run reiserfsck --check first\n\n");
+	reiserfs_close (fs);
+	return 1;
+    }
+
+    if (get_sb_umount_state(sb) != REISERFS_CLEANLY_UMOUNTED)
+	/* fixme: shouldn't we check for something like: fsck guarantees: fs is ok */
+	DIE ("the file system isn't in valid state.");
 		
-    if(!valid_offset(fs->s_dev, (loff_t) block_count_new * fs->s_blocksize - 1))
-	die ("%s: %s too small", argv[0], devname);
+    if (block_count_new >= get_sb_block_count(sb)) {
+	if (block_count_new == get_sb_block_count(sb)) {
+	    reiserfs_warning (stderr, "%s already is of the needed size. Nothing to be done\n\n", devname);
+	    exit (1);
+	}
+	
+	if(!valid_offset(fs->fs_dev, (loff_t) block_count_new * fs->fs_blocksize - 1)) {
+	    reiserfs_warning (stderr, "%s is of %lu blocks size only with reiserfs of %d blocks\nsize on it. "\
+		"You are trying to expant reiserfs up to %lu blocks size.\nYou probably forgot to expand your "\
+		"partition size.\n\n", devname, count_blocks (devname, fs->fs_blocksize),
+		get_sb_block_count(sb), block_count_new);
+	    exit (1);
+	}
+    }
+
 
     sb_old = 0;		/* Needed to keep idiot compiler from issuing false warning */
     /* save SB for reporting */
     if(opt_verbose) {
 	sb_old = getmem(SB_SIZE);
-	memcpy(sb_old, SB_DISK_SUPER_BLOCK(fs), SB_SIZE);
+	memcpy(sb_old, fs->fs_ondisk_sb, SB_SIZE);
     }
 
-    if (block_count_new == SB_BLOCK_COUNT(fs)) 
-	die ("%s: Calculated fs size is the same as the previous one.", argv[0]);
-
-    if (block_count_new > SB_BLOCK_COUNT(fs))
-	expand_fs(fs, block_count_new);
-    else
-	shrink_fs(fs, block_count_new);
+    error = (block_count_new > get_sb_block_count(fs->fs_ondisk_sb)) ? expand_fs(fs, block_count_new) : shrink_fs(fs, block_count_new);
+    if (error)
+	return error;
 
     if(opt_verbose) {
-	sb_report(rs, sb_old);
+	sb_report(fs->fs_ondisk_sb, sb_old);
 	freemem(sb_old);
     }
 
-    set_state (rs, REISERFS_VALID_FS);
-    bwrite_cond(SB_BUFFER_WITH_SB(fs));
+    set_sb_fs_state (fs->fs_ondisk_sb, REISERFS_CONSISTENT);
+    bwrite_cond(fs->fs_super_bh);
 	
     if (opt_verbose) {
 	printf("\nSyncing..");

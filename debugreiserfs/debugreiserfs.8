@@ -1,20 +1,22 @@
 .\" -*- nroff -*-
-.\" Copyright 1996-2001 Hans Reiser.
+.\" Copyright 1996-2002 Hans Reiser.
 .\" 
-.TH DEBUGREISERFS 8 "March 2001" "Reiserfsprogs 3.x.0j"
+.TH DEBUGREISERFS 8 "January 2002" "Reiserfsprogs 3.6.2"
 .SH NAME
 debugreiserfs
 .SH SYNOPSIS
 .B debugreiserfs
 [
-.B -jdcmos
+.B -dJmoqpS
 ] [
-.B -b \fIblocknumber
+.B -j \fIdevice
 ] [
-.B -p \fIfilename.bmp
-] [
-.B -P \fIfilename.bmp
+.B -B \fIblocknumber
 ]
+
+.\" ] [
+.\" .B -s
+.\" ] [
 .I device
 .SH DESCRIPTION
 It helps sometimes to solve problems with reiserfs filesystems. Being
@@ -26,43 +28,54 @@ is the special file corresponding to the device (e.g /dev/hdXX for
 IDE disk partition or /dev/sdXX for SCSI disk partition).
 .SH OPTIONS
 .TP
-\fB-j
-print contents of journal
+\fB-j\fR \fIdevice\fR
+print contents of journal. Also with the option -p it allows to pack
+journal into archive with other metadata  
 .TP
-\fB-d
+\fB-J\fR
+print journal header.
+.TP
+.B -d
 print formatted nodes of the filesystem
 .TP
-\fB-c
-print contents of direct items
-.TP
-\fB-m
+.B -m
 print contents of bitmap (not very useful)
 .TP
-\fB-o
+.B -o
 print objectid map (not very useful)
 .TP
-\fB-s
-scans the partition and prints a line when any kind of reiserfs formatted nodes found
-.TP
-\fB-b \fIblocknumber
+\fB-1\fR \fIblocknumber\fR
 print specified block of the filesystem
 .TP
-\fB-p \fIfilename
-\fB-P \fIfilename
-
-Makes \fBdebugreiserfs\fR to find filesystem metadata 
-These exist to help reiserfsck debugging. If reiserfsck fails -
-you may extract filesystem metadata with  \fBdebugreiserfs\fR -p filename /dev/xxx |gzip
--c > xxx.gz. We download that data and make the filesystem similar
-to your with gunzip -c xxx.gz | unpack /dev/xxx (unpack is included
-into reiserfsprogs package). This usually allows to reproduce and
-debug the problem quickly. When data file is not too large.
--P will cause  \fBdebugreiserfs\fR to find and pack metadata from all the device whereas with -p it will only go through blocks marked used in filesystem bitmaps
-
+.\" \fB-s
+.\" scans the partition and prints a line when any kind of reiserfs
+.\" formatted nodes found. Can be used to find specific key in the filesystem.
+.\" .TP
+.B -p
+Makes \fBdebugreiserfs\fR to find filesystem metadata This option
+exists to help reiserfsck debugging. If reiserfsck fails - you may
+extract filesystem metadata with \fBdebugreiserfs\fR -p
+/dev/xxx |gzip -c > xxx.gz. We download that data and make the
+filesystem similar to your with gunzip -c xxx.gz | unpack /dev/xxx
+(unpack is included into reiserfsprogs package). This usually allows
+to reproduce and debug the problem quickly. When data file is not too
+large.
+.TP
+.B -S 
+When -S is not specified -p 
+.\" and -s 
+deals with blocks marked used in the
+filesystem bitmap. With this option set they will work with whole
+device.
+.TP
+.B -q
+Suppress showing speed of progress when 
+.\" -s or 
+-p is in use
 .SH AUTHOR
 This version of \fBdebugreiserfs\fR has been written by Hans Reiser <reiser@idiom.com>.
 .SH BUGS
-There are probably few of them. Please, report bugs to Hans Reiser <reiser@idiom.com>.
+There are probably few of them. Please, report bugs to ReiserFS mail-list <reiserfs-list@namesys.com>.
 .SH SEE ALSO
 .BR reiserfsck (8),
 .BR mkreiserfs (8)

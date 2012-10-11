@@ -1,3 +1,157 @@
+2002-06-27
+	* reiserfsprogs
+		called 3.6.2
+2002-05-23
+	* reiserfsck
+		speedup for pass2: do not check whether a file should be relocated 
+		if the file body was previously deleted from the tree and is
+		inserted again.
+2002-05-10
+	* reiserfsck
+		fix-fixable is able to fix wrong nlinks.
+		check makes some check about nlinks also.
+2002-04-30
+	* reiserfsck 
+		delete direntries of old format in new format directories
+2002-03-29
+	* reiserfsprogs
+		bad blocks support added.
+2002-03-15
+	* reiserfsprogs
+		different blocksize support added.
+2002-02-18
+	* debugreiserfs 
+		new option -J, prints a journal header.
+2002-02-10
+	* reiserfsprogs
+		a few speedups were added. 
+2002-02-05
+	* reiserfsprogs
+		optimization of the work with disk buffers.
+2002-01-28
+	* mkreiserfs
+		zeroing the first block on the device if not SPARC
+2002-01-26
+	* reiserfsck
+		a few speedups were added.
+2002-01-20
+	* debugreiserfs
+		investigation of unused space added (-D -U options, hidden)
+2002-01-16
+	* reiserfsprogs
+		support for UUID and LABEL was added
+2002-01-15
+	* reiserfstune
+		creates a standard journal from a non-standard
+2001-12-25
+	* reiserfsck 
+		Handles safe links.
+2001-12-03
+	* reiserfsck
+		Filenames output during tree scan is now nicely scrolled
+		left and right, when entire line does not fit the screen.
+2001-11-20
+	* reiserfsck
+		Can rebuild superblock properly.
+2001-11-03
+	* reiserfsck
+		Can now backup all data which get changed during fscking
+		and can rollback all changes.
+2001-10-30
+	* reiserfsprogs
+		mkreiserfs/reiserfsck/reiserfstune/debugreiserfs work with
+		relocated journal
+2001-09-30
+	* debugreiserfs
+		super block editor (-C -B 16)
+2001-08-23
+	* reiserfsck
+		--fix-fixable becomes a mode, can fix everything what does
+		not need to rebuild a tree.
+		--fix-non-critical option moved to --ajust-file-size option,
+		work in --fix-fixable and --rebuild-tree modes.
+2001-07-19
+	* mkreiserfs
+		can now create non-standard journal: journal size,
+		offset, device may now vary
+	* reiserfstune
+		initial release. Allows to change journal parameters for
+		existing filesystems
+	* reisrefsck
+		it now sets "consistency checked" flag after
+		--rebuild-tree and --check which did not find anything
+		broken
+	* man pages
+		updated
+	
+2001-06-25
+	* mkreiserfs
+		long options (--journal-device, --journal-size)
+	* library
+		reiserfs_create, reiserfs_create_journal
+		
+2001-06-20
+	* global changes
+		Jeff's patch (safe endianness) is merged (with changes)
+		mlock is used to estimate amount of memory available
+	
+2001-06-14
+	* reiserfsck
+		update journal header when transaction is replayed
+	
+2001-06-13
+	* reiserfsck
+		lost+found's mode is set to drwx------ after lost+found pass
+	
+2001-06-08
+	* library
+		functions to deal with journal
+
+2001-06-05
+	* global change
+		Unified access via get_/set_ macroses is added for fields
+		of struct key, struct item_head, struct
+		reiserfs_journal_desc/commit, struct block_head, struct disk_child
+	
+2001-05-22
+	* global change
+		Access to super block's fields are unified vid get_sb_xxx
+		and set_sb_xxx macroses
+	
+2001-05-05
+	* called 3.x.0k-pre4
+	* reiserfsck
+		entries in lost+found are removed on pass 0
+	
+2001-05-03
+	* mkreiserfs
+		first 64k get zeroed now. This kills JFS if it was there
+	* reiserfsprogs.spec (Anthon van der Neut)
+		prereleases can be built by rpm now
+		link from /sbin/mkreiserfs to /sbin/mkfs.reiserfs
+		guess about reiserfs kernel support is added
+	
+2001-04-16
+	* reiserfsck
+		in --check mode it exits with 0 if there were no
+		corruptions found, 1 if there were only corruptions
+		fixable by --fix-fixable or 2 if --rebuild-tree is
+		required
+		man page updated, simple example of using reiserfsck is
+		added
+
+2001-04-15
+	* mkreiserfs
+		bug in confirmation dialogs fixed
+	
+2001-04-13-Friday
+	* reiserfsck
+		--hash option makes reiserfsck to skip blocks having
+		directory entries created with other hash. It is useful
+		together with --scan-whole-partition
+		--background option allows to fork fsck end exit (useful
+		for running remotely)
+
 2001-03-31
 	* reiserfsck
 		empty lost directories do not get linked into /lost+found
@@ -98,7 +252,7 @@
 		--interactive option is added
 	* debugreiserfs:
 		few bugs fixed
-	
+  	
 2001-01-07
 	* reiserfs library:
 		started with reiserfs_open, reiserfs_close, bitmap tools

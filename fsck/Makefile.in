@@ -1,6 +1,6 @@
-# Makefile.in generated automatically by automake 1.4 from Makefile.am
+# Makefile.in generated automatically by automake 1.4-p5 from Makefile.am
 
-# Copyright (C) 1994, 1995-8, 1999 Free Software Foundation, Inc.
+# Copyright (C) 1994, 1995-8, 1999, 2001 Free Software Foundation, Inc.
 # This Makefile.in is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
@@ -62,31 +62,33 @@ MAKEINFO = @MAKEINFO@
 PACKAGE = @PACKAGE@
 RANLIB = @RANLIB@
 VERSION = @VERSION@
+sbindir = @sbindir@
 
 sbin_PROGRAMS = reiserfsck
 
-reiserfsck_SOURCES = main.c pass0.c pass1.c pass2.c semantic.c pass4.c lost+found.c ubitmap.c uobjectid.c ustree.c ufile.c check.c check_tree.c journal.c info.c segments.c fsck.h
+reiserfsck_SOURCES = main.c pass0.c pass1.c pass2.c semantic_check.c semantic_rebuild.c pass4.c lost+found.c ubitmap.c uobjectid.c ustree.c ufile.c check.c check_tree.c info.c super.c fsck.h
+
 
 man_MANS = reiserfsck.8
 EXTRA_DIST = $(man_MANS)
 
-LDADD = ../lib/libmisc.a ../reiserfscore/libcore.a
-
-INCLUDES = -I../include -I.
+LDADD = $(top_srcdir)/lib/libmisc.a $(top_srcdir)/reiserfscore/libcore.a
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
+CONFIG_HEADER = ../include/config.h
 CONFIG_CLEAN_FILES = 
 PROGRAMS =  $(sbin_PROGRAMS)
 
 
-DEFS = @DEFS@ -I. -I$(srcdir) 
+DEFS = @DEFS@ -I. -I$(srcdir) -I../include
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
-reiserfsck_OBJECTS =  main.o pass0.o pass1.o pass2.o semantic.o pass4.o \
-lost+found.o ubitmap.o uobjectid.o ustree.o ufile.o check.o \
-check_tree.o journal.o info.o segments.o
+reiserfsck_OBJECTS =  main.o pass0.o pass1.o pass2.o semantic_check.o \
+semantic_rebuild.o pass4.o lost+found.o ubitmap.o uobjectid.o ustree.o \
+ufile.o check.o check_tree.o info.o super.o
 reiserfsck_LDADD = $(LDADD)
-reiserfsck_DEPENDENCIES =  ../lib/libmisc.a ../reiserfscore/libcore.a
+reiserfsck_DEPENDENCIES =  $(top_srcdir)/lib/libmisc.a \
+$(top_srcdir)/reiserfscore/libcore.a
 reiserfsck_LDFLAGS = 
 CFLAGS = @CFLAGS@
 COMPILE = $(CC) $(DEFS) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -241,7 +243,7 @@ distdir: $(DISTFILES)
 	@for file in $(DISTFILES); do \
 	  d=$(srcdir); \
 	  if test -d $$d/$$file; then \
-	    cp -pr $$/$$file $(distdir)/$$file; \
+	    cp -pr $$d/$$file $(distdir)/$$file; \
 	  else \
 	    test -f $(distdir)/$$file \
 	    || ln $$d/$$file $(distdir)/$$file 2> /dev/null \
@@ -249,37 +251,53 @@ distdir: $(DISTFILES)
 	  fi; \
 	done
 check.o: check.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 check_tree.o: check_tree.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 info.o: info.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
-journal.o: journal.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 lost+found.o: lost+found.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 main.o: main.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h ../version.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h ../include/config.h ../version.h
 pass0.o: pass0.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 pass1.o: pass1.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 pass2.o: pass2.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 pass4.o: pass4.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
-segments.o: segments.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
-semantic.o: semantic.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
+semantic_check.o: semantic_check.c fsck.h ../include/io.h \
+	../include/misc.h ../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
+semantic_rebuild.o: semantic_rebuild.c fsck.h ../include/io.h \
+	../include/misc.h ../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
+super.o: super.c fsck.h ../include/io.h ../include/misc.h \
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 ubitmap.o: ubitmap.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 ufile.o: ufile.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 uobjectid.o: uobjectid.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 ustree.o: ustree.c fsck.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h
 
 info-am:
 info: info-am

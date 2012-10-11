@@ -51,7 +51,7 @@ typedef __u32 u32;
 	} while(0)
 
 
-u32 keyed_hash(const char *msg, int len)
+u32 keyed_hash(const signed char *msg, int len)
 {
 	u32 k[] = { 0x9464a485, 0x542e1a94, 0x3e846bff, 0xb75bcfc3}; 
 
@@ -60,8 +60,6 @@ u32 keyed_hash(const char *msg, int len)
 	u32 pad;
 	int i;
  
-
-	//	assert(len >= 0 && len < 256);
 
 	pad = (u32)len | ((u32)len << 8);
 	pad |= pad << 16;
@@ -93,7 +91,6 @@ u32 keyed_hash(const char *msg, int len)
 
 	if (len >= 12)
 	{
-	    	//assert(len < 16);
 		if (len >= 16)
 		    *(int *)0 = 0;
 
@@ -119,7 +116,6 @@ u32 keyed_hash(const char *msg, int len)
 	}
 	else if (len >= 8)
 	{
-	    	//assert(len < 12);
 		if (len >= 12)
 		    *(int *)0 = 0;
 		a = (u32)msg[ 0]      |
@@ -140,7 +136,6 @@ u32 keyed_hash(const char *msg, int len)
 	}
 	else if (len >= 4)
 	{
-	    	//assert(len < 8);
 		if (len >= 8)
 		    *(int *)0 = 0;
 		a = (u32)msg[ 0]      |
@@ -157,7 +152,6 @@ u32 keyed_hash(const char *msg, int len)
 	}
 	else
 	{
-	    	//assert(len < 4);
 		if (len >= 4)
 		    *(int *)0 = 0;
 		a = b = c = d = pad;
@@ -170,12 +164,11 @@ u32 keyed_hash(const char *msg, int len)
 
 	TEACORE(FULLROUNDS);
 
-/*	return 0;*/
 	return h0^h1;
 }
 
 
-u32 yura_hash (const char *msg, int len)
+u32 yura_hash (const signed char *msg, int len)
 {
     int j, pow;
     u32 a, c;
@@ -211,23 +204,23 @@ u32 yura_hash (const char *msg, int len)
 }
 
 
-u32 r5_hash (const char *msg, int len)
+u32 r5_hash (const signed char *msg, int len)
 {
-  u32 a=0;
-  int i;
-
-  for (i = 0; i < len; i ++) {
-    a += msg[i] << 4;
-    a += msg[i] >> 4;
-    a *= 11;
-  } 
-  return a;
+    u32 a=0;
+    int i;
+    
+    for (i = 0; i < len; i ++) {
+	a += msg[i] << 4;
+	a += msg[i] >> 4;
+	a *= 11;
+    } 
+    return a;
 }
+
 
 #if 0
 
 #include <stdio.h>
-//#include <stddef.h>
 
 int main (void)
 {

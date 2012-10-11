@@ -1,91 +1,156 @@
 .\" -*- nroff -*-
-.\" Copyright 1996-2001 Hans Reiser.
+.\" Copyright 1996-2002 Hans Reiser.
 .\" 
-.TH REISERFSCK 8 "March 2001" "Reiserfsprogs-3.x.0j"
+.TH REISERFSCK 8 "January 2002" "Reiserfsprogs-3.6.2"
 .SH NAME
 reiserfsck \- check a Linux Reiserfs file system
 .SH SYNOPSIS
 .B reiserfsck 
-[
-.B -arvixoV
-] [
-.B -l logfilename
-] [
-.B --rebuild-tree
-] [
-.B --check
-] [
-.B --rebuild-sb
-] [
-.B --interactive
-] [
-\fB --logfile \fI logfilename
-] [
-.B --fix-fixable
-]
+[ \fB-afprVy\fR ]
+[ \fB--check\fR | \fB--fix-fixable\fR | \fB--rebuild-sb\fR
+| \fB--rebuild-tree\fR | \fB--clean-attributes\fR ]
+.\" [ \fB-i\fR | \fB--interactive\fR ]
+[ \fB-j\fR | \fB--journal-device\fR \fIdevice\fR ]
+[ \fB--no-journal-available\fR ]
+[ \fB-z\fR | \fB--adjust-file-size\fR ]
+[ \fB-S\fR | \fB--scan-whole-partition\fR ]
+[ \fB-l\fR | \fB--logfile \fIfilename\fR ]
+[ \fB-n\fR | \fB--nolog\fR ]
+[ \fB-q\fR | \fB--quiet\fR ]
+.\" [ \fB-b\fR | \fB--scan-marked-in-bitmap \fIbitmap-filename\fR ]
+.\" [ \fB-h\fR | \fB--hash \fIhash-name\fR ]
+.\" [ \fB-g\fR | \fB--background\fR ]
 .I device
 .SH DESCRIPTION
-It looks for reiserfs filesystem on a device, replays transactions
-which are to be replayed and either check or repair the filesystem
+\fBReiserfsck\fR searches for a Reiserfs filesystem on a device, replays 
+any necessary transactions, and either checks or repairs the file system.
 .TP
 .I device
-is the special file corresponding to the device (e.g /dev/hdXX for
-IDE disk partition or /dev/sdXX for SCSI disk partition).
+is the special file corresponding to the device or partition (e.g /dev/hdXX 
+for IDE disk partition or /dev/sdXX for SCSI disk partition).
 .SH OPTIONS
 .TP
 .B --check
-This checks filesystem consistency. This is a default action. It may
-be used on a filesystem mounted read-only
+This default action checks file system consistency and reports but 
+does not repair any corruption that it finds. This option may be 
+used on a read-only file system mount.  The \fB--check\fR option exits 
+with status 0 to indicate that no corruption was found.  Otherwise,
+\fBreiserfsck\fR returns 1 to indicate corruption that can be fixed with 
+\fB--fix-fixable\fR and 2 to indicate corruption that requires 
+\fB--rebuild-tree\fR.
 .TP
-.B --rebuild-tree
-This rebuilds filesystem tree using leaf nodes found on the
-device. Normally, you do not need this, but if you have to rebuild
-tree - please backup whole partition first or at least the most
-important data if you can mount the partition.
+.B --fix-fixable
+This option recovers certain kinds of corruption that do not require 
+rebuilding the entire file system tree (\fB--rebuild-tree\fR). Normally 
+you only need this option if the \fB--check\fR option reports 
+"corruption that can be fixed with \fB--fix-fixable\fR". This includes: 
+zeroing invalid data-block pointers, correcting st_size and st_blocks 
+for directories, and deleting invalid directory entries.
 .TP
 .B --rebuild-sb
+This option recovers the superblock on a Reiserfs partition.  Normally you 
+only need this option if mount reports "read_super_block: can't find 
+a reiserfs file system" and you are sure that a Reiserfs file system is 
+there.
 .TP
-.B --interactive, -i
-This makes \fBreiserfsck\fR to stop after each pass completed.
+.B --rebuild-tree
+This option rebuilds the entire file system tree using leaf nodes found 
+on the device.  Normally you only need this option if the \fB--check\fR 
+option reports "corruption that can be fixed only during \fB--rebuild-tree\fR". 
+You are strongly encouraged to make a backup copy of the whole partition 
+before attempting the \fB--rebuild-tree\fR option.
 .TP
-.B --quiet, -q
-have \fBreiserfsck\fR to not reflect its progress
+.B --clean-attributes
+This option cleans reserved fields of Stat-Data items.
+.TP
+.B \fB--journal-device \fIdevice \fR, \fB-j \fIdevice \fR
+This option supplies the device name of the current file system journal.  
+This option is required when the journal resides on a separate device 
+from the main data device (although it can be avoided with the expert
+option \fB--no-journal-available\fR).
+.TP 
+.\" .B --interactive, -i
+.\" This makes \fBreiserfsck\fR to stop after each pass completed.
+.\" .TP
+.B --adjust-file-size, -z
+This option causes \fBreiserfsck\fR to correct file sizes that
+are larger than the offset of the last discovered byte.  This
+implies that holes at the end of a file will be removed.  File
+sizes that are smaller than the offset of the last discovered
+byte are corrected by --fix-fixable.
+.TP
+\fB--logfile \fIfilename\fR, \fB-l \fI filename\fR
+This option causes \fBreiserfsck\fR to report any corruption it finds 
+to the specified log file rather than stderr.
 .TP
 .B --nolog, -n
-have \fBreiserfsck\fR to not log anything
+This option prevents \fBreiserfsck\fR from reporting any kinds of corruption.
 .TP
-\fB--logfile \fIfilename\fR, \fB-l \fI filename
-have \fBreiserfsck\fR to put info about found corruptions in logfile
-rather than on stderr
+.B --quiet, -q
+This option prevents \fBreiserfsck\fR from reporting its rate of progress.
 .TP
-.B --fix-fixable, -x
-have \fBreiserfsck\fR to recover corruptions which can be fixed w/o
---rebuild-tree when it is runnig in check mode. Corruptions which can
-be fixed so far: bad pointers to data blocks, wrong directory's
-st_size and st_blocks, directories entries pointing to nowhere can be
-deleted
-.TP
-.B --fix-non-critical, -o
-have \fBreiserfsck\fR to fix: file sizes when they are bigger than
-real file size, set file mode to regular file when mode looks wrong
-and to try to recover "objectid sharing" problem
-.TP
-.B -a
-When it is set - \fBreiserfsck\fR assumes that it is called by fsck -A
-and just returns even if filesystem seems not umounted cleanly
-.TP
-.B -r
-ignored
+\fB-a\fR, \fB-p\fR
+These options are usually passed by fsck -A during the automatic 
+checking of /etc/fstab partitions.  For compatibility, these options
+simply cause reiserfsck to print information about the specified file 
+system.  No checks are performed. 
+When it is set - \fBreiserfsck\fR assumes that it is called by \fBfsck\fR -A,
+provides some information about the specified filesystem and exits. 
 .TP
 .B -V
-Prints version and exits
+This option prints the reiserfsprogs version and exit.
+.TP
+\fB-r\fR, \fB-p\fR, \fB-y\fR
+These options are ignored.
+.TP
+.B -V\fR, \fB-f\fR
+prints version and exits
+.SH EXPERT OPTIONS
+DO NOT USE THESE OPTIONS UNLESS YOU KNOW WHAT YOU ARE DOING. 
+WE ARE NOT RESPONSIBLE IF YOU LOSE DATA AS A RESULT OF THESE
+OPTIONS.
+.TP
+.B \fB\--no-journal-available\fR
+This option allows \fBreiserfsck\fR to proceed when the journal device is 
+not available. This option has no effect when the journal is located on 
+the main data device. NOTE: after this operation you must use \fBreiserfstune\fR 
+to specify a new journal device.
+.TP
+.B --scan-whole-partition, -S
+This option causes \fB--rebuild-tree\fR to scan the whole partition, not only 
+used space on the partition.
+.SH EXAMPLE OF USING
+1. You think something may be wrong with a reiserfs partition on /dev/hda1 
+or you would just like to perform a periodic disk check.
+
+2. Run \fBreiserfsck --check --logfile check.log /dev/hda1\fR. If \fBreiserfsck 
+--check\fR exits with status 0 it means no errors were discovered. 
+
+3. If \fBreiserfsck --check\fR exits with status 1 (and reports about fixable 
+corruptions) it means that you should run \fBreiserfsck --fix-fixable --logfile 
+fixable.log /dev/hda1\fR.
+
+4. If \fBreiserfsck --check\fR exits with status 2 (and reports about fatal 
+corruptions) it means that you need to run \fBreiserfsck --rebuild-tree\fR.  
+If \fBreiserfsck --check\fR fails in some way you should also run \fBreiserfsck 
+--rebuild-tree\fR, but we also encourage you to submit this as a bug report.
+
+5. Before running \fBreiserfsck --rebuild-tree\fR, please make a backup of 
+the whole partition before proceeding. Then run \fBreiserfsck --rebuild-tree 
+--logfile rebuild.log /dev/hda1\fR.
+
+6. If the \fB--rebuild-tree\fR step fails or does not recover what you expected, 
+please submit this as a bug report. Try to provide as much information as 
+possible and we will try to help solve the problem.
 .SH AUTHOR
-This version of \fBreiserfsck\fR has been written by Hans Reiser
-<reiser@idiom.com>.
+This version of \fBreiserfsck\fR has been written by Vitaly Fertman <vitaly@namesys.com>
+and Vladimir Saveliev <vs@namesys.com>.
 .SH BUGS
-There are probably few of them. Please, report bugs to Hans Reiser <reiser@idiom.com>.
+There are likely to be some bugs. Please report bugs to the ReiserFS mail-list 
+<reiserfs-list@namesys.com>.
 .SH TODO
-Faster recovering, signal handling, i/o error handling, etc.
+Faster recovering, signal handling, i/o error handling, return reasonable exit codes, etc.
 .SH SEE ALSO
 .BR mkreiserfs (8),
-.BR debugreiserfs (8)
+.BR debugreiserfs (8),
+.BR reiserfstune (8)

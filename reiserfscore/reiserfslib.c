@@ -3,98 +3,63 @@
  */
 
 #include "includes.h"
+#include <linux/major.h>
+#include <linux/kdev_t.h>
 
+struct key root_dir_key = {0, 0, {{0, 0},}};
+struct key parent_root_dir_key = {0, 0, {{0, 0},}};
+struct key lost_found_dir_key = {0, 0, {{0, 0}, }};
 
-/* fixme: this assumes that journal start and journal size are set
-   correctly */
-static void check_first_bitmap (reiserfs_filsys_t fs, char * bitmap)
+__u16 root_dir_format = 0;
+__u16 lost_found_dir_format = 0;
+
+static void make_const_keys (void)
 {
-    int i;
-    int bad;
+    set_key_dirid (&root_dir_key, REISERFS_ROOT_PARENT_OBJECTID);
+    set_key_objectid (&root_dir_key, REISERFS_ROOT_OBJECTID);
 
-    bad = 0;
-    for (i = 0; i < rs_journal_start (fs->s_rs) +
-	     rs_journal_size (fs->s_rs) + 1; i ++) {
-	if (!test_bit (i, bitmap)) {
-	    bad = 1;
-	    /*reiserfs_warning ("block %d is marked free in the first bitmap, fixed\n", i);*/
-	    /*set_bit (i, bitmap);*/
-	}
-    }
-    if (bad)
-	reiserfs_warning (stderr, "reiserfs_open: first bitmap looks corrupted\n");
+    set_key_dirid (&parent_root_dir_key, 0);
+    set_key_objectid (&parent_root_dir_key, REISERFS_ROOT_PARENT_OBJECTID);
 }
 
 
-/* read bitmap blocks */
-void reiserfs_read_bitmap_blocks (reiserfs_filsys_t fs)
+
+/* reiserfs needs at least: enough blocks for journal, 64 k at the beginning,
+   one block for super block, bitmap block and root block. Note that first
+   bitmap block must point to all of them */
+int is_block_count_correct (unsigned long block_of_super_block, int block_size,
+	unsigned long block_count, unsigned long journal_size)
 {
-	struct reiserfs_super_block * rs = fs->s_rs;
-	struct buffer_head * bh = SB_BUFFER_WITH_SB(fs);
-	int fd = fs->s_dev;
-	unsigned long block;
-	int i;
-	
-	/* read bitmaps, and correct a bit if necessary */
-	SB_AP_BITMAP (fs) = getmem (sizeof (void *) * rs_bmap_nr (rs));
-	for (i = 0, block = bh->b_blocknr + 1;
-	     i < rs_bmap_nr (rs); i ++) {
-		SB_AP_BITMAP (fs)[i] = bread (fd, block, fs->s_blocksize);
-		if (!SB_AP_BITMAP (fs)[i]) {
-		    	reiserfs_warning (stderr, "reiserfs_open: bread failed reading bitmap #%d (%lu)\n", i, block);
-			SB_AP_BITMAP (fs)[i] = getblk (fd, block, fs->s_blocksize);
-			memset (SB_AP_BITMAP (fs)[i]->b_data, 0xff, fs->s_blocksize);
-			set_bit (BH_Uptodate, &SB_AP_BITMAP (fs)[i]->b_state);
-		}
-		
-		/* all bitmaps have to have itself marked used on it */
-		if (bh->b_blocknr == 16) {
-			if (!test_bit (block % (fs->s_blocksize * 8), SB_AP_BITMAP (fs)[i]->b_data)) {
-				reiserfs_warning (stderr, "reiserfs_open: bitmap %d was marked free\n", i);
-				/*set_bit (block % (fs->s_blocksize * 8), SB_AP_BITMAP (fs)[i]->b_data);*/
-			}
-		} else {
-			/* bitmap not spread over partition: fixme: does not
-			   work when number of bitmaps => 32768 */
-			if (!test_bit (block, SB_AP_BITMAP (fs)[0]->b_data)) {
-			    	reiserfs_warning (stderr, "reiserfs_open: bitmap %d was marked free\n", i);
-				/*set_bit (block, SB_AP_BITMAP (fs)[0]->b_data);*/
-			}
-		}
+    unsigned long blocks;
 
-		if (i == 0) {
-			/* first bitmap has to have marked used super block
-			   and journal areas */
-			check_first_bitmap (fs, SB_AP_BITMAP (fs)[i]->b_data);
-		}
+    /* RESERVED, MD RAID SBs, super block, bitmap, root, journal size w/ journal header */
+    blocks = block_of_super_block + 1 + 1 + 1 + journal_size;
 
-		block = (bh->b_blocknr == 16 ? ((i + 1) * fs->s_blocksize * 8) : (block + 1));
-    }
+    /* we have a limit: skipped area, super block, journal and root block
+    all have to be addressed by one first bitmap */
+    if (blocks > block_size * 8)
+    	return 0;
+    	
+    if (blocks > block_count)
+    	return 0;
+    	
+    return 1;
 }
 
-
-void reiserfs_free_bitmap_blocks (reiserfs_filsys_t fs)
+/* read super block. fixme: only 4k blocks, pre-journaled format
+   is refused. Journal and bitmap are to be opened separately */
+reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void * vp)
 {
-	int i;
-	
-    /* release bitmaps if they were read */
-    if (SB_AP_BITMAP (fs)) {
-		for (i = 0; i < SB_BMAP_NR (fs); i ++)
-			brelse (SB_AP_BITMAP (fs) [i]);
-		freemem (SB_AP_BITMAP (fs));
-	}
-
-}
-
-/* read super block and bitmaps. fixme: only 4k blocks, pre-journaled format
-   is refused */
-reiserfs_filsys_t reiserfs_open (char * filename, int flags, int *error, void * vp)
-{
-    reiserfs_filsys_t fs;
+    reiserfs_filsys_t * fs;
     struct buffer_head * bh;
-    struct reiserfs_super_block * rs;
+    struct reiserfs_super_block * sb;
     int fd, i;
-    
+
+
+    /* convert root dir key and parent root dir key to little endian format */
+    make_const_keys ();
+
+
     fd = open (filename, flags | O_LARGEFILE);
     if (fd == -1) {
 	if (error)
@@ -103,20 +68,22 @@ reiserfs_filsys_t reiserfs_open (char * filename, int flags, int *error, void * 
     }
 
     fs = getmem (sizeof (*fs));
-    fs->s_dev = fd;
-    fs->s_vp = vp;
-    asprintf (&fs->file_name, "%s", filename);
-
+    fs->fs_dev = fd;
+    fs->fs_vp = vp;
+    asprintf (&fs->fs_file_name, "%s", filename);
+    
     /* reiserfs super block is either in 16-th or in 2-nd 4k block of the
        device */
-    for (i = 16; i > 0; i -= 14) {
+    for (i = 2; i < 17; i += 14) {
 	bh = bread (fd, i, 4096);
 	if (!bh) {
 	    reiserfs_warning (stderr, "reiserfs_open: bread failed reading block %d\n", i);
 	} else {
-	    rs = (struct reiserfs_super_block *)bh->b_data;
+	    sb = (struct reiserfs_super_block *)bh->b_data;
 	    
-	    if (is_reiser2fs_magic_string (rs) || is_reiserfs_magic_string (rs))
+	    if (is_any_reiserfs_magic_string (sb))
+		/* fixme: we could make some check to make sure that super
+		   block looks correctly */
 		goto found;
 
 	    /* reiserfs signature is not found at the i-th 4k block */
@@ -128,98 +95,279 @@ reiserfs_filsys_t reiserfs_open (char * filename, int flags, int *error, void * 
 		      "found on %s\n", filename);
     if (error)
 	*error = 0;
+    freemem (fs);
+    close (fd);
+    fs = NULL;
     return fs;
 
  found:
+    
+    fs->fs_blocksize = get_sb_block_size (sb);
 
-    /* fixme: we could make some check to make sure that super block looks
-       correctly */
-    fs->s_version = is_reiser2fs_magic_string (rs) ? REISERFS_VERSION_2 :
-	REISERFS_VERSION_1;
-    fs->s_blocksize = rs_blocksize (rs);
-    fs->s_hash_function = code2func (rs_hash (rs));
-    SB_BUFFER_WITH_SB (fs) = bh;
-    fs->s_rs = rs;
-    fs->s_flags = flags; /* O_RDONLY or O_RDWR */
-    fs->s_vp = vp;
+    /* check block size on the filesystem */
+    if (fs->fs_blocksize != 4096) {
+	i = bh->b_blocknr * 4096 / fs->fs_blocksize;
+	brelse (bh);
+	bh = bread (fd, i, fs->fs_blocksize);
+	if (!bh) {
+	    reiserfs_warning (stderr, "reiserfs_open: bread failed reading block %d, size %d\n",
+			      i, fs->fs_blocksize);
+	    freemem (fs);
+	    return 0;
+	}
+	sb = (struct reiserfs_super_block *)bh->b_data;	
+	if (!does_look_like_super_block (sb, fs->fs_blocksize)) {
+	    reiserfs_warning (stderr, "reiserfs_open: no reiserfs in %d, size %d\n",
+			      i, fs->fs_blocksize);
+	    freemem (fs);
+	    return 0;
+	}
+    }
 
-	
-    reiserfs_read_bitmap_blocks(fs);
-	
+    fs->fs_hash_function = code2func (get_sb_hash_code (sb));
+    fs->fs_super_bh = bh;
+    fs->fs_ondisk_sb = sb;
+    fs->fs_flags = flags; /* O_RDONLY or O_RDWR */
+
+    fs->fs_format = get_reiserfs_format (sb);
+    
+    /*reiserfs_read_bitmap_blocks(fs);*/
+    if (flags & O_RDWR)
+	fs->fs_dirt  = 1;
+    else
+	fs->fs_dirt = 0;
+
     return fs;
+}
+
+
+/* creates buffer for super block and fills it up with fields which are
+   constant for given size and version of a filesystem */
+reiserfs_filsys_t * reiserfs_create (char * filename,
+				     int version,
+				     unsigned long block_count, int block_size, int default_journal, int new_format)
+{
+    reiserfs_filsys_t * fs;
+
+
+    /* convert root dir key and parent root dir key to little endian format */
+    make_const_keys ();
+
+
+    if (count_blocks (filename, block_size) < block_count) {
+	reiserfs_warning (stderr, "reiserfs_create: no enough blocks on device\n");
+	return 0;
+    }
+
+    if (!is_block_count_correct (REISERFS_DISK_OFFSET_IN_BYTES / block_size, block_size, block_count, 0)) {
+//    if (block_count < min_block_amount (block_size, 0)) {
+	reiserfs_warning (stderr, "reiserfs_create: "
+			  "can not create that small (%d blocks) filesystem\n",
+			  block_count);
+	return 0;
+    }
+
+    fs = getmem (sizeof (*fs));
+    if (!fs) {
+	reiserfs_warning (stderr, "reiserfs_create: getmem failed\n");
+	return 0;
+    }
+
+    fs->fs_dev = open (filename, O_RDWR | O_LARGEFILE);
+    if (fs->fs_dev == -1) {
+	reiserfs_warning (stderr, "reiserfs_create: could not open %s: %m\n",
+			  filename);
+	freemem (fs);
+	return 0;
+    }
+
+    fs->fs_blocksize = block_size;
+    asprintf (&fs->fs_file_name, "%s", filename);
+    fs->fs_format = version;
+
+    if (new_format)
+        fs->fs_super_bh = getblk (fs->fs_dev, REISERFS_DISK_OFFSET_IN_BYTES / block_size, block_size);
+    else 
+        fs->fs_super_bh = getblk (fs->fs_dev, REISERFS_OLD_DISK_OFFSET_IN_BYTES / block_size, block_size);
+    
+    if (!fs->fs_super_bh) {
+	reiserfs_warning (stderr, "reiserfs_create: getblk failed\n");
+	return 0;
+    }
+
+    mark_buffer_uptodate (fs->fs_super_bh, 1);
+    
+    fs->fs_ondisk_sb = (struct reiserfs_super_block *)fs->fs_super_bh->b_data;
+    memset (fs->fs_ondisk_sb, 0, block_size);
+    
+    /* fill super block fields which are constant for given version and block count */
+    set_sb_block_count (fs->fs_ondisk_sb, block_count);
+    /* sb_free_blocks */
+    /* sb_root_block */
+    /* sb_journal_1st_block */
+    /* sb_journal_dev */
+    /* sb_orig_journal_size */
+    /* sb_joural_magic */
+    /* sb_journal magic_F */
+    /* sb_mount_id */
+    /* sb_not_used0 */
+    /* sb_generation_number */    
+    set_sb_block_size (fs->fs_ondisk_sb, block_size);
+    switch (version) {
+    case REISERFS_FORMAT_3_5:
+	set_sb_oid_maxsize (fs->fs_ondisk_sb, (block_size - SB_SIZE_V1) / sizeof(__u32) / 2 * 2);
+	/* sb_oid_cursize */
+	/* sb_state */
+	memcpy (fs->fs_ondisk_sb->s_v1.s_magic, REISERFS_3_5_SUPER_MAGIC_STRING,
+		strlen (REISERFS_3_5_SUPER_MAGIC_STRING));
+	break;
+
+    case REISERFS_FORMAT_3_6:
+	set_sb_oid_maxsize (fs->fs_ondisk_sb, (block_size - SB_SIZE) / sizeof(__u32) / 2 * 2);
+	/* sb_oid_cursize */
+	/* sb_state */
+        memcpy (fs->fs_ondisk_sb->s_v1.s_magic, REISERFS_3_6_SUPER_MAGIC_STRING,
+                strlen (REISERFS_3_6_SUPER_MAGIC_STRING));
+	break;
+    }
+    if (!default_journal)
+        memcpy (fs->fs_ondisk_sb->s_v1.s_magic, REISERFS_JR_SUPER_MAGIC_STRING,
+                strlen (REISERFS_JR_SUPER_MAGIC_STRING));
+
+    /* sb_fsck_state */
+    /* sb_hash_function_code */
+    /* sb_tree_height */
+    set_sb_bmap_nr (fs->fs_ondisk_sb,
+		    (block_count + (block_size * 8 - 1)) / (block_size * 8));
+    set_sb_version (fs->fs_ondisk_sb, version);
+    /* sb_not_used1 */
+
+    mark_buffer_dirty (fs->fs_super_bh);
+    fs->fs_dirt = 1;
+
+    return fs;
+}
+
+
+int no_reiserfs_found (reiserfs_filsys_t * fs)
+{
+    return (fs == NULL || fs->fs_blocksize == 0) ? 1 : 0;
+}
+
+
+int new_format (reiserfs_filsys_t * fs)
+{
+    return fs->fs_super_bh->b_blocknr != 2;
+}
+
+
+int spread_bitmaps (reiserfs_filsys_t * fs)
+{
+    return fs->fs_super_bh->b_blocknr != 2;
+}
+
+
+/* 0 means: do not guarantee that fs is consistent */
+int reiserfs_is_fs_consistent (reiserfs_filsys_t * fs)
+{
+    if (get_sb_umount_state (fs->fs_ondisk_sb) == REISERFS_CLEANLY_UMOUNTED &&
+	get_sb_fs_state (fs->fs_ondisk_sb) == REISERFS_CONSISTENT)
+	return 1;
+    return 0;
+}
+
+
+void reiserfs_reopen (reiserfs_filsys_t * fs, int flag)
+{
+    reiserfs_only_reopen (fs, flag);
+    reiserfs_reopen_journal (fs, flag);
 
 }
 
 
-int no_reiserfs_found (reiserfs_filsys_t fs)
+/* flush bitmap, brelse super block, flush all dirty buffers, close and open
+   again the device, read super block */
+void reiserfs_only_reopen (reiserfs_filsys_t * fs, int flag)
 {
-    return (fs->s_blocksize == 0) ? 1 : 0;
-}
+    unsigned long super_block;
 
 
-int new_format (reiserfs_filsys_t fs)
-{
-    return fs->s_sbh->b_blocknr != 2;
-}
-
-
-int spread_bitmaps (reiserfs_filsys_t fs)
-{
-    return fs->s_sbh->b_blocknr != 2;
-}
-
-
-void reiserfs_reopen (reiserfs_filsys_t fs, int flag)
-{
-    close (fs->s_dev);
-    fs->s_dev = open (fs->file_name, flag | O_LARGEFILE);
-    if (fs->s_dev == -1)
+    /*  reiserfs_flush_to_ondisk_bitmap (fs->fs_bitmap2, fs);*/
+    super_block = fs->fs_super_bh->b_blocknr;                
+    brelse (fs->fs_super_bh);
+    flush_buffers (fs->fs_dev);
+    
+    invalidate_buffers (fs->fs_dev);
+    if (close (fs->fs_dev))
+	die ("reiserfs_reopen: closed failed: %m");
+    
+    fs->fs_dev = open (fs->fs_file_name, flag | O_LARGEFILE);
+    if (fs->fs_dev == -1)
 	die ("reiserfs_reopen: could not reopen device: %m");
+
+    fs->fs_super_bh = bread (fs->fs_dev, super_block, fs->fs_blocksize);
+    if (!fs->fs_super_bh)
+	die ("reiserfs_reopen: reading super block failed");
+    fs->fs_ondisk_sb = (struct reiserfs_super_block *)fs->fs_super_bh->b_data;
+    fs->fs_flags = flag; /* O_RDONLY or O_RDWR */
+    
+    if (flag & O_RDWR)
+	fs->fs_dirt  = 1;
+    else
+	fs->fs_dirt = 0;
 }
 
 
-int filesystem_dirty (reiserfs_filsys_t fs)
+int is_opened_rw (reiserfs_filsys_t * fs)
 {
-    return fs->s_dirt;
-}
-
-
-void mark_filesystem_dirty (reiserfs_filsys_t fs)
-{
-    fs->s_dirt = 1;
+    if ((fs->fs_flags) & O_RDWR)
+	return 1;
+    return 0;
 }
 
 
 /* flush all changes made on a filesystem */
-void reiserfs_flush (reiserfs_filsys_t fs)
+void reiserfs_flush (reiserfs_filsys_t * fs)
 {
-    flush_buffers ();
+    if (fs->fs_dirt) {
+	reiserfs_flush_journal (fs);
+	flush_buffers (fs->fs_dev);
+    }
+    fs->fs_dirt = 0;
 }
 
 
 /* free all memory involved into manipulating with filesystem */
-void reiserfs_free (reiserfs_filsys_t fs)
+void reiserfs_free (reiserfs_filsys_t * fs)
 {
-    reiserfs_free_bitmap_blocks(fs);
-    
+    reiserfs_free_journal (fs);
+    reiserfs_free_ondisk_bitmap (fs);
+
     /* release super block and memory used by filesystem handler */
-    brelse (SB_BUFFER_WITH_SB (fs));
-    
+    brelse (fs->fs_super_bh);
+    fs->fs_super_bh = 0;
+
     free_buffers ();
 
-    free (fs->file_name);
+    free (fs->fs_file_name);
+    fs->fs_file_name = 0;
     freemem (fs);
 }
 
 
-void reiserfs_close (reiserfs_filsys_t fs)
+/* this closes everything: journal. bitmap and the fs itself */
+void reiserfs_close (reiserfs_filsys_t * fs)
 {
+    reiserfs_close_journal (fs);
+    reiserfs_close_ondisk_bitmap (fs);
+
     reiserfs_flush (fs);
     reiserfs_free (fs);
+    fsync(fs->fs_dev);
 }
 
 
-int reiserfs_new_blocknrs (reiserfs_filsys_t fs, 
+int reiserfs_new_blocknrs (reiserfs_filsys_t * fs, 
 			   unsigned long * free_blocknrs, unsigned long start, int amount_needed)
 {
     if (fs->block_allocator)
@@ -229,105 +377,49 @@ int reiserfs_new_blocknrs (reiserfs_filsys_t fs,
 }
 
 
-int reiserfs_free_block (reiserfs_filsys_t fs, unsigned long block)
+int reiserfs_free_block (reiserfs_filsys_t * fs, unsigned long block)
 {
     if (fs->block_deallocator)
 	return fs->block_deallocator (fs, block);
-    die ("block allocator is not defined\n");
+    die ("block deallocator is not defined\n");
     return 0;
 }
 
+/*
+inline int reiserfs_bin_search (void * key, void * base, int num, int width,
+			 int *ppos, comparison_fn_t comp_func) {
+    __u32 position = *ppos;
+    int retval;
 
-typedef int (comp_function_t) (void * key1, void * key2);
-
-inline int _bin_search (void * key, void * base, int num, int width, __u32 *ppos, comp_function_t comp_func)
-{
-    int rbound, lbound, j;
-
-    if (num == 0) {
-	/* objectid map may be 0 elements long */
-        *ppos = 0;
-        return ITEM_NOT_FOUND;
-    }
-
-    lbound = 0;
-    rbound = num - 1;
-
-    for (j = (rbound + lbound) / 2; lbound <= rbound; j = (rbound + lbound) / 2) {
-	switch (comp_func ((void *)((char *)base + j * width), key ) ) {
-	case -1:/* second is greater */
-	    lbound = j + 1;
-	    continue;
-
-	case 1: /* first is greater */
-	    if (j == 0) {
-                *ppos = lbound;
-                return ITEM_NOT_FOUND;
-	    }
-	    rbound = j - 1;
-	    continue;
-
-	case 0:
-	    *ppos = j;
-	    return ITEM_FOUND;
-	}
-    }
-
-    *ppos = lbound;
-    return ITEM_NOT_FOUND;
+    retval = reiserfs_bin_search (key, base, num, width, &position, comp_func);
+    *ppos = position;
+    return retval;
 }
+*/
 
-#if 0
-static inline int _bin_search (void * key, void * base, int num, int width, __u32 *ppos)
+static int reiserfs_search_by_key_x (reiserfs_filsys_t * fs, struct key * key,
+				     struct path * path, int key_length)
 {
-    __u32 rbound, lbound, j;
-
-    lbound = 0;
-    rbound = num - 1;
-    for (j = (rbound + lbound) / 2; lbound <= rbound; j = (rbound + lbound) / 2) {
-	switch (comp_keys ((void *)((char *)base + j * width), key)) {
-	case -1:/* second is greater */
-	    lbound = j + 1;
-	    continue;
-
-	case 1: /* first is greater */
-	    if (j == 0) {
-                *ppos = lbound;
-                return ITEM_NOT_FOUND;
-	    }
-	    rbound = j - 1;
-	    continue;
-
-	case 0:
-	    *ppos = j;
-	    return ITEM_FOUND;
-	}
-    }
-
-    *ppos = lbound;
-    return ITEM_NOT_FOUND;
-}
-#endif
-
-static int _search_by_key (reiserfs_filsys_t fs, struct key * key, struct path * path)
-{
-    struct buffer_head * bh;
-    unsigned long block = SB_ROOT_BLOCK (fs);
+    struct buffer_head * bh;   
+    unsigned long block;
     struct path_element * curr;
     int retval;
     
+
+    block = get_sb_root_block (fs->fs_ondisk_sb);
     path->path_length = ILLEGAL_PATH_ELEMENT_OFFSET;
     while (1) {
 	curr = PATH_OFFSET_PELEMENT (path, ++ path->path_length);
-	bh = curr->pe_buffer = bread (fs->s_dev, block, fs->s_blocksize);
+	bh = curr->pe_buffer = bread (fs->fs_dev, block, fs->fs_blocksize);
         if (bh == 0) {
 	    path->path_length --;
 	    pathrelse (path);
 	    return ITEM_NOT_FOUND;
 	}
-	retval = _bin_search (key, B_N_PKEY (bh, 0), B_NR_ITEMS (bh),
-			      is_leaf_node (bh) ? IH_SIZE : KEY_SIZE, &(curr->pe_position), comp_keys);
-	if (retval == ITEM_FOUND) {
+	retval = reiserfs_bin_search (key, B_N_PKEY (bh, 0), B_NR_ITEMS (bh),
+				      is_leaf_node (bh) ? IH_SIZE : KEY_SIZE,
+				      &(curr->pe_position), key_length == 4 ? comp_keys : comp_keys_3);
+	if (retval == POSITION_FOUND) {
 	    /* key found, return if this is leaf level */
 	    if (is_leaf_node (bh)) {
 		path->pos_in_item = 0;
@@ -339,17 +431,116 @@ static int _search_by_key (reiserfs_filsys_t fs, struct key * key, struct path *
 	    if (is_leaf_node (bh))
 		return ITEM_NOT_FOUND;
 	}
-	block = B_N_CHILD_NUM (bh, curr->pe_position);
+	block = get_dc_child_blocknr (B_N_CHILD (bh, curr->pe_position));
     }
     printf ("search_by_key: you can not get here\n");
     return ITEM_NOT_FOUND;
 }
 
 
-static int comp_dir_entries (void * p1, void * p2)
+int reiserfs_search_by_key_3 (reiserfs_filsys_t * fs, struct key * key,
+			      struct path * path)
+{
+    return reiserfs_search_by_key_x (fs, key, path, 3);
+}
+
+
+int reiserfs_search_by_key_4 (reiserfs_filsys_t * fs, struct key * key,
+			      struct path * path)
+{
+    return reiserfs_search_by_key_x (fs, key, path, 4);
+}
+
+
+/* key is key of byte in the regular file. This searches in tree
+   through items and in the found item as well */
+int usearch_by_position (reiserfs_filsys_t * s, struct key * key,
+			 int version, struct path * path)
+{
+    struct buffer_head * bh;
+    struct item_head * ih;
+    struct key * next_key;
+
+    if (reiserfs_search_by_key_3 (s, key, path) == ITEM_FOUND) {
+    	ih = get_ih (path);
+
+	if (!is_direct_ih (ih) && !is_indirect_ih (ih))
+	    return DIRECTORY_FOUND;
+
+	path->pos_in_item = 0;
+	return POSITION_FOUND;
+    }
+
+    bh = get_bh (path);
+    ih = get_ih (path);
+
+
+    if (PATH_LAST_POSITION (path) == 0) {
+	/* previous item does not exist, that means we are in leftmost leaf of
+	 * the tree */
+	if (!not_of_one_file (&ih->ih_key, key)) {
+	    if (!is_direct_ih (ih) && !is_indirect_ih (ih))
+		return DIRECTORY_FOUND;
+	    return POSITION_NOT_FOUND;
+	}
+	return FILE_NOT_FOUND;
+    }
+
+    /* take previous item */
+    PATH_LAST_POSITION (path) --;
+    ih --;
+
+    if (not_of_one_file (&ih->ih_key, key) || is_stat_data_ih(ih)) {
+	/* previous item belongs to another object or is a stat data, check
+	 * next item */
+	PATH_LAST_POSITION (path) ++;
+	if (PATH_LAST_POSITION (path) < B_NR_ITEMS (bh))
+	    /* next key is in the same node */
+	    next_key = B_N_PKEY (bh, PATH_LAST_POSITION (path));
+	else
+	    next_key = uget_rkey (path);
+	if (next_key == 0 || not_of_one_file (next_key, key)) {
+	    /* there is no any part of such file in the tree */
+	    path->pos_in_item = 0;
+	    return FILE_NOT_FOUND;
+	}
+
+	if (is_direntry_key (next_key)) {
+	    reiserfs_warning (stderr, "usearch_by_position: looking for %k found a directory with the same key\n",
+		      next_key);
+	    return DIRECTORY_FOUND;
+	}
+
+	/* next item is the part of this file */
+	path->pos_in_item = 0;
+	return POSITION_NOT_FOUND;
+    }
+
+    if (is_direntry_ih (ih)) {
+	return DIRECTORY_FOUND;
+    }
+
+    if (is_stat_data_ih(ih)) {
+	PATH_LAST_POSITION (path) ++;
+	return FILE_NOT_FOUND;
+    }
+
+    /* previous item is part of desired file */
+    if (I_K_KEY_IN_ITEM (ih, key, bh->b_size)) {
+	path->pos_in_item = get_offset (key) - get_offset (&ih->ih_key);
+	if (is_indirect_ih (ih) )
+	    path->pos_in_item /= bh->b_size;
+	return POSITION_FOUND;
+    }
+
+    path->pos_in_item = is_indirect_ih (ih) ? I_UNFM_NUM (ih) : get_ih_item_len (ih);
+    return POSITION_NOT_FOUND;
+}
+
+static int comp_dir_entries (const void * p1, const void * p2)
 {
     __u32 deh_offset;
-    __u32 * off1, * off2;
+    const __u32 * off1, * off2;
 
     off1 = p1;
     off2 = p2;
@@ -362,31 +553,66 @@ static int comp_dir_entries (void * p1, void * p2)
     return 0;
 }
 
-
-static struct key * _get_rkey (struct path * path)
+struct key * uget_lkey (struct path * path)
 {
     int pos, offset = path->path_length;
     struct buffer_head * bh;
 
     if (offset < FIRST_PATH_ELEMENT_OFFSET)
-	die ("_get_rkey: illegal offset in the path (%d)", offset);
+	die ("uget_lkey: illegal offset in the path (%d)", offset);
+
+
+    /* While not higher in path than first element. */
+    while (offset-- > FIRST_PATH_ELEMENT_OFFSET) {
+	if (! buffer_uptodate (PATH_OFFSET_PBUFFER (path, offset)) )
+	    die ("uget_lkey: parent is not uptodate");
+	
+	/* Parent at the path is not in the tree now. */
+	if (! B_IS_IN_TREE (bh = PATH_OFFSET_PBUFFER (path, offset)))
+	    die ("uget_lkey: buffer on the path is not in tree");
+
+	/* Check whether position in the parent is correct. */
+	if ((pos = PATH_OFFSET_POSITION (path, offset)) > B_NR_ITEMS (bh))
+	    die ("uget_lkey: invalid position (%d) in the path", pos);
+
+	/* Check whether parent at the path really points to the child. */
+	if (get_dc_child_blocknr (B_N_CHILD (bh, pos)) != PATH_OFFSET_PBUFFER (path, offset + 1)->b_blocknr)
+	    die ("uget_lkey: invalid block number (%d). Must be %ld",
+		 get_dc_child_blocknr (B_N_CHILD (bh, pos)), PATH_OFFSET_PBUFFER (path, offset + 1)->b_blocknr);
+	
+	/* Return delimiting key if position in the parent is not equal to zero. */
+	if (pos)
+	    return B_N_PDELIM_KEY(bh, pos - 1);
+    }
+
+    /* there is no left delimiting key */
+    return 0;
+}
+
+struct key * uget_rkey (struct path * path)
+{
+    int pos, offset = path->path_length;
+    struct buffer_head * bh;
+
+    if (offset < FIRST_PATH_ELEMENT_OFFSET)
+	die ("uget_rkey: illegal offset in the path (%d)", offset);
 
     while (offset-- > FIRST_PATH_ELEMENT_OFFSET) {
 	if (! buffer_uptodate (PATH_OFFSET_PBUFFER (path, offset)))
-	    die ("_get_rkey: parent is not uptodate");
+	    die ("uget_rkey: parent is not uptodate");
 
 	/* Parent at the path is not in the tree now. */
 	if (! B_IS_IN_TREE (bh = PATH_OFFSET_PBUFFER (path, offset)))
-	    die ("_get_rkey: buffer on the path is not in tree");
+	    die ("uget_rkey: buffer on the path is not in tree");
 
 	/* Check whether position in the parrent is correct. */
 	if ((pos = PATH_OFFSET_POSITION (path, offset)) > B_NR_ITEMS (bh))
-	    die ("_get_rkey: invalid position (%d) in the path", pos);
+	    die ("uget_rkey: invalid position (%d) in the path", pos);
 
 	/* Check whether parent at the path really points to the child. */
-	if (B_N_CHILD_NUM (bh, pos) != PATH_OFFSET_PBUFFER (path, offset + 1)->b_blocknr)
-	    die ("_get_rkey: invalid block number (%d). Must be %d",
-		 B_N_CHILD_NUM (bh, pos), PATH_OFFSET_PBUFFER (path, offset + 1)->b_blocknr);
+	if (get_dc_child_blocknr (B_N_CHILD (bh, pos)) != PATH_OFFSET_PBUFFER (path, offset + 1)->b_blocknr)
+	    die ("uget_rkey: invalid block number (%d). Must be %ld",
+		 get_dc_child_blocknr (B_N_CHILD (bh, pos)), PATH_OFFSET_PBUFFER (path, offset + 1)->b_blocknr);
 	
 	/* Return delimiting key if position in the parent is not the last one. */
 	if (pos != B_NR_ITEMS (bh))
@@ -397,17 +623,33 @@ static struct key * _get_rkey (struct path * path)
     return 0;
 }
 
+struct key * get_next_key_2 (struct path * path)
+{
+    if (PATH_LAST_POSITION (path) < B_NR_ITEMS (get_bh (path)) - 1)
+	return B_N_PKEY (get_bh (path), PATH_LAST_POSITION (path) + 1);
+    return uget_rkey (path);
+}
+
+struct key * reiserfs_next_key (struct path * path)
+{
+    if (get_item_pos (path) < B_NR_ITEMS (get_bh (path)) - 1)
+	return B_N_PKEY (get_bh (path), get_item_pos (path) + 1);
+
+    return uget_rkey (path);
+}
+
 
 /* NOTE: this only should be used to look for keys who exists */
-int _search_by_entry_key (reiserfs_filsys_t fs, struct key * key, 
-			  struct path * path)
+int reiserfs_search_by_entry_key (reiserfs_filsys_t * fs, struct key * key, 
+				  struct path * path)
 {
     struct buffer_head * bh;
     int item_pos;
     struct item_head * ih;
     struct key tmpkey;
+    __u32 offset;
 
-    if (_search_by_key (fs, key, path) == ITEM_FOUND) {
+    if (reiserfs_search_by_key_4 (fs, key, path) == ITEM_FOUND) {
         path->pos_in_item = 0;
         return POSITION_FOUND;
     }
@@ -422,9 +664,10 @@ int _search_by_entry_key (reiserfs_filsys_t fs, struct key * key,
 	    /* there are no items of that directory */
 	    return DIRECTORY_NOT_FOUND;
 
-	if (!is_direntry_ih (ih))
-	    reiserfs_panic ("_search_by_entry_key: found item is not of directory type %H",
-			    ih);
+	if (!is_direntry_ih (ih)) {
+	    reiserfs_panic ("reiserfs_search_by_entry_key: found item "
+			    "is not of directory type %H", ih);
+	}
 
 	/* key we looked for should be here */
         path->pos_in_item = 0;
@@ -457,7 +700,7 @@ int _search_by_entry_key (reiserfs_filsys_t fs, struct key * key,
 				key);
         } else {
 	    /* next item is in right neighboring node */
-            struct key * next_key = _get_rkey (path);
+            struct key * next_key = uget_rkey (path);
 
             if (next_key == 0 || not_of_one_file (next_key, key)) {
                 /* there are no items of that directory */
@@ -473,7 +716,7 @@ int _search_by_entry_key (reiserfs_filsys_t fs, struct key * key,
 	       pasted in position 0 */
             copy_key (&tmpkey, next_key);
             pathrelse (path);
-            if (_search_by_key (fs, &tmpkey, path) != ITEM_FOUND || PATH_LAST_POSITION (path) != 0)
+            if (reiserfs_search_by_key_4 (fs, &tmpkey, path) != ITEM_FOUND || PATH_LAST_POSITION (path) != 0)
                 reiserfs_panic ("_search_by_entry_key: item corresponding to delimiting key %k not found",
 				&tmpkey);
         }
@@ -483,21 +726,21 @@ int _search_by_entry_key (reiserfs_filsys_t fs, struct key * key,
         return POSITION_NOT_FOUND;
     }
 
-
     /* previous item is part of desired directory */
-    if (_bin_search (&(key->u.k_offset_v1.k_offset), B_I_DEH (bh, ih), ih_entry_count (ih),
-		     DEH_SIZE, &(path->pos_in_item), comp_dir_entries) == ITEM_FOUND)
+    offset = get_key_offset_v1 (key);
+    if (reiserfs_bin_search (&offset, B_I_DEH (bh, ih), get_ih_entry_count (ih),
+			     DEH_SIZE, &(path->pos_in_item), comp_dir_entries) == POSITION_FOUND)
 	return POSITION_FOUND;
 
     return POSITION_NOT_FOUND;
 }
 
 
-static void _init_tb_struct (struct tree_balance * tb, reiserfs_filsys_t fs,
+void init_tb_struct (struct tree_balance * tb, reiserfs_filsys_t * fs,
 			     struct path * path, int size)
 {
     memset (tb, '\0', sizeof(struct tree_balance));
-    tb->tb_sb = fs;
+    tb->tb_fs = fs;
     tb->tb_path = path;
 
     PATH_OFFSET_PBUFFER(path, ILLEGAL_PATH_ELEMENT_OFFSET) = NULL;
@@ -506,21 +749,21 @@ static void _init_tb_struct (struct tree_balance * tb, reiserfs_filsys_t fs,
 }
 
 
-int reiserfs_remove_entry (reiserfs_filsys_t fs, struct key * key)
+int reiserfs_remove_entry (reiserfs_filsys_t * fs, struct key * key)
 {
     struct path path;
     struct tree_balance tb;
     struct item_head * ih;
     struct reiserfs_de_head * deh;
 
-    if (_search_by_entry_key (fs, key, &path) != POSITION_FOUND) {
+    if (reiserfs_search_by_entry_key (fs, key, &path) != POSITION_FOUND) {
 	pathrelse (&path);
 	return 1;
     }
 
     ih = get_ih (&path);
-    if (ih_entry_count (ih) == 1) {
-	_init_tb_struct (&tb, fs, &path, -(IH_SIZE + ih_item_len (ih)));
+    if (get_ih_entry_count (ih) == 1) {
+	init_tb_struct (&tb, fs, &path, -(IH_SIZE + get_ih_item_len (ih)));
 	if (fix_nodes (M_DELETE, &tb, 0) != CARRY_ON) {
 	    unfix_nodes (&tb);
 	    return 1;
@@ -530,7 +773,7 @@ int reiserfs_remove_entry (reiserfs_filsys_t fs, struct key * key)
     }
 
     deh = B_I_DEH (get_bh (&path), ih) + path.pos_in_item;
-    _init_tb_struct (&tb, fs, &path, -(DEH_SIZE + entry_length (ih, deh, path.pos_in_item)));
+    init_tb_struct (&tb, fs, &path, -(DEH_SIZE + entry_length (ih, deh, path.pos_in_item)));
     if (fix_nodes (M_CUT, &tb, 0) != CARRY_ON) {
 	unfix_nodes (&tb);
 	return 1;
@@ -541,12 +784,12 @@ int reiserfs_remove_entry (reiserfs_filsys_t fs, struct key * key)
 
 
 
-void reiserfs_paste_into_item (reiserfs_filsys_t fs, struct path * path,
+void reiserfs_paste_into_item (reiserfs_filsys_t * fs, struct path * path,
 			       const void * body, int size)
 {
     struct tree_balance tb;
   
-    _init_tb_struct (&tb, fs, path, size);
+    init_tb_struct (&tb, fs, path, size);
 
     if (fix_nodes (M_PASTE, &tb, 0/*ih*/) != CARRY_ON)
 	reiserfs_panic ("reiserfs_paste_into_item: fix_nodes failed");
@@ -555,12 +798,12 @@ void reiserfs_paste_into_item (reiserfs_filsys_t fs, struct path * path,
 }
 
 
-void reiserfs_insert_item (reiserfs_filsys_t fs, struct path * path,
+void reiserfs_insert_item (reiserfs_filsys_t * fs, struct path * path,
 			   struct item_head * ih, const void * body)
 {
     struct tree_balance tb;
     
-    _init_tb_struct (&tb, fs, path, IH_SIZE + ih_item_len(ih));
+    init_tb_struct (&tb, fs, path, IH_SIZE + get_ih_item_len(ih));
     if (fix_nodes (M_INSERT, &tb, ih) != CARRY_ON)
 	die ("reiserfs_insert_item: fix_nodes failed");
 
@@ -570,7 +813,7 @@ void reiserfs_insert_item (reiserfs_filsys_t fs, struct path * path,
 
 /*===========================================================================*/
 
-static __u32 hash_value (reiserfs_filsys_t fs, char * name)
+static __u32 hash_value (reiserfs_filsys_t * fs, char * name)
 {
     __u32 res;
 
@@ -588,12 +831,84 @@ static __u32 hash_value (reiserfs_filsys_t fs, char * name)
 }
 
 
+/* if name is found in a directory - return 1 and set path to the name,
+   otherwise return 0 and pathrelse path */
+int reiserfs_locate_entry (reiserfs_filsys_t * fs, struct key * dir, char * name,
+			   struct path * path)
+{
+    struct key entry_key;
+    struct item_head * ih;
+    struct reiserfs_de_head * deh;
+    __u32 hash;
+    int i, retval;
+    struct key * rdkey;
+    
+    set_key_dirid (&entry_key, get_key_dirid (dir));
+    set_key_objectid (&entry_key, get_key_objectid (dir));
+    hash = hash_value (fs, name);
+    set_key_offset_v1 (&entry_key, hash);
+    set_key_uniqueness (&entry_key, DIRENTRY_UNIQUENESS);
 
-/* returns 0 if name is not found in a directory and objectid of
-   pointed object otherwise and returns minimal not used generation
-   counter.  dies if found object is not a directory. */
-int reiserfs_find_entry (reiserfs_filsys_t fs, struct key * dir, char * name, 
-			 int * min_gen_counter)
+ 
+    if (reiserfs_search_by_entry_key (fs, &entry_key, path) == DIRECTORY_NOT_FOUND) {
+	pathrelse (path);
+	return 0;
+    }
+
+    do {
+	ih = get_ih (path);
+	deh = B_I_DEH (get_bh (path), ih) + path->pos_in_item;
+	for (i = path->pos_in_item; i < get_ih_entry_count (ih); i ++, deh ++) {
+	    if (GET_HASH_VALUE (get_deh_offset (deh)) != GET_HASH_VALUE (hash)) {
+		/* all entries having the same hash were scanned */
+		pathrelse (path);
+		return 0;
+	    }
+
+	    /* the name in directory has the same hash as the given name */
+	    if ((name_in_entry_length (ih, deh, i) == strlen (name)) &&
+		!memcmp (name_in_entry (deh, i), name, strlen (name))) {
+		path->pos_in_item = i;
+		return 1;
+	    }
+	}
+
+	rdkey = uget_rkey (path);
+	if (!rdkey || not_of_one_file (rdkey, dir)) {
+	    pathrelse (path);
+	    return 0;
+	}
+	
+	if (!is_direntry_key (rdkey))
+	    reiserfs_panic ("reiserfs_locate_entry: can not find name in broken directory yet");
+
+	/* next item is the item of the directory we are looking name in */
+	if (GET_HASH_VALUE (get_offset (rdkey)) != hash) {
+	    /* but there is no names with given hash */
+	    pathrelse (path);
+	    return 0;
+	}
+
+	/* first name of that item may be a name we are looking for */
+	entry_key = *rdkey;
+	pathrelse (path);
+	retval = reiserfs_search_by_entry_key (fs, &entry_key, path);
+	if (retval != POSITION_FOUND)
+	    reiserfs_panic ("reiserfs_locate_entry: wrong delimiting key in the tree");
+
+    } while (1);
+
+    return 0;
+    
+}
+
+
+/* returns 0 if name is not found in a directory and 1 if name is
+   found. Stores key found in the entry in 'key'. Returns minimal not used
+   generation counter in 'min_gen_counter'. dies if found object is not a
+   directory. */
+int reiserfs_find_entry (reiserfs_filsys_t * fs, struct key * dir, char * name, 
+			 int * min_gen_counter, struct key * key)
 {
     struct key entry_key;
     int retval;
@@ -604,59 +919,69 @@ int reiserfs_find_entry (reiserfs_filsys_t fs, struct key * dir, char * name,
     struct key * rdkey;
     __u32 hash;
 
-    entry_key.k_dir_id = dir->k_dir_id;
-    entry_key.k_objectid = dir->k_objectid;
+
+    set_key_dirid (&entry_key, get_key_dirid (dir));
+    set_key_objectid (&entry_key, get_key_objectid (dir));
     hash = hash_value (fs, name);
-    set_type_and_offset (KEY_FORMAT_1, &entry_key, hash, TYPE_DIRENTRY);    
+    set_key_offset_v1 (&entry_key, hash);
+    set_key_uniqueness (&entry_key, DIRENTRY_UNIQUENESS);
+
     *min_gen_counter = 0;
 
-    if (_search_by_entry_key (fs, &entry_key, &path) == DIRECTORY_NOT_FOUND) {
+    if (reiserfs_search_by_entry_key (fs, &entry_key, &path) == DIRECTORY_NOT_FOUND) {
 	pathrelse (&path);
 	return 0;
     }
-
+	
     do {
 	ih = get_ih (&path);
 	deh = B_I_DEH (get_bh (&path), ih) + path.pos_in_item;
-	for (i = path.pos_in_item; i < ih_entry_count (ih); i ++, deh ++) {
-	    if (GET_HASH_VALUE (deh_offset (deh)) != GET_HASH_VALUE (hash)) {
+	for (i = path.pos_in_item; i < get_ih_entry_count (ih); i ++, deh ++) {
+	    if (GET_HASH_VALUE (get_deh_offset (deh)) != GET_HASH_VALUE (hash)) {
 		/* all entries having the same hash were scanned */
 		pathrelse (&path);
 		return 0;
 	    }
-
-	    if (GET_GENERATION_NUMBER (deh_offset (deh)) == *min_gen_counter)
+			
+	    if (GET_GENERATION_NUMBER (get_deh_offset (deh)) == *min_gen_counter)
 		(*min_gen_counter) ++;
-
-	    if (!memcmp (name_in_entry (deh, i), name, strlen (name))) {
+			
+	    if ((name_in_entry_length (ih, deh, i) == strlen (name)) &&
+	        (!memcmp (name_in_entry (deh, i), name, strlen (name)))) {
+		/* entry found in the directory */
+		if (key) {
+		    memset (key, 0, sizeof (struct key));
+		    set_key_dirid (key, get_deh_dirid (deh));
+		    set_key_objectid (key, get_deh_objectid (deh));
+		}
 		pathrelse (&path);
-		return deh_objectid (deh) ? deh_objectid (deh) : 1;
+		return 1;//get_deh_objectid (deh) ? get_deh_objectid (deh) : 1;
 	    }
 	}
-
-	rdkey = _get_rkey (&path);
+		
+	rdkey = uget_rkey (&path);
 	if (!rdkey || not_of_one_file (rdkey, dir)) {
 	    pathrelse (&path);
 	    return 0;
 	}
-	
+		
 	if (!is_direntry_key (rdkey))
 	    reiserfs_panic ("reiserfs_find_entry: can not find name in broken directory yet");
-
+		
 	/* next item is the item of the directory we are looking name in */
 	if (GET_HASH_VALUE (get_offset (rdkey)) != hash) {
 	    /* but there is no names with given hash */
 	    pathrelse (&path);
 	    return 0;
 	}
-
+		
 	/* first name of that item may be a name we are looking for */
 	entry_key = *rdkey;
 	pathrelse (&path);
-	retval = _search_by_entry_key (fs, &entry_key, &path);
+	retval = reiserfs_search_by_entry_key (fs, &entry_key, &path);
 	if (retval != POSITION_FOUND)
 	    reiserfs_panic ("reiserfs_find_entry: wrong delimiting key in the tree");
-
+		
     } while (1);
     
     return 0;
@@ -667,21 +992,23 @@ int reiserfs_find_entry (reiserfs_filsys_t fs, struct key * dir, char * name,
 char * make_entry (char * entry, char * name, struct key * key, __u32 offset)
 {
     struct reiserfs_de_head * deh;
-
+    __u16 state;
+	
     if (!entry)
 	entry = getmem (DEH_SIZE + ROUND_UP (strlen (name)));
 
     memset (entry, 0, DEH_SIZE + ROUND_UP (strlen (name)));
     deh = (struct reiserfs_de_head *)entry;
-    deh->deh_location = 0;
-    deh->deh_offset = cpu_to_le32 (offset);
-    deh->deh_state = 0;
-    mark_de_visible (deh);
-
+	
+    set_deh_location (deh, 0);
+    set_deh_offset (deh, offset);
+    state = (1 << DEH_Visible2);
+    set_deh_state (deh, state);
+	
     /* key of object entry will point to */
-    deh->deh_dir_id = cpu_to_le32 (key->k_dir_id);
-    deh->deh_objectid = cpu_to_le32 (key->k_objectid);
-
+    set_deh_dirid (deh, get_key_dirid (key));
+    set_deh_objectid (deh, get_key_objectid (key));
+	
     memcpy ((char *)(deh + 1), name, strlen (name));
     return entry;
 }
@@ -689,8 +1016,8 @@ char * make_entry (char * entry, char * name, struct key * key, __u32 offset)
 
 /* add new name into a directory. If it exists in a directory - do
    nothing */
-int reiserfs_add_entry (reiserfs_filsys_t fs, struct key * dir, char * name,
-			 struct key * key, int fsck_need)
+int reiserfs_add_entry (reiserfs_filsys_t * fs, struct key * dir, char * name, int name_len,
+			struct key * key, int fsck_need)
 {
     struct item_head entry_ih = {{0,}, };
     char * entry;
@@ -700,40 +1027,49 @@ int reiserfs_add_entry (reiserfs_filsys_t fs, struct key * dir, char * name,
     int item_len;
     __u32 hash;
 
-    if (reiserfs_find_entry (fs, dir, name, &gen_counter))
+    if (reiserfs_find_entry (fs, dir, name, &gen_counter, 0))
+	/* entry is in the directory already or directory was not found */
 	return 0;
 
     /* compose entry key to look for its place in the tree */
-    entry_ih.ih_key.k_dir_id = cpu_to_le32 (dir->k_dir_id);
-    entry_ih.ih_key.k_objectid = cpu_to_le32 (dir->k_objectid);
+    set_key_dirid (&(entry_ih.ih_key), get_key_dirid (dir));
+    set_key_objectid (&(entry_ih.ih_key), get_key_objectid (dir));
     hash = hash_value (fs, name) + gen_counter;
     if (!strcmp (name, "."))
 	hash = DOT_OFFSET;
     if (!strcmp (name, ".."))
 	hash = DOT_DOT_OFFSET;
-    set_type_and_offset (KEY_FORMAT_1, &(entry_ih.ih_key),
-			 hash, TYPE_DIRENTRY);
-    set_key_format (&entry_ih, KEY_FORMAT_1);
-    set_entry_count (&entry_ih, 1);
-    if (SB_VERSION (fs) == REISERFS_VERSION_2)
+    set_key_offset_v1 (&(entry_ih.ih_key), hash);
+    set_key_uniqueness (&(entry_ih.ih_key), DIRENTRY_UNIQUENESS);
+
+    set_ih_key_format (&entry_ih, KEY_FORMAT_1);
+    set_ih_entry_count (&entry_ih, 1);
+
+    item_len = DEH_SIZE + name_len;
+/*
+    if (get_reiserfs_format (fs->fs_ondisk_sb) == REISERFS_FORMAT_3_5)
+	item_len = DEH_SIZE + strlen (name);
+    else if (get_reiserfs_format (fs->fs_ondisk_sb) == REISERFS_FORMAT_3_6)
 	item_len = DEH_SIZE + ROUND_UP (strlen (name));
     else
-	item_len = DEH_SIZE + strlen (name);
+	reiserfs_panic ("unknown fs format");
+*/
+
     set_ih_item_len (&entry_ih, item_len);
 
     /* fsck may need to insert item which was not reached yet */
-    entry_ih.ih_format.fsck_need = fsck_need;
+    set_ih_flags (&entry_ih, fsck_need);
 
     entry = make_entry (0, name, key, get_offset (&(entry_ih.ih_key)));
 
-    retval = _search_by_entry_key (fs, &(entry_ih.ih_key), &path);
+    retval = reiserfs_search_by_entry_key (fs, &(entry_ih.ih_key), &path);
     switch (retval) {
     case POSITION_NOT_FOUND:
 	reiserfs_paste_into_item (fs, &path, entry, item_len);
 	break;
 
     case DIRECTORY_NOT_FOUND:
-	((struct reiserfs_de_head *)entry)->deh_location = cpu_to_le16 (DEH_SIZE);
+	set_deh_location ((struct reiserfs_de_head *)entry, DEH_SIZE);
 	reiserfs_insert_item (fs, &path, &entry_ih, entry);
 	break;
 
@@ -763,4 +1099,365 @@ void copy_short_key (void * to, void * from)
 void copy_item_head(void * p_v_to, void * p_v_from)
 {
     memcpy (p_v_to, p_v_from, IH_SIZE);
+}
+
+
+/* inserts new or old stat data of a directory (unreachable, nlinks == 0) */
+int create_dir_sd (reiserfs_filsys_t * fs,
+		    struct path * path, struct key * key,
+		    void (*modify_item)(struct item_head *, void *))
+{
+    struct item_head ih;
+    struct stat_data sd;
+    int key_format;
+
+    if (fs->fs_format == REISERFS_FORMAT_3_5)
+	key_format = KEY_FORMAT_1;
+    else
+	key_format = KEY_FORMAT_2;
+
+    make_dir_stat_data (fs->fs_blocksize, key_format, get_key_dirid (key),
+			get_key_objectid (key), &ih, &sd);
+
+    if (modify_item)
+	modify_item (&ih, &sd);
+#if 0
+    /* set nlink count to 0 and make the item unreachable */
+    zero_nlink (&ih, &sd, 0);
+    mark_item_unreachable (&ih);
+#endif
+    reiserfs_insert_item (fs, path, &ih, &sd);
+    return key_format;
+}
+
+
+
+void make_sure_root_dir_exists (reiserfs_filsys_t * fs,
+				void (*modify_item)(struct item_head *, void *),
+				int ih_flags)
+{
+    INITIALIZE_PATH (path);
+
+
+    /* is there root's stat data */
+    if (reiserfs_search_by_key_4 (fs, &root_dir_key, &path) == ITEM_NOT_FOUND) {	
+	root_dir_format = create_dir_sd (fs, &path, &root_dir_key, modify_item);
+    } else {
+    	struct item_head * ih = get_ih (&path);
+    	
+    	if (!is_stat_data_ih (ih))
+	    reiserfs_panic ("It must be root's stat data %k\n", &ih->ih_key);
+	
+        root_dir_format = (get_ih_item_len (get_ih (&path)) == SD_SIZE) ? KEY_FORMAT_2 : KEY_FORMAT_1;
+	pathrelse (&path);
+    }
+
+    /* add "." and ".." if any of them do not exist. Last two
+       parameters say: 0 - entry is not added on lost_found pass and 1
+       - mark item unreachable */
+
+    reiserfs_add_entry (fs, &root_dir_key, ".", name_length (".", root_dir_format),
+    		&root_dir_key, ih_flags);
+    reiserfs_add_entry (fs, &root_dir_key, "..", name_length ("..", root_dir_format),
+    		&parent_root_dir_key, ih_flags);
+}
+
+
+/* we only can use a file for filesystem or journal if it is either not
+   mounted block device or regular file and we are forced to use it */
+int can_we_format_it (char * device_name, int force)
+{
+    mode_t mode;
+    dev_t rdev;
+
+
+    if (is_mounted (device_name)) {
+	/* device looks mounted */
+	reiserfs_warning (stderr, "'%s' looks mounted.", device_name);
+	check_forcing_ask_confirmation (force);
+    }
+
+    mode = get_st_mode (device_name);
+    rdev = get_st_rdev (device_name);
+
+    if (!S_ISBLK (mode)) {
+	/* file is not a block device */
+	reiserfs_warning (stderr, "%s is not a block special device", device_name);
+	check_forcing_ask_confirmation (force);
+    } else {
+	/* from e2progs-1.18/misc/mke2fs.c */
+
+	
+/*FIXME: it should be probably rewritten for 2.5 later*/
+#ifndef MAJOR
+#define MAJOR(dev)	((dev)>>8)
+#define MINOR(dev)	((dev) & 0xff)
+#endif
+#ifndef SCSI_BLK_MAJOR
+#define SCSI_BLK_MAJOR(M)  ((M) == SCSI_DISK_MAJOR || (M) == SCSI_CDROM_MAJOR)
+#endif
+
+#ifndef IDE_DISK_MAJOR
+#ifdef IDE9_MAJOR
+#define IDE_DISK_MAJOR(M) (MAJOR(rdev) == IDE0_MAJOR || MAJOR(rdev) == IDE1_MAJOR || \
+			   MAJOR(rdev) == IDE2_MAJOR || MAJOR(rdev) == IDE3_MAJOR || \
+			   MAJOR(rdev) == IDE4_MAJOR || MAJOR(rdev) == IDE5_MAJOR || \
+			   MAJOR(rdev) == IDE6_MAJOR || MAJOR(rdev) == IDE7_MAJOR || \
+			   MAJOR(rdev) == IDE8_MAJOR || MAJOR(rdev) == IDE9_MAJOR)
+#else
+#define IDE_DISK_MAJOR(M) (MAJOR(rdev) == IDE0_MAJOR || MAJOR(rdev) == IDE1_MAJOR || \
+			   MAJOR(rdev) == IDE2_MAJOR || MAJOR(rdev) == IDE3_MAJOR || \
+			   MAJOR(rdev) == IDE4_MAJOR || MAJOR(rdev) == IDE5_MAJOR)
+#endif
+#endif
+
+	if ((IDE_DISK_MAJOR (MAJOR(rdev)) && MINOR (rdev) % 64 == 0) ||
+	    (SCSI_BLK_MAJOR (MAJOR(rdev)) && MINOR (rdev) % 16 == 0)) {
+	    /* /dev/hda or similar */
+	    reiserfs_warning (stderr, "%s is entire device, not just one partition!",
+		    device_name);
+	    check_forcing_ask_confirmation (force);
+	}
+    }
+
+    return 1;
+}
+
+	
+#if 0	
+/*tune*/
+#define check_forcing_ask_confirmation() \
+	if (!Force) {\
+	    /* avoid formatting it without being forced */\
+	    reiserfs_warning (stderr, "Use -f to force over\n");\
+	    return 0;\
+	}\
+	if (Force == 1) {\
+	    if (!user_confirmed (stderr, "Continue (y/n):", "y\n"))\
+		return 0;\
+	}\
+
+
+/* we only can use a file for filesystem or journal if it is either not
+   mounted block device or regular file and we are forced to use it */
+static int can_we_format_it (char * device_name)
+{
+    mode_t mode;
+    dev_t rdev;
+
+
+    if (is_mounted (device_name)) {
+	/* device looks mounted */
+	message("'%s' looks mounted.\n", device_name);
+	check_forcing_ask_confirmation ();
+    }
+
+    mode = get_st_mode (device_name);
+    rdev = get_st_rdev (device_name);
+
+    if (!S_ISBLK (mode)) {
+	/* file is not a block device */
+	message("Can not create a journal on not a block device file %s\n", device_name);
+	exit (1);
+    } else {
+	/* from e2progs-1.18/misc/mke2fs.c */
+	if ((MAJOR (rdev) == HD_MAJOR && MINOR (rdev) % 64 == 0) ||
+	    (SCSI_BLK_MAJOR (rdev) && MINOR (rdev) % 16 == 0)) {
+	    /* /dev/hda or similar */
+	    message("%s is entire device, not just one partition!\n",
+		    device_name);
+	    check_forcing_ask_confirmation ();
+	}
+    }
+
+    return 1;
+}
+
+
+/*mkreiserfs*/
+/* we only can use a file for filesystem or journal if it is either not
+   mounted block device or regular file and we are forced to use it */
+static int can_we_format_it (char * device_name, int force)
+{
+    mode_t mode;
+    dev_t rdev;
+
+    if (is_mounted (device_name)) {
+		/* device looks mounted */
+	    message("'%s' looks mounted.", device_name);
+		check_forcing_ask_confirmation ();
+    }
+
+    mode = get_st_mode (device_name);
+    rdev = get_st_rdev (device_name);
+
+    if (!S_ISBLK (mode)) {
+		/* file is not a block device */
+	    message("%s is not a block special device", device_name);
+		check_forcing_ask_confirmation ();
+    } else {
+		if (((MAJOR (rdev) == IDE0_MAJOR ||
+			  MAJOR (rdev) == IDE1_MAJOR ||
+			  MAJOR (rdev) == IDE2_MAJOR ||
+			  MAJOR (rdev) == IDE3_MAJOR ||
+			  MAJOR (rdev) == IDE4_MAJOR ||
+			  MAJOR (rdev) == IDE5_MAJOR ||
+			  MAJOR (rdev) == IDE6_MAJOR ||
+			  MAJOR (rdev) == IDE7_MAJOR ||
+			  MAJOR (rdev) == IDE8_MAJOR ||
+			  MAJOR (rdev) == IDE9_MAJOR) &&
+			 MINOR (rdev) % 64 == 0) ||
+			(SCSI_BLK_MAJOR (MAJOR (rdev)) &&
+			 MINOR (rdev) % 16 == 0)) {
+			/* /dev/hda or similar */
+			message("%s is entire device, not just one partition!",
+					device_name);
+			check_forcing_ask_confirmation ();
+		}
+    }
+
+    return 1;
+}
+	
+#endif
+	
+	
+
+
+int create_badblock_bitmap (reiserfs_filsys_t * fs, char * badblocks_file) {
+    FILE * fd;
+    char buf[128];
+    __u32 blocknr;
+    int count;
+
+    fd = fopen (badblocks_file, "r");
+
+    if (fd == NULL) {
+        fprintf (stderr, "%s: could not open badblock file %s, work without it\n",
+        	__FUNCTION__, badblocks_file);
+        return 1;
+    }
+
+    fs->fs_badblocks_bm = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+    reiserfs_bitmap_zero (fs->fs_badblocks_bm);
+
+    while (!feof (fd)) {
+	if (fgets(buf, sizeof(buf), fd) == NULL)
+	    break;
+	count = sscanf(buf, "%u", &blocknr);
+	
+	if (count <= 0)
+	    continue;
+
+	if (blocknr < get_sb_block_count (fs->fs_ondisk_sb) && !not_data_block (fs, blocknr)) {
+	    reiserfs_bitmap_set_bit (fs->fs_badblocks_bm, blocknr);
+	} else {
+	    fprintf (stderr, "%s: bad block number %u in badblocks file\n", __FUNCTION__, blocknr);
+	}
+    }
+
+    fclose (fd);
+
+    return 0;
+}
+
+void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet) {
+    struct tree_balance tb;
+    struct key badblock_key = {-1, -1, {{0, 0}}};
+    struct path badblock_path;
+    struct item_head * tmp_ih;
+    struct item_head badblock_ih;
+//    char item[UNFM_P_SIZE];
+    struct unfm_nodeinfo ni;
+
+    __u64 offset;
+    __u32 i, j;
+
+    if (fs->fs_badblocks_bm == NULL)
+    	return;
+
+    /* delete all items with badblock_key */
+    while (1) {
+	reiserfs_search_by_key_4 (fs, &badblock_key, &badblock_path);
+	
+	if (get_blkh_nr_items ( B_BLK_HEAD (get_bh(&badblock_path))) <= PATH_LAST_POSITION (&badblock_path)) {
+	    pathrelse (&badblock_path);
+            break;
+	}
+
+	tmp_ih = get_ih(&badblock_path);
+	
+	if (get_key_dirid(&tmp_ih->ih_key) != (__u32)-1 ||
+	    get_key_objectid(&tmp_ih->ih_key) != (__u32)-1 || !is_indirect_ih (tmp_ih)) {
+	    pathrelse (&badblock_path);
+	    break;
+	}
+
+	if (no_badblock_in_tree_yet)
+	    reiserfs_panic ("$s: bad block list found in the tree\n", __FUNCTION__);	
+	
+	memset (get_item (&badblock_path), 0, get_ih_item_len (tmp_ih));
+	
+	
+	init_tb_struct (&tb, fs, &badblock_path, -(IH_SIZE + get_ih_item_len(PATH_PITEM_HEAD (&badblock_path))));
+	
+	if (fix_nodes (M_DELETE, &tb, 0) != CARRY_ON)
+	    die ("%s: fix_nodes failed", __FUNCTION__);
+	
+	do_balance (/*tb.transaction_handle,*/ &tb, 0, 0, M_DELETE, 0/*zero num*/);
+    }
+
+    set_ih_key_format (&badblock_ih, KEY_FORMAT_2);
+    set_ih_item_len (&badblock_ih, UNFM_P_SIZE);
+    set_ih_free_space (&badblock_ih, 0);
+    set_ih_location (&badblock_ih, 0);
+    set_key_dirid (&badblock_ih.ih_key, -1);
+    set_key_objectid (&badblock_ih.ih_key, -1);
+    set_type (KEY_FORMAT_2, &badblock_ih.ih_key, TYPE_INDIRECT);
+
+    j = 0;
+    ni.unfm_freespace = 0;
+
+    /* insert all badblock pointers */
+    for (i = 0; i < fs->fs_badblocks_bm->bm_bit_size; i++) {
+        int retval;
+
+	if (!reiserfs_bitmap_test_bit (fs->fs_badblocks_bm, i))	
+	    continue;
+	
+	offset = j * fs->fs_blocksize + 1;
+	set_offset (KEY_FORMAT_2, &badblock_ih.ih_key, offset);
+	ni.unfm_nodenum = cpu_to_le32 (i);
+	
+	retval = usearch_by_position (fs, &badblock_ih.ih_key, key_format (&badblock_ih.ih_key), &badblock_path);
+
+	switch (retval) {
+	case (FILE_NOT_FOUND):
+		init_tb_struct (&tb, fs, &badblock_path, IH_SIZE + get_ih_item_len(&badblock_ih));
+		if (fix_nodes (/*tb.transaction_handle,*/ M_INSERT, &tb, &badblock_ih/*, body*/) != CARRY_ON)
+		    die ("reiserfsck_insert_item: fix_nodes failed");
+		do_balance (/*tb.transaction_handle,*/ &tb, &badblock_ih, (void *)&ni.unfm_nodenum , M_INSERT, 0/*zero num*/);
+
+//		reiserfsck_insert_item (&badblock_path, &badblock_ih, item);
+		
+		break;
+	
+	case (POSITION_NOT_FOUND):
+		/* take unformatted pointer from an indirect item */
+	
+		init_tb_struct (&tb, fs, &badblock_path, UNFM_P_SIZE);
+		
+		if (fix_nodes (M_PASTE, &tb, 0) != CARRY_ON)
+		    die ("reiserfsck_paste_into_item: fix_nodes failed");
+
+		do_balance (&tb, 0, (const char *)&ni, M_PASTE, 0);
+						
+//		reiserfsck_file_write (&badblock_ih, item, 1 /* was in tree to avoid problems with bitmaps */);
+//		reiserfsck_paste_into_item (path, (const char *)&ni, UNFM_P_SIZE);
+		
+		break;
+	}
+	
+	j++;
+    }
 }

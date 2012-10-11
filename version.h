@@ -1,9 +1,7 @@
 /*
- * Copyright 2000 Hans Reiser
+ * Copyright 2002 Hans Reiser
  */
 
-#define REISERFSPROGS_VERSION "3.x.0j"
-
 #define print_banner(prog) \
-fprintf (stderr, "\n<-------------%s, 2001------------->\nreiserfsprogs %s\n", \
-prog, REISERFSPROGS_VERSION)
+fprintf (stderr, "\n<-------------%s, 2002------------->\nreiserfsprogs %s\n\n", \
+prog, VERSION)

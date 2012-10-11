@@ -1,10 +1,8 @@
 sbin_PROGRAMS = debugreiserfs unpack
 
-debugreiserfs_SOURCES = debugreiserfs.c pack.c
-unpack_SOURCES = unpack.c debugreiserfs.h
+debugreiserfs_SOURCES = debugreiserfs.c pack.c stat.c corruption.c scan.c recover.c journal.c
+unpack_SOURCES = unpack.c pack.c debugreiserfs.h
 man_MANS = debugreiserfs.8
 EXTRA_DIST = $(man_MANS)
 
-LDADD = ../lib/libmisc.a ../reiserfscore/libcore.a
-
-INCLUDES = -I../include
+LDADD = $(top_srcdir)/lib/libmisc.a $(top_srcdir)/reiserfscore/libcore.a

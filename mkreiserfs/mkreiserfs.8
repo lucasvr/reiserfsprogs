@@ -1,62 +1,103 @@
 .\" -*- nroff -*-
-.\" Copyright 1996-2001 Hans Reiser.
+.\" Copyright 1996-2002 Hans Reiser.
 .\" 
-.TH MKREISERFS 8 "March 2001" "Reiserfsprogs-3.x.0j"
+.TH MKREISERFS 8 "January 2002" "Reiserfsprogs-3.6.2"
 .SH NAME
-mkreiserfs \- create a Linux Reiserfs file system
+mkreiserfs \- create a Linux ReiserFS file system 
 .SH SYNOPSIS
 .B mkreiserfs
-[
-.B -h
-.I r5 
-| 
-.I tea
-|
-.I rupasov
-] [
-.B \-v
-.I 1 
-|
-.I 2
-] [
-.B -q
-]
-.I device
-[
-.I size-in-blocks
-]
+[ \fB-dfV\fR ]
+[ \fB-b\fR | \fB--block-size \fIN\fR ]
+[ \fB-h\fR | \fB--hash \fIHASH\fR ]
+[ \fB-u\fR | \fB--uuid \fIUUID\fR ] 
+[ \fB-l\fR | \fB--label \fILABEL\fR ]
+[ \fB--format \fIFORMAT\fR ]
+[ \fB-j\fR | \fB--journal-device \fIFILE\fR ]
+[ \fB-s\fR | \fB--journal-size \fIN\fR ]
+[ \fB-o\fR | \fB--journal-offset \fIN\fR ]
+[ \fB-t\fR | \fB--transaction-max-size\fR \fIN\fR ] \fI device\fR
+[ \fIfilesystem-size\fR ]
 .SH DESCRIPTION
-It creates a Linux Reiserfs file system on a device
+It creates a Linux ReiserFS file system on a device
 (usually a disk partition).
 .TP
 .I device
 is the special file corresponding to the device (e.g /dev/hdXX for
 IDE disk partition or /dev/sdXX for SCSI disk partition).
 .TP
-.I block-count
-is the number of blocks on the device. If omitted, it will be
+.I filesystem-size
+size of filesystem in blocks. If omitted, it will be
 determined by
 .B mkreiserfs
 automatically.
 .SH OPTIONS
 .TP
-\fB\-h \fIr5\fR |\fI tea\fR |\fI rupasov
-This specifies the name of hash function file names in directories
-will be sorted with. Choose one of the above. 'r5' is default.
+\fB-b\fR | \fB--block-size \fIN\fR
+\fIN\fR is block size in bytes. 4096 only for now.
 .TP
-\fB\-v \fI1\fR |\fI 2
-This specifies format new filsystem has to be of.
+\fB-h\fR | \fB--hash \fIHASH\fR
+\fIHASH\fR specifies the name of hash function file names in directories
+will be sorted with. Choose one of r5, rupasov, tea. r5 is default
 .TP
-\fB\-q\fR
-This makes the progress bar much less verbose.  Useful when
-logged in via a slow link (e.g. serial console).
+\fB--format \fIFORMAT\fR
+\fIFORMAT\fR specifies a format new filsystem has to be of. Choose one
+of 3.5 and 3.6. If none is specified mkreiserfs will create format 3.6
+if running kernel is 2.4, 3.5 if 2.2 is running, and will refuse
+creation under other kernels.
+.TP
+\fB-u\fR | \fB--uuid \fIUUID\fR
+Set  the  universally  unique  identifier (\fB UUID \fR) of the filesystem to 
+\fIUUID\fR (see also \fBuuidgen(8)\fR). The  format  of  the  UUID  is  a 
+series  of  hex  digits  separated  by  hypthens,  like  this:
+"c1b9d5a2-f162-11cf-9ece-0020afc76f16". If the option skipped,
+mkreiserfs generates a new one.
+.TP
+\fB-l\fR | \fB--label \fILABEL\fR
+Set  the  volume  label  of  the filesystem. \fILABEL\fR can be at most 16
+characters long; if it is longer than 16 characters, mkreiserfs will truncate it.
+.TP
+\fB-j\fR | \fB--journal-device \fIFILE\fR
+\fIFILE\fR is name of block device where the file system is to have
+journal on.
+.TP
+\fB-o\fR | \fB--journal-offset \fIN\fR
+\fIN\fR is an offset where journal starts when it is to be on a
+separate device. Default is 0. Makes no effect when journal is to be
+on a host device
+.TP
+\fB-s\fR | \fB--journal-size \fIN
+\fIN\fR is size of journal in blocks. When journal is to be on a
+separate device - its size defaults to number of blocks that device
+has. When journal is to be on a host device - its size defaults 8193
+and maximal possible value is 32749 (for blocksize 4k). Minimun is 513
+for both cases.
+.TP
+\fB-t\fR | \fB--transaction-max-size \fIN
+\fIN\fR is the maximum transaction size parameter for the journal. The
+default, and max possible, value is 1024 blocks. It should be less
+than half the size of the journal. If specifed incorrectly, it will be
+adjusted.
+.TP
+\fB-f\fR
+This forces mkreiserfs to continue even if device is either whole
+disk, or looks mounted or is not a block device. Specified more than
+once allows to avoid asking for confirmation.
+.TP
+\fB-d\fR
+This makes mkreiserfs to print debugging information during mkreiserfs.
+.TP
+\fB-V\fR
+This prints version and exits.
+
 .SH AUTHOR
 This version of
 .B mkreiserfs
-has been written by Hans Reiser <reiser@idiom.com>.
+has been written by Edward Shishkin <edward@namesys.com>.
 .SH BUGS
 No other blocksizes but 4k are available.
-Please, report about other bugs to Hans Reiser <reiser@idiom.com>.
+Please, report about other bugs to 
+the ReiserFS mail-list <reiserfs-list@namesys.com>
 .SH SEE ALSO
 .BR reiserfsck (8),
-.BR debugreiserfs (8)
+.BR debugreiserfs (8),
+.BR reiserfstune (8)

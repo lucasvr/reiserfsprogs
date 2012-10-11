@@ -1,17 +1,17 @@
 /*
- * Copyright 1996-1999 Hans Reiser
+ * Copyright 1996-2002 Hans Reiser
  */
 #include "fsck.h"
 #include <stdlib.h>
 
+reiserfs_bitmap_t * bad_unfm_in_tree_once_bitmap;
 
-reiserfs_bitmap_t bad_unfm_in_tree_once_bitmap;
 
 //int step = 0; // 0 - find stat_data or any item ; 1 - find item ; 2 - already found
 
 
 /* allocates buffer head and copy buffer content */
-struct buffer_head * make_buffer (int dev, int blocknr, int size, char * data)
+struct buffer_head * make_buffer (int dev, unsigned long blocknr, int size, char * data)
 {
     struct buffer_head * bh;
     
@@ -27,11 +27,11 @@ struct buffer_head * make_buffer (int dev, int blocknr, int size, char * data)
 
 int find_not_of_one_file(struct key * to_find, struct key * key)
 {
-    if ((to_find->k_objectid != -1) &&
-        (to_find->k_objectid != key->k_objectid))
+    if ((get_key_objectid (to_find) != -1) &&
+        (get_key_objectid (to_find) != get_key_objectid (key)))
         return 1;
-    if ((to_find->k_dir_id != -1) &&
-        (to_find->k_dir_id != key->k_dir_id))
+    if ((get_key_dirid (to_find) != -1) &&
+        (get_key_dirid (to_find) != get_key_dirid (key)))
         return 1;
     return 0;
 }
@@ -45,19 +45,19 @@ int is_item_reachable (struct item_head * ih)
 
 void mark_item_unreachable (struct item_head * ih)
 {
+    clean_ih_flags (ih);
     mark_ih_unreachable (ih);
 
     if (is_indirect_ih (ih))
-	set_free_space (ih, 0);
+	set_ih_free_space (ih, 0);
 }
 
 
 void mark_item_reachable (struct item_head * ih, struct buffer_head * bh)
 {
-    mark_ih_ok (ih);
+    mark_ih_reachable (ih);
     mark_buffer_dirty (bh);
 }
-
 
 static void stat_data_in_tree (struct buffer_head *bh,
 			       struct item_head * ih)
@@ -65,7 +65,7 @@ static void stat_data_in_tree (struct buffer_head *bh,
 #if 0
     __u32 objectid;
     
-    objectid = le32_to_cpu (ih->ih_key.k_objectid);
+    objectid = get_key_objectid (&ih->ih_key);
     
     if (mark_objectid_really_used (proper_id_map (fs), objectid)) {
 	stat_shared_objectid_found (fs);
@@ -84,7 +84,7 @@ static void indirect_in_tree (struct buffer_head * bh,
 {
     int i;
     __u32 * unp;
-    unsigned long unfm_ptr;
+    __u32 unfm_ptr;
 
     unp = (__u32 *)B_I_PITEM (bh, ih);
     
@@ -92,13 +92,12 @@ static void indirect_in_tree (struct buffer_head * bh,
 	unfm_ptr = le32_to_cpu (unp[i]);
 	if (unfm_ptr == 0)
 	    continue;
-
 	if (still_bad_unfm_ptr_1 (unfm_ptr))
 	    reiserfs_panic ("mark_unformatted_used: (%lu: %k) "
 			    "still has bad pointer %lu",
 			    bh->b_blocknr, &ih->ih_key, unfm_ptr);
 	
-	mark_block_used (unfm_ptr);
+	mark_block_used (unfm_ptr, 1);
     }
 }
 
@@ -107,11 +106,11 @@ static void leaf_is_in_tree_now (struct buffer_head * bh)
 {
     item_action_t actions[] = {stat_data_in_tree, indirect_in_tree, 0, 0};
 
-    mark_block_used ((bh)->b_blocknr);
+    mark_block_used ((bh)->b_blocknr, 1);
 
     for_every_item (bh, mark_item_unreachable, actions);
 
-    stats(fs)->inserted_leaves ++;
+    pass_1_stat (fs)->inserted_leaves ++;
 
     mark_buffer_dirty (bh);
 }
@@ -194,18 +193,18 @@ int balance_condition_2_fails (struct buffer_head * new, struct path * path)
 	   call search_by_key, which will read right neighbor as well */
 	INITIALIZE_PATH(path_to_right_neighbor);
 	
-	if (usearch_by_key (fs, right_dkey, &path_to_right_neighbor) != ITEM_FOUND)
+	if (reiserfs_search_by_key_4 (fs, right_dkey, &path_to_right_neighbor) != ITEM_FOUND)
 	    die ("get_right_neighbor_free_space: invalid right delimiting key");
 	used_space =  B_CHILD_SIZE (PATH_PLAST_BUFFER (&path_to_right_neighbor));
 	pathrelse (&path_to_right_neighbor);
     }
     else
-	used_space = B_N_CHILD (bh, pos + 1)->dc_size;
+	used_space = get_dc_child_size (B_N_CHILD (bh, pos + 1));
     
     if (B_FREE_SPACE (new) >= used_space -
 	(are_items_mergeable (B_N_PITEM_HEAD (new, B_NR_ITEMS (new) - 1), (struct item_head *)right_dkey, new->b_size) ? IH_SIZE : 0))
 	return 1;
-    
+
     return 0;
 }
 
@@ -218,32 +217,28 @@ static void get_max_buffer_key (struct buffer_head * bh, struct key * key)
     copy_key (key, &(ih->ih_key));
 
     if (is_direntry_key (key)) {
-	/* copy 3-rd and 4-th key components of the last entry */
-	//set_le_key_k_offset (ih_version(ih), key, B_I_DEH (bh, ih)[I_ENTRY_COUNT (ih) - 1].deh_offset);
-	//set_le_key_k_type (ih_version(ih), key, TYPE_DIRENTRY);
+	/* copy deh_offset 3-rd and 4-th key components of the last entry */
 	set_offset (KEY_FORMAT_1, key, 
-			     le32_to_cpu (B_I_DEH (bh, ih)[ih_entry_count (ih) - 1].deh_offset));
+		    get_deh_offset (B_I_DEH (bh, ih) + get_ih_entry_count (ih) - 1));
 
     } else if (!is_stat_data_key (key))
 	/* get key of the last byte, which is contained in the item */
 	set_offset (key_format (key), key, get_offset (key) + get_bytes_number (ih, bh->b_size) - 1);
-    //set_le_key_k_offset(ih_version(ih), key,
-    //		    le_key_k_offset(ih_version(ih), key) + get_bytes_number (bh, ih, 0, CHECK_FREE_BYTES) - 1 );
 }
 
 
-static int tree_is_empty (void)
+int tree_is_empty (void)
 {
-  return (SB_ROOT_BLOCK (fs) == ~0) ? 1 : 0;
+    return (get_sb_root_block (fs->fs_ondisk_sb) == ~0) ? 1 : 0;
 }
 
 
-static void make_single_leaf_tree (struct buffer_head * bh)
+void make_single_leaf_tree (struct buffer_head * bh)
 {
     /* tree is empty, make tree root */
-    set_root_block (fs->s_rs, bh->b_blocknr);
-    set_tree_height (fs->s_rs, 2);
-    mark_buffer_dirty (fs->s_sbh);
+    set_sb_root_block (fs->fs_ondisk_sb, bh->b_blocknr);
+    set_sb_tree_height (fs->fs_ondisk_sb, 2);
+    mark_buffer_dirty (fs->fs_super_bh);
     leaf_is_in_tree_now (bh);
 }
 
@@ -263,11 +258,10 @@ static void try_to_insert_pointer_to_leaf (struct buffer_head * new_bh)
 	return;
     }
 
-
     first_bh_key = B_N_PKEY (new_bh, 0);
     
     /* try to find place in the tree for the first key of the coming node */
-    ret_value = usearch_by_key (fs, first_bh_key, &path);
+    ret_value = reiserfs_search_by_key_4 (fs, first_bh_key, &path);
     if (ret_value == ITEM_FOUND)
 	goto cannot_insert;
 
@@ -299,14 +293,14 @@ static void try_to_insert_pointer_to_leaf (struct buffer_head * new_bh)
     
     if (balance_condition_2_fails (new_bh, &path))
 	goto cannot_insert;
-    
+
+
  insert:
     insert_pointer (new_bh, &path);
     goto out;
     
  cannot_insert:
     /* statistic */
-    stats (fs)->uninsertable_leaves ++;
 
     mark_block_uninsertable (new_bh->b_blocknr);
     
@@ -324,7 +318,7 @@ static void try_to_insert_pointer_to_leaf (struct buffer_head * new_bh)
    3. what we should do with directory entries hashed by another hash?
    they are deleted for now
 */
-static void pass1_correct_leaf (reiserfs_filsys_t s,
+static void pass1_correct_leaf (reiserfs_filsys_t * fs,
 				struct buffer_head * bh)
 {
     int i, j;
@@ -343,9 +337,9 @@ static void pass1_correct_leaf (reiserfs_filsys_t s,
 	    int hash_code;
 
 	    deh = B_I_DEH (bh, ih);
-	    for (j = 0; j < ih_entry_count (ih); j ++) {
+	    for (j = 0; j < get_ih_entry_count (ih); j ++) {
 		name = name_in_entry (deh + j, j);
-		name_len = name_length (ih, deh + j, j);
+		name_len = name_in_entry_length (ih, deh + j, j);
 
 		if ((j == 0 && is_dot (name, name_len)) ||
 		    (j == 1 && is_dot_dot (name, name_len))) {
@@ -353,14 +347,14 @@ static void pass1_correct_leaf (reiserfs_filsys_t s,
 		}
 
 		hash_code = find_hash_in_use (name, name_len,
-					      GET_HASH_VALUE (deh_offset (deh + j)),
-					      rs_hash (fs->s_rs));
-		if (hash_code != rs_hash (fs->s_rs)) {
+					      GET_HASH_VALUE (get_deh_offset (deh + j)),
+					      get_sb_hash_code (fs->fs_ondisk_sb));
+		if (hash_code != get_sb_hash_code (fs->fs_ondisk_sb)) {
 		    fsck_log ("pass1: block %lu, %H, entry \"%.*s\" "
 			      "hashed with %s whereas proper hash is %s\n",
 			      bh->b_blocknr, ih, name_len, name, 
-			      code2name (hash_code), code2name (rs_hash (fs->s_rs)));
-		    if (ih_entry_count (ih) == 1) {
+			      code2name (hash_code), code2name (get_sb_hash_code (fs->fs_ondisk_sb)));
+		    if (get_ih_entry_count (ih) == 1) {
 			delete_item (fs, bh, i);
 			i --;
 			ih --;
@@ -389,7 +383,7 @@ static void pass1_correct_leaf (reiserfs_filsys_t s,
 		continue;
 
 	    /* this corruption of indirect item had to be fixed in pass0 */
-	    if (not_data_block (s, unfm_ptr) || unfm_ptr >= SB_BLOCK_COUNT (s))
+	    if (not_data_block (fs, unfm_ptr) || unfm_ptr >= get_sb_block_count (fs->fs_ondisk_sb))
 		/*!was_block_used (unfm_ptr))*/
 		reiserfs_panic ("pass1_correct_leaf: (%lu: %k), %d-th slot is not fixed",
 				bh->b_blocknr, &ih->ih_key, j);
@@ -398,7 +392,7 @@ static void pass1_correct_leaf (reiserfs_filsys_t s,
 	    if (is_used_leaf (unfm_ptr)) {
 		dirty ++;
 		*ind_item = 0;
-		stats(fs)->wrong_pointers ++;
+		pass_1_stat (fs)->pointed_leaves ++;
 		continue;
 	    }
 
@@ -410,13 +404,14 @@ static void pass1_correct_leaf (reiserfs_filsys_t s,
                        special bitmap */
 		    mark_bad_unfm_in_tree_once (unfm_ptr);
 		else {
-		    /* Yes, we have seen this pointer already, zero other pointers to it */
+		    /* Yes, we have seen this pointer already, zero other pointers to it. */
 		    dirty ++;
 		    *ind_item = 0;
-		    stats(fs)->wrong_pointers ++;
+		    pass_1_stat (fs)->non_unique_pointers ++;
 		    continue;
 		}
-	    }		
+	    } else
+		pass_1_stat (fs)->correct_pointers ++;
 	}
     }
 
@@ -437,16 +432,16 @@ void save_item (struct si ** head, struct buffer_head * bh, struct item_head * i
     }
 
     if (is_indirect_ih (ih)) {
-	fsck_progress ("save_item: %H (should not happen)\n", ih);
+	fsck_progress ("save_item (block %lu: %H (should not happen)\n", ih);
     }
     
-    stats(fs)->saved_on_pass1 ++;
+    pass_1_stat (fs)->saved_items ++;
 
     si = getmem (sizeof (*si));
-    si->si_dnm_data = getmem (ih_item_len(ih));
+    si->si_dnm_data = getmem (get_ih_item_len(ih));
     /*si->si_blocknr = blocknr;*/
     memcpy (&(si->si_ih), ih, IH_SIZE);
-    memcpy (si->si_dnm_data, item, ih_item_len(ih));
+    memcpy (si->si_dnm_data, item, get_ih_item_len(ih));
 
     // changed by XB
     si->last_known = NULL;
@@ -483,6 +478,17 @@ void save_item (struct si ** head, struct buffer_head * bh, struct item_head * i
 }
 
 
+struct si * remove_saved_item (struct si * si)
+{
+    struct si * tmp = si->si_next;
+    
+    freemem (si->si_dnm_data);
+    freemem (si);
+    return tmp;
+}
+
+
+#if 0
 static void save_items (struct si ** head, struct buffer_head * bh)
 {
     int i;
@@ -494,17 +500,6 @@ static void save_items (struct si ** head, struct buffer_head * bh)
     }
 }
 
-
-struct si * remove_saved_item (struct si * si)
-{
-    struct si * tmp = si->si_next;
-    
-    freemem (si->si_dnm_data);
-    freemem (si);
-    return tmp;
-}
-
-
 /* insert_item_separately */
 static void put_saved_items_into_tree_1 (struct si * si)
 {
@@ -514,38 +509,222 @@ static void put_saved_items_into_tree_1 (struct si * si)
 	si = remove_saved_item (si);
     }
 }
+#endif
 
 
-/* reads the device by set of 8 blocks, takes leaves and tries to
-   insert them into tree */
-void pass_1_pass_2_build_the_tree (void)
+/* fsck starts creating of this bitmap on pass 1. It will then become
+   on-disk bitmap */
+static void init_new_bitmap (reiserfs_filsys_t * fs)
+{
+    int i;
+    unsigned long block;
+    unsigned long reserved;
+    
+
+    fsck_new_bitmap (fs) = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+
+    /* mark_block_used skips 0, set the bit explicitly */
+    reiserfs_bitmap_set_bit (fsck_new_bitmap (fs), 0);
+
+    /* mark other skipped blocks and super block used */
+    for (i = 1; i <= fs->fs_super_bh->b_blocknr; i ++)
+	mark_block_used (i, 1);
+
+    /* mark bitmap blocks as used */
+    block = fs->fs_super_bh->b_blocknr + 1;
+    for (i = 0; i < get_sb_bmap_nr (fs->fs_ondisk_sb); i ++) {
+	mark_block_used (block, 1);
+	if (spread_bitmaps (fs))
+	    block = (block / (fs->fs_blocksize * 8) + 1) * (fs->fs_blocksize * 8);
+	else
+	    block ++;
+    }
+
+    reserved = get_size_of_journal_or_reserved_area (fs->fs_ondisk_sb);
+    /* where does journal area (or reserved journal area) start from */
+
+    if (!is_new_sb_location (fs->fs_super_bh->b_blocknr, fs->fs_blocksize) &&
+    	!is_old_sb_location (fs->fs_super_bh->b_blocknr, fs->fs_blocksize))
+	die ("init_new_bitmap: wrong super block");
+
+    block = get_journal_start_must (fs);
+
+    for (i = block; i < reserved + block; i ++)
+	mark_block_used (i, 1);
+	
+
+    if (fs->fs_badblocks_bm)
+    	for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
+	    if (reiserfs_bitmap_test_bit (fs->fs_badblocks_bm, i)) {
+	    	if (reiserfs_bitmap_test_bit (fsck_new_bitmap (fs), i))
+	    	    reiserfs_panic ("%s: bad block pointer to not data area, cannot happen\n",
+	    	    	__FUNCTION__);	    	
+		reiserfs_bitmap_set_bit (fsck_new_bitmap (fs), i);
+	    }
+    	}
+
+#if 0
+    /* mark journal area as used if journal is standard or it is non standard
+       and initialy has been created on a main device */
+    reserved = 0;
+    if (!is_reiserfs_jr_magic_string (fs->fs_ondisk_sb))
+	reserved = get_jp_journal_size (sb_jp (fs->fs_ondisk_sb));
+    if (get_sb_reserved_for_journal (fs->fs_ondisk_sb))
+	reserved = get_sb_reserved_for_journal (fs->fs_ondisk_sb);
+    if (reserved) {
+	for (i = 0; i <= reserved; i ++)
+	    mark_block_used (i + get_jp_journal_1st_block (sb_jp
+							   (fs->fs_ondisk_sb)));
+    }
+#endif
+}
+
+
+/* this makes a map of blocks which can be allocated when fsck will
+   continue */
+static void find_allocable_blocks (reiserfs_filsys_t * fs)
+{
+    int i;
+
+    fsck_progress ("Looking for allocable blocks .. ");
+
+    fsck_allocable_bitmap (fs) = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+    reiserfs_bitmap_fill (fsck_allocable_bitmap (fs));
+
+
+    /* find how many leaves are not pointed by any indirect items */
+    for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
+	if (not_data_block (fs, i))
+	    /* journal (or reserved for it area), bitmaps, super block and
+	       blocks before it */
+	    continue;
+
+	if (is_good_unformatted (i) && is_bad_unformatted (i))
+	    die ("find_allocable_blocks: bad and good unformatted");
+
+	if (is_good_unformatted (i) || is_bad_unformatted (i)) {
+	    /* blocks which were pointed once or more thn onec from indirect
+	       items - they will not be allocated */
+	    continue;
+	}
+
+	/* make allocable not leaves, not bad blocks */
+	if (!is_used_leaf (i) &&
+	    (!fs->fs_badblocks_bm || !reiserfs_bitmap_test_bit (fs->fs_badblocks_bm, i))) {
+	    /* this is not leaf and it is not pointed by found indirect items,
+               so it does not contains anything valuable */
+	    make_allocable (i);
+	    pass_1_stat (fs)->allocable_blocks ++;
+	}
+    }
+    fsck_progress ("ok\n");
+
+    fs->block_allocator = reiserfsck_reiserfs_new_blocknrs;
+    fs->block_deallocator = reiserfsck_reiserfs_free_block;
+}
+
+
+static void before_pass_1 (reiserfs_filsys_t * fs)
+{
+    /* this will become an on-disk bitmap */
+    init_new_bitmap (fs);
+
+    /* bitmap of leaves which could not be inserted on pass 1. FIXME:
+       no need to have 1 bit per block */
+    fsck_uninsertables (fs) = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+    reiserfs_bitmap_fill (fsck_uninsertables (fs));
+    
+    /* find blocks which can be allocated */
+    find_allocable_blocks (fs);
+
+    /* bitmap of bad unformatted nodes which are in the tree already */
+    bad_unfm_in_tree_once_bitmap = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+
+    /* pass 1 does not deal with objectid */
+}
+
+
+static void save_pass_1_result (reiserfs_filsys_t * fs)
+{
+    FILE * file;
+    int retval;
+
+    file = open_file("temp_fsck_file.deleteme", "w+");
+    if (!file)
+	return;
+
+    /* to be able to get a new bitmap on pass2 we should flush it on disk
+       new_bitmap should not be flushed on disk if run w/out -d option, as
+       if fsck fails on pass1 we get wrong bitmap on the next fsck start */
+    reiserfs_flush_to_ondisk_bitmap (fsck_new_bitmap (fs), fs);
+    
+    /* to be able to restart with pass 2 we need bitmap of
+       uninsertable blocks and bitmap of alocable blocks */
+    reiserfs_begin_stage_info_save(file, PASS_1_DONE);
+    reiserfs_bitmap_save (file,  fsck_uninsertables (fs));
+    reiserfs_bitmap_save (file,  fsck_allocable_bitmap(fs));
+    reiserfs_end_stage_info_save (file);
+    close_file (file);
+    retval = unlink (state_dump_file (fs));
+    retval = rename ("temp_fsck_file.deleteme", state_dump_file (fs));
+    if (retval != 0)
+	fsck_progress ("pass 1: could not rename temp file temp_fsck_file.deleteme to %s",
+		       state_dump_file (fs));
+}
+
+
+void load_pass_1_result (FILE * fp, reiserfs_filsys_t * fs)
+{
+    fsck_new_bitmap (fs) = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+    reiserfs_bitmap_copy (fsck_new_bitmap (fs), fs->fs_bitmap2);
+    
+    fsck_uninsertables (fs) = reiserfs_bitmap_load (fp);
+    fsck_allocable_bitmap (fs) = reiserfs_bitmap_load (fp);
+    
+    fs->block_allocator = reiserfsck_reiserfs_new_blocknrs;
+    fs->block_deallocator = reiserfsck_reiserfs_free_block;
+
+    if (!fsck_new_bitmap (fs) || !fsck_allocable_bitmap (fs) ||
+	!fsck_allocable_bitmap (fs))
+	fsck_exit ("State dump file seems corrupted. Run without -d");
+
+
+    /* we need objectid map on pass 2 to be able to relocate files */
+    proper_id_map (fs) = init_id_map ();
+    fetch_objectid_map (proper_id_map (fs), fs);
+
+    fsck_progress ("Pass 1 result loaded. %d blocks used, %d allocable, "
+		   "still to be inserted %d\n",
+		   reiserfs_bitmap_ones (fsck_new_bitmap (fs)),
+		   reiserfs_bitmap_zeros (fsck_allocable_bitmap (fs)),
+		   reiserfs_bitmap_zeros (fsck_uninsertables (fs)));
+}
+
+
+extern reiserfs_bitmap_t * leaves_bitmap;
+
+/* reads blocks marked in leaves_bitmap and tries to insert them into
+   tree */
+static void do_pass_1 (reiserfs_filsys_t * fs)
 {
     struct buffer_head * bh;
     int i; 
     int what_node;
     unsigned long done = 0, total;
-    struct si * saved_items = 0;
-
-    if (fsck_log_file (fs) != stderr)
-	fsck_log ("####### Pass 1 #######\n");
-
-    bad_unfm_in_tree_once_bitmap = reiserfs_create_bitmap (SB_BLOCK_COUNT (fs));
 
 
     /* on pass0 we have found that amount of leaves */
-    total = how_many_leaves_were_there ();
-
-    fsck_progress ("\nPass1:\n");
+    total = reiserfs_bitmap_ones (leaves_bitmap);
 
     /* read all leaves found on the pass 0 */
-    for (i = 0; i < SB_BLOCK_COUNT (fs); i ++) {
+    for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
 	if (!is_used_leaf (i))
 	    continue;
 
-	print_how_far (&done, total, 1, fsck_quiet (fs));
+	print_how_far (fsck_progress_file (fs), &done, total, 1, fsck_quiet (fs));
 
 	/* at least one of nr_to_read blocks is to be checked */
-	bh = bread (fs->s_dev, i, fs->s_blocksize);
+	bh = bread (fs->fs_dev, i, fs->fs_blocksize);
 	if (!bh) {
 	    /* we were reading one block at time, and failed, so mark
 	       block bad */
@@ -553,7 +732,7 @@ void pass_1_pass_2_build_the_tree (void)
 	    continue;
 	}
 
-	what_node = who_is_this (bh->b_data, fs->s_blocksize);
+	what_node = who_is_this (bh->b_data, bh->b_size);
 	if ( what_node != THE_LEAF ) {
 	    fsck_progress ("build_the_tree: nothing but leaves are expected. "
 			   "Block %lu - %s\n", i,
@@ -562,18 +741,19 @@ void pass_1_pass_2_build_the_tree (void)
 	    continue;
 	}
 	
-	if (is_block_used (i))
+	if (is_block_used (i) && !(block_of_journal (fs, i) &&
+				   fsck_data(fs)->rebuild.use_journal_area))
 	    /* block is in new tree already */
-	    die ("build_the_tree: leaf (%lu) is in tree already\n", i);
+	    die ("build_the_tree: leaf (%u) is in tree already\n", i);
 		    
 	/* fprintf (block_list, "leaf %d\n", i + j);*/
-	stats(fs)->analyzed ++;
+	pass_1_stat (fs)->leaves ++;
 
 	/* the leaf may still contain indirect items with wrong
 	   slots. Fix that */
 	pass1_correct_leaf (fs, bh);
 
-	if (node_item_number (bh) == 0) {
+	if (get_blkh_nr_items (B_BLK_HEAD (bh)) == 0) {
 	    /* all items were deleted on pass 0 or pass 1 */
 	    mark_buffer_clean (bh);
 	    brelse (bh);
@@ -586,8 +766,34 @@ void pass_1_pass_2_build_the_tree (void)
 	    
 	    /* Save good items only to put them into tree at the
 	       end of this pass */
-	    save_items (&saved_items, bh);
+	    //save_items (&saved_items, bh);
+	    mark_block_uninsertable (bh->b_blocknr);
+	    brelse (bh);
+	    continue;
+	}
+	
+	if (block_of_journal (fs, i) && fsck_data(fs)->rebuild.use_journal_area) {
+	    /* FIXME: temporary thing */
+	    if (tree_is_empty ()) {
+		/* we insert inot tree only first leaf of journal */
+		unsigned long block;
+		struct buffer_head * new_bh;
+		
+		block = alloc_block ();
+		if (!block)
+		    die ("could not allocate block");
+		new_bh = getblk (bh->b_dev, block, bh->b_size);
+		memcpy (new_bh->b_data, bh->b_data, bh->b_size);
+		mark_buffer_uptodate (new_bh, 1);
+		mark_buffer_dirty (new_bh);
+		make_single_leaf_tree (new_bh);
+		brelse (new_bh);
+		brelse (bh);
+		continue;
+	    }
 
+	    /* other blocks of journal will be inserted in pass 2 */
+	    mark_block_uninsertable (bh->b_blocknr);
 	    brelse (bh);
 	    continue;
 	}
@@ -596,130 +802,75 @@ void pass_1_pass_2_build_the_tree (void)
 	brelse (bh);
     }
 
-
-#if 0
-    /* read all leaves found on the pass 0 */
-    for (i = 0; i < SB_BLOCK_COUNT (fs); i += nr_to_read) {
-	to_scan = how_many_to_scan (fs, i, nr_to_read);
-	if (to_scan) {
-	    print_how_far (&done, total, to_scan, fsck_quiet (fs));
-
-	    /* at least one of nr_to_read blocks is to be checked */
-	    bbh = bread (fs->s_dev, i / nr_to_read, fs->s_blocksize * nr_to_read);
-	    if (bbh) {
-		for (j = 0; j < nr_to_read; j ++) {
-		    if (!is_used_leaf (i + j))
-			continue;
-
-		    data = bbh->b_data + j * fs->s_blocksize;
-
-		    what_node = who_is_this (data, fs->s_blocksize);
-		    if ( what_node != THE_LEAF ) {
-			fsck_progress ("build_the_tree: nothing but leaves are expected. "
-				       "Block %lu - %s\n", i + j,
-				       (what_node == THE_INTERNAL) ? "internal" : "??");
-			continue;
-		    }
-
-		    if (is_block_used (i + j))
-			/* block is in new tree already */
-			die ("build_the_tree: leaf (%lu) is in tree already\n",
-			     i + j);
-		    
-		    /* fprintf (block_list, "leaf %d\n", i + j);*/
-
-		    bh = make_buffer (fs->s_dev, i + j, fs->s_blocksize, data);
-		    stats(fs)->analyzed ++;
-
-		    /* the leaf may still contain indirect items with wrong
-                       slots. Fix that */
-		    pass1_correct_leaf (fs, bh);
-
-		    if (node_item_number (bh) == 0) {
-			/* all items were deleted on pass 0 or pass 1 */
-			mark_buffer_clean (bh);
-			brelse (bh);
-			continue;
-		    }
-
-		    if (is_leaf_bad (bh)) {
-			/* FIXME: will die */
-			fsck_log ("pass1: (is_leaf_bad) bad leaf (%lu)\n", bh->b_blocknr);
-
-			/* Save good items only to put them into tree at the
-                           end of this pass */
-			save_items (&saved_items, bh);
-
-			brelse (bh);
-			continue;
-		    }
-		    
-		    try_to_insert_pointer_to_leaf (bh);
-		    brelse (bh);
-		}
-
-		bforget (bbh);
-	    } else {
-		done -= to_scan;
-
-		/* bread failed */
-		if (nr_to_read != 1) {
-		    /* we tryied to read bunch of blocks. Try to read them by one */
-		    nr_to_read = 1;
-		    i --;
-		    continue;
-		} else {
-		    /* we were reading one block at time, and failed, so mark
-                       block bad */
-		    fsck_progress ("pass0: block %lu is bad, marked used\n", i);
-		}
-	    }
-	}
-
-	if (nr_to_read == 1 && ((i + 1) % NR_TO_READ) == 0) {
-	    /* we have read NR_TO_READ blocks one at time, switch back to
-               reading NR_TO_READ blocks at time */
-	    i -= (NR_TO_READ - 1);
-	    nr_to_read = NR_TO_READ;
-	}
-    }
-#endif
     fsck_progress ("\n");
 
-    /* Pass 1a (this should die) */
+}
 
-    /* put saved items into tree. These items were in leaves, those could not
-       be inserted into tree because some indirect items point to those
-       leaves. Rather than lookup for corresponding unfm pointers in the tree,
-       we save items of those leaves and put them into tree separately */
-    if (how_many_items_were_saved ()) {
-	fsck_progress ("There were %lu saved items\nPass 1a - ",
-		       how_many_items_were_saved ());
-	fflush (stdout);
-	put_saved_items_into_tree_1 (saved_items);
-    }
+
+static void after_pass_1 (reiserfs_filsys_t * fs)
+{
+    time_t t;
+
+    /* update fsck_state */
+    
+    /* we  should not flush bitmaps on disk after pass1, because
+       new_bitmap contains only those blocks which are good leaves or 
+       just allocated internal blocks. */
+       
+    set_sb_fs_state (fs->fs_ondisk_sb, PASS_1_DONE);
+    mark_buffer_dirty (fs->fs_super_bh);
+
+    /* write all dirty blocks */
+    fsck_progress ("Flushing..");
+    fs->fs_dirt = 1;
+    reiserfs_flush (fs);
+    fsck_progress ("done\n");
 
     stage_report (1, fs);
-    /* end of pass 1 */
 
-
-    if (SB_ROOT_BLOCK(fs) == -1)
-        die ("\n\nNo reiserfs metadata found");
-
-    /* pass 2 */
-    pass_2_take_bad_blocks_put_into_tree ();
-
-    flush_buffers ();
-
-    stage_report (2, fs);
-
-    fsck_progress ("Tree is built. Checking it - "); fflush (stdout);
-    reiserfsck_check_pass1 ();
-    fsck_progress ("done\n"); fflush (stdout);
-
+    /* we do not need this anymore */
+    delete_aux_bitmaps ();
     reiserfs_delete_bitmap (bad_unfm_in_tree_once_bitmap);
 
+    if (!fsck_run_one_step (fs)) {
+	if (fsck_user_confirmed (fs, "Continue? (Yes):", "Yes\n", 1))
+	    /* reiserfsck continues */
+	    return;
+    } else
+	save_pass_1_result (fs);
+
+    if (proper_id_map (fs)) {
+	/* when we run pass 1 only - we do not have proper_id_map */
+	free_id_map (proper_id_map (fs));
+	proper_id_map (fs) = 0;
+    }
+    
+    time (&t);
+    fsck_progress ("###########\n"
+		   "reiserfsck finished pass 1 at %s"
+		   "###########\n", ctime (&t));
+    fs->fs_dirt = 1;
+    reiserfs_close (fs);
+    exit (4);
 }
+
+
+void pass_1 (reiserfs_filsys_t * fs)
+{
+    fsck_progress ("\nPass 1 (will try to insert %lu leaves):\n",
+		   reiserfs_bitmap_ones (fsck_source_bitmap (fs)));
+    if (fsck_log_file (fs) != stderr)
+	fsck_log ("####### Pass 1 #######\n");
+
+
+    before_pass_1 (fs);
+
+    /* try to insert leaves found during pass 0 */
+    do_pass_1 (fs);
+
+    after_pass_1 (fs);
+}
+
 
 #if 0
 
@@ -730,152 +881,3 @@ void recover_internal_tree (struct super_block * s)
     build_the_tree();
 }
 #endif
-
-
-void rebuild_sb (reiserfs_filsys_t fs)
-{
-    int version;
-    struct buffer_head * bh;
-    struct reiserfs_super_block * rs;
-    __u32 blocks;
-
-
-    if (no_reiserfs_found (fs)) {
-	char * answer = 0;
-	size_t n = 0;
-        printf("\nwhat is version of ReiserFS you use[1-4]\n"
-	       "\t(1)   3.6.x\n"
-	       "\t(2) >=3.5.9\n"
-	       "\t(3) < 3.5.9 converted to new format\n"
-	       "\t(4) < 3.5.9\n"
-	       "\t(X)   exit\n");
-	getline (&answer, &n, stdin);
-	version = atoi (answer);
-        if (version < 1 || version > 4)
-    	    die ("rebuild_sb: wrong version");
-
-	fs->s_blocksize = 4096;
-    	
-        switch(version){
-        case 1:
-        case 2:
-            bh = getblk (fs->s_dev, (REISERFS_DISK_OFFSET_IN_BYTES / fs->s_blocksize),
-			 fs->s_blocksize);
-            break;
-        case 3:
-        case 4:
-            bh = getblk (fs->s_dev, (2), fs->s_blocksize);
-            break;
-        default:
-            exit(0);
-        }
-        if (!bh)
-            die ("rebuild_sb: can't bread");
-        rs = (struct reiserfs_super_block *)bh->b_data;
-        fs->s_rs = rs;
-    }
-    else
-    {
-	/* reiserfs super block is found */
-        version = check_sb(fs);
-        if (!user_confirmed ("\nDo you want to remake your super block\n"
-			    "(say no if you use resizer)[Yes/no]: ", "Yes\n"))
-	    return;
-        rs = fs->s_rs;
-	bh = fs->s_sbh;
-    }
-    
-    // set block number on the device and number of bitmap blocks needed to
-    // address all blocks
-    blocks = (count_blocks ("", fs->s_blocksize, fs->s_dev) / 8) * 8;
-    set_block_count (rs, blocks);
-    //rs->s_block_count = cpu_to_le32(blocks);
-
-    set_bmap_nr (rs, (blocks + (fs->s_blocksize * 8 - 1)) / (fs->s_blocksize * 8));
-    set_journal_size(rs, JOURNAL_BLOCK_COUNT);
-    
-    //rs->s_bmap_nr = cpu_to_le16( blocks / (g_sb.s_blocksize * 8) +
-    //      ((blocks % (g_sb.s_blocksize * 8)) ? 1 : 0) );
-
-    switch (version){
-    case 1:
-	// super block v2 at 64k offset
-	set_blocksize (rs, fs->s_blocksize);
-	strncpy (rs->s_v1.s_magic, REISER2FS_SUPER_MAGIC_STRING,
-		 strlen(REISER2FS_SUPER_MAGIC_STRING));
-	set_journal_start (rs, get_journal_start_must (fs->s_blocksize));
-	set_version (rs, REISERFS_VERSION_2);
-	set_objectid_map_max_size (rs, (fs->s_blocksize - SB_SIZE) / sizeof(__u32) / 2 * 2);
-	break;
-	
-    case 2:
-	// super block v1 at 64k offset
-	set_blocksize (rs, fs->s_blocksize);
-	strncpy (rs->s_v1.s_magic, REISERFS_SUPER_MAGIC_STRING,
-		 strlen(REISERFS_SUPER_MAGIC_STRING));
-	set_journal_start (rs, get_journal_start_must (fs->s_blocksize));
-	set_version (rs, REISERFS_VERSION_1);
-	set_objectid_map_max_size (rs, (fs->s_blocksize - SB_SIZE_V1) / sizeof(__u32) / 2 * 2);
-	break;
-
-    case 3:
-	// super block v2 at 8k offset
-	set_blocksize (rs, fs->s_blocksize);
-	strncpy (rs->s_v1.s_magic, REISER2FS_SUPER_MAGIC_STRING,
-		 strlen(REISER2FS_SUPER_MAGIC_STRING));
-	set_journal_start (rs, get_journal_old_start_must (rs));
-	set_version (rs, REISERFS_VERSION_2);
-	set_objectid_map_max_size (rs, (fs->s_blocksize - SB_SIZE) / sizeof(__u32) / 2 * 2);
-	break;
-
-    case 4:
-	// super block v1 at 8k offset
-	set_blocksize (rs, fs->s_blocksize);
-	strncpy (rs->s_v1.s_magic, REISERFS_SUPER_MAGIC_STRING,
-		 strlen(REISERFS_SUPER_MAGIC_STRING));
-	set_journal_start (rs, get_journal_old_start_must (rs));
-	set_version (rs, REISERFS_VERSION_1);
-	set_objectid_map_max_size (rs, (fs->s_blocksize - SB_SIZE_V1) / sizeof(__u32) / 2 * 2);
-	break;
-    }
-
-    print_block (stderr, fs, bh);
-    if (user_confirmed ("Is this ok ? [N/Yes]: ", "Yes\n")) {
-	mark_buffer_uptodate (bh, 1);
-	mark_buffer_dirty (bh);
-	bwrite (bh);
-	fsck_progress ("\nDo not forget to run reiserfsck --rebuild-tree\n\n");
-    } else
-	fsck_progress ("Super block was not written\n");
-    brelse (bh);
-}
-
-/*
-   check_sb and rebuild-sb don't touch these fields:
-   __u32 s_journal_dev;
-   __u32 s_journal_trans_max ;
-   __u32 s_journal_block_count ;
-   __u32 s_journal_max_batch ;
-   __u32 s_journal_max_commit_age ;
-   __u32 s_journal_max_trans_age ;
-
-   others are checked and set in either rebuild_sb or rebuild-tree
-*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -7,43 +7,89 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <stdlib.h> 
 #include <asm/types.h>
 
 #include <sys/types.h>
-/*#include <linux/unistd.h>*/
+#include <sys/stat.h>
 
 
 #include "io.h"
 #include "misc.h"
+#include "config.h"
+
+
+static int is_bad_block (unsigned long block)
+{
+#ifdef IO_FAILURE_EMULATION
+    
+    /* this array similates bad blocks on the device */
+    unsigned long bad_blocks [] =
+	{
+	    8208, 8209, 8210
+/*, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19*/
+	};
+    int i;
+    
+    for (i = 0; i < sizeof (bad_blocks) / sizeof (bad_blocks[0]); i ++)
+	if (bad_blocks [i] == block)
+	    return 1;
+
+#endif
+
+    return 0;
+}
 
 
 
-/* All buffers are in double linked cycled list. Buffers of tree are
-   hashed by their block number.  If getblk found buffer with wanted
-   block number in hash queue it moves buffer to the end of list */
+/* All buffers are in double linked cycled list.  If getblk found buffer with
+   wanted block number in hash queue it moves buffer to the end of list. */
 
-#define BLOCK_SIZE 1024
-#define MAX_NR_BUFFERS 16384
 static int g_nr_buffers;
+
+
+static unsigned long buffers_memory;
+
+/* create buffers until we spend this fraction of system memory, this
+** is a hard limit on the amount of buffer ram used
+*/
+#define BUFFER_MEMORY_FRACTION 10
+
+/* number of bytes in local buffer cache before we start forcing syncs
+** of dirty data and reusing unused buffers instead of allocating new
+** ones.  If a flush doesn't find reusable buffers, new ones are
+** still allocated up to the BUFFER_MEMORY_FRACTION percentage
+**
+*/
+#define BUFFER_SOFT_LIMIT (500 * 1024)
+static int buffer_soft_limit = BUFFER_SOFT_LIMIT;
+
 
 #define NR_HASH_QUEUES 4096
 static struct buffer_head * g_a_hash_queues [NR_HASH_QUEUES];
-static struct buffer_head * g_buffer_list_head;
+static struct buffer_head * Buffer_list_head;
+static struct buffer_head * g_free_buffers = NULL ;
 static struct buffer_head * g_buffer_heads;
+static int buffer_hits = 0 ;
+static int buffer_misses = 0 ;
+static int buffer_reads = 0 ;
+static int buffer_writes = 0 ;
 
 
 
-static void show_buffers (int dev, int size)
+static void _show_buffers(struct buffer_head **list, int dev, int size)
 {
     int all = 0;
     int dirty = 0;
     int in_use = 0; /* count != 0 */
     int free = 0;
-    struct buffer_head * next = g_buffer_list_head;
+    struct buffer_head * next;
+
+    next = *list;
+    if (!next)
+        return ;
 
     for (;;) {
-	if (!next)
-	    die ("show_buffers: buffer list is corrupted");
 	if (next->b_dev == dev && next->b_size == size) {
 	    all ++;
 	    if (next->b_count != 0) {
@@ -57,11 +103,19 @@ static void show_buffers (int dev, int size)
 	    }
 	}
 	next = next->b_next;
-	if (next == g_buffer_list_head)
+	if (next == *list)
 	    break;
     }
 
-    printf ("show_buffers (dev %d, size %d): free %d, count != 0 %d, dirty %d, all %d\n", dev, size, free, in_use, dirty, all);
+    printf ("show_buffers (dev %d, size %d): free %d, count != 0 %d, dirty %d, all %d\n",
+	dev, size, free, in_use, dirty, all);
+}
+
+
+static void show_buffers (int dev, int size)
+{
+    _show_buffers(&Buffer_list_head, dev, size) ;
+    _show_buffers(&g_free_buffers, dev, size) ;
 }
 
 
@@ -101,20 +155,21 @@ static void remove_from_hash_queue (struct buffer_head * bh)
 }
 
 
-static void put_buffer_list_end (struct buffer_head * bh)
+static void put_buffer_list_end (struct buffer_head **list,
+                                 struct buffer_head * bh)
 {
     struct buffer_head * last = 0;
 
     if (bh->b_prev || bh->b_next)
 	die ("put_buffer_list_end: buffer list corrupted");
 
-    if (g_buffer_list_head == 0) {
+    if (*list == 0) {
 	bh->b_next = bh;
 	bh->b_prev = bh;
-	g_buffer_list_head = bh;
+	*list = bh;
     } else {
-	last = g_buffer_list_head->b_prev;
-    
+	last = (*list)->b_prev;
+
 	bh->b_next = last->b_next;
 	bh->b_prev = last;
 	last->b_next->b_prev = bh;
@@ -123,41 +178,77 @@ static void put_buffer_list_end (struct buffer_head * bh)
 }
 
 
-static void remove_from_buffer_list (struct buffer_head * bh)
+static void remove_from_buffer_list (struct buffer_head **list,
+                                     struct buffer_head * bh)
 {
     if (bh == bh->b_next) {
-	g_buffer_list_head = 0;
+	*list = 0;
     } else {
 	bh->b_prev->b_next = bh->b_next;
 	bh->b_next->b_prev = bh->b_prev;
-	if (bh == g_buffer_list_head)
-	    g_buffer_list_head = bh->b_next;
+	if (bh == *list)
+	    *list = bh->b_next;
     }
 
     bh->b_next = bh->b_prev = 0;
 }
 
 
-static void put_buffer_list_head (struct buffer_head * bh)
+static void put_buffer_list_head (struct buffer_head **list,
+                                  struct buffer_head * bh)
 {
-    put_buffer_list_end (bh);
-    g_buffer_list_head = bh;
+    put_buffer_list_end (list, bh);
+    *list = bh;
 }
 
+/*
+#include <sys/mman.h>
+
+static size_t estimate_memory_amount (void)
+{
+    size_t len = 1;
+    size_t max = 0;
+    void * addr;
+
+    while (len > 0) {
+	addr = mmap (0, len, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (addr == MAP_FAILED) {
+	    if (errno != ENOMEM)
+		die ("mmap failed: %m\n");
+	    break;
+	}
+	if (mlock (addr, len) != 0) {
+	    if (errno == EPERM)
+		die ("No permission to run mlock");
+	    break;
+	}
+
+	munlock (addr, len);
+	munmap (addr, len);
+	max = len;
+	len *= 2;
+    }
+
+    // * If we've looped, we don't want to return 0, we want to return the
+    // * last successful len before we looped. In the event that mmap/mlock
+    // * failed for len = 1, max will still be 0, so we don't get an invalid
+    // * result
+    return max;
+}
+*/
 
 #define GROW_BUFFERS__NEW_BUFERS_PER_CALL 10
-/* creates number of new buffers and insert them into head of buffer list 
- */
+
+/* creates number of new buffers and insert them into head of buffer list */
 static int grow_buffers (int size)
 {
     int i;
     struct buffer_head * bh, * tmp;
 
-    if (g_nr_buffers + GROW_BUFFERS__NEW_BUFERS_PER_CALL > MAX_NR_BUFFERS)
-	return 0;
 
     /* get memory for array of buffer heads */
-    bh = (struct buffer_head *)getmem (GROW_BUFFERS__NEW_BUFERS_PER_CALL * sizeof (struct buffer_head) + sizeof (struct buffer_head *));
+    bh = (struct buffer_head *)getmem (GROW_BUFFERS__NEW_BUFERS_PER_CALL * 
+				       sizeof (struct buffer_head) + sizeof (struct buffer_head *));
     if (g_buffer_heads == 0)
 	g_buffer_heads = bh;
     else {
@@ -177,15 +268,15 @@ static int grow_buffers (int size)
 	    die ("grow_buffers: no memory for new buffer data");
 	tmp->b_dev = 0;
 	tmp->b_size = size;
-	put_buffer_list_head (tmp);
-
-	g_nr_buffers ++;
+	put_buffer_list_head (&g_free_buffers, tmp);
     }
+    buffers_memory += GROW_BUFFERS__NEW_BUFERS_PER_CALL * size;
+    g_nr_buffers += GROW_BUFFERS__NEW_BUFERS_PER_CALL;
     return GROW_BUFFERS__NEW_BUFERS_PER_CALL;
 }
 
 
-struct buffer_head * find_buffer (int dev, int block, int size)
+struct buffer_head * find_buffer (int dev, unsigned long block, int size)
 {		
     struct buffer_head * next;
 
@@ -203,98 +294,117 @@ struct buffer_head * find_buffer (int dev, int block, int size)
     return next;
 }
 
-void __wait_on_buffer (struct buffer_head * bh)
+
+static struct buffer_head * get_free_buffer (struct buffer_head **list,
+                                             int size)
 {
-}
+    struct buffer_head * next;
 
-struct buffer_head * get_hash_table(dev_t dev, int block, int size)
-{
-    struct buffer_head * bh;
-
-    bh = find_buffer (dev, block, size);
-    if (bh) {
-	bh->b_count ++;
-    }
-    return bh;
-}
-
-
-static struct buffer_head * get_free_buffer (int size)
-{
-    struct buffer_head * next = g_buffer_list_head;
-
+    next = *list;
     if (!next)
 	return 0;
+
     for (;;) {
 	if (!next)
 	    die ("get_free_buffer: buffer list is corrupted");
 	if (next->b_count == 0 && buffer_clean (next) && next->b_size == size) {
 	    remove_from_hash_queue (next);
-	    remove_from_buffer_list (next);
-	    put_buffer_list_end (next);
+	    remove_from_buffer_list (list, next);
 	    return next;
 	}
 	next = next->b_next;
-	if (next == g_buffer_list_head)
+	if (next == *list)
 	    break;
     }
     return 0;
 }
 
 
-static void sync_buffers (int size, int to_write)
+/* to_write == 0 when all blocks have to be flushed. Otherwise - write only
+   buffers with b_count == 0 */
+static int sync_buffers (struct buffer_head **list, dev_t dev, int to_write)
 {
-    struct buffer_head * next = g_buffer_list_head;
+    struct buffer_head * next;
     int written = 0;
 
+
+restart:
+    next = *list;
+    if (!next)
+	return 0;
     for (;;) {
 	if (!next)
-	    die ("flush_buffer: buffer list is corrupted");
-    
-	if ((!size || next->b_size == size) && buffer_dirty (next) && buffer_uptodate (next)) {
-	    written ++;
-	    bwrite (next);
-	    if (written == to_write)
-		return;
+	    die ("sync_buffers: buffer list is corrupted");
+ 
+	if (next->b_dev == dev && buffer_dirty (next) && buffer_uptodate (next)) {
+	    if ((to_write == 0 || next->b_count == 0) && !buffer_do_not_flush (next)) {
+		bwrite (next);
+	    }
 	}
     
+	/* if this buffer is reusable, put it onto the end of the free list */
+	if (next->b_count == 0 && buffer_clean(next)) {
+	    remove_from_hash_queue (next);
+	    remove_from_buffer_list (list, next);
+	    put_buffer_list_end (&g_free_buffers, next);
+	    written++ ;
+	    if (written == to_write)
+		return written;
+	    goto restart;
+	}
+	if (to_write && written >= to_write)
+	    return written;
+
 	next = next->b_next;
-	if (next == g_buffer_list_head)
+	if (next == *list)
 	    break;
     }
+
+    return written;
 }
 
-void flush_buffers (void)
+
+void flush_buffers (dev_t dev)
 {
-    sync_buffers (0, 0);
+    if (!dev)
+	die ("flush_buffers: device is not specifed");
+    sync_buffers (&Buffer_list_head, dev, 0/*all*/);
+    buffer_soft_limit = BUFFER_SOFT_LIMIT;
 }
 
 
-struct buffer_head * getblk (int dev, int block, int size)
+struct buffer_head * getblk (int dev, unsigned long block, int size)
 {
     struct buffer_head * bh;
 
     bh = find_buffer (dev, block, size);
     if (bh) {
-	if (0 && !buffer_uptodate (bh))
-	    die ("getblk: buffer must be uptodate");
-	// move the buffer to the end of list
+	/* move the buffer to the end of list */
 
 	/*checkmem (bh->b_data, bh->b_size);*/
 
-	remove_from_buffer_list (bh);
-	put_buffer_list_end (bh);
+	remove_from_buffer_list (&Buffer_list_head, bh);
+	put_buffer_list_end (&Buffer_list_head, bh);
 	bh->b_count ++;
+	buffer_hits++ ;
 	return bh;
     }
+    buffer_misses++ ;
 
-    bh = get_free_buffer (size);
-    if (bh == 0) {
-	if (grow_buffers (size) == 0) {
-	    sync_buffers (size, 10);
+    bh = get_free_buffer (&g_free_buffers, size);
+    if (bh == NULL) {
+	if (buffers_memory >= buffer_soft_limit) {
+	    if (sync_buffers (&Buffer_list_head, dev, 32) == 0) {
+		grow_buffers(size);
+		buffer_soft_limit = buffers_memory + GROW_BUFFERS__NEW_BUFERS_PER_CALL * size;
+	    }
+	} else {
+	    if (grow_buffers(size) == 0)
+		sync_buffers (&Buffer_list_head, dev, 32);
 	}
-	bh = get_free_buffer (size);
-	if (bh == 0) {
+
+	bh = get_free_buffer (&g_free_buffers, size);
+	if (bh == NULL) {
 	    show_buffers (dev, size);
 	    die ("getblk: no free buffers after grow_buffers and refill (%d)", g_nr_buffers);
 	}
@@ -309,15 +419,11 @@ struct buffer_head * getblk (int dev, int block, int size)
     clear_bit(BH_Dirty, &bh->b_state);
     clear_bit(BH_Uptodate, &bh->b_state);
 
+    put_buffer_list_end (&Buffer_list_head, bh);
     insert_into_hash_queue (bh);
     /*checkmem (bh->b_data, bh->b_size);*/
 
     return bh;
-}
-
-struct buffer_head * reiserfs_getblk (int dev, int block, int size, int *repeat)
-{
-    return getblk (dev, block, size);
 }
 
 
@@ -328,7 +434,9 @@ void brelse (struct buffer_head * bh)
     if (bh->b_count == 0) {
 	die ("brelse: can not free a free buffer %lu", bh->b_blocknr);
     }
-    /*checkmem (bh->b_data, bh->b_size);*/
+    
+    /*checkmem (bh->b_data, get_mem_size (bh->b_data));*/
+    
     bh->b_count --;
 }
 
@@ -336,72 +444,56 @@ void brelse (struct buffer_head * bh)
 void bforget (struct buffer_head * bh)
 {
     if (bh) {
+	bh->b_state = 0;
 	brelse (bh);
 	remove_from_hash_queue (bh);
-	remove_from_buffer_list (bh);
-	put_buffer_list_head (bh);
+	remove_from_buffer_list(&Buffer_list_head, bh);
+	if (bh->b_count == 0)
+	    put_buffer_list_head(&g_free_buffers, bh);
+	else
+	    put_buffer_list_head(&Buffer_list_head, bh);
     }
 }
 
-#if 0
-#if ! ( defined __USE_LARGEFILE64 || defined __USE_FILE_OFFSET64 )
-_syscall5 (int,  _llseek,  uint,  fd, ulong, hi, ulong, lo,
-           loff_t *, res, uint, wh);
-#endif
-
-loff_t reiserfs_llseek (unsigned int fd, loff_t offset, unsigned int origin)
-{
-#if defined __USE_FILE_OFFSET64
-    return lseek(fd, offset, origin);
-#elif defined __USE_LARGEFILE64
-    return lseek64(fd, offset, origin);
-#else
-    loff_t retval, result;
-    retval = _llseek (fd, ((unsigned long long) offset) >> 32,
-		      ((unsigned long long) offset) & 0xffffffff,
-		      &result, origin);
-    return (retval != 0 ? (loff_t)-1 : result);
-#endif
-}
-#endif
 
 static int f_read(struct buffer_head * bh)
 {
     loff_t offset;
     ssize_t bytes;
 
+    buffer_reads++ ;
+
     offset = (loff_t)bh->b_size * (loff_t)bh->b_blocknr;
-    /*if (reiserfs_llseek (bh->b_dev, offset, SEEK_SET) == (loff_t)-1)*/
     if (lseek64 (bh->b_dev, offset, SEEK_SET) == (loff_t)-1)
-        return 0;
+	return 0;
 
     bytes = read (bh->b_dev, bh->b_data, bh->b_size);
     if (bytes != (ssize_t)bh->b_size)
-        return 0;
+	return 0;
 
     return 1;
 }
+
 
 struct buffer_head * bread (int dev, unsigned long block, size_t size)
 {
     struct buffer_head * bh;
 
-    /*
-    if ((size == 32768 && (block == 16 || 1026)) ||
-	(size == 4096 && (block == 128 || block == 8211))) {
-	size = 10;
+    if (is_bad_block (block))
 	return 0;
-    }
-    */
 
     bh = getblk (dev, block, size);
+    
+    /*checkmem (bh->b_data, get_mem_size(bh->b_data));*/
+    
     if (buffer_uptodate (bh))
 	return bh;
 
-    if (f_read(bh) == 0)
-    {
-        brelse(bh);
-        return 0;
+    if (f_read(bh) == 0 || is_bad_block (block)) {
+/*      BAD BLOCK LIST SUPPORT
+    	die ("%s: Cannot read a block # %lu. Specify list of badblocks\n",*/
+    	die ("%s: Cannot read a block # %lu.\n",
+    		__FUNCTION__, bh->b_blocknr);
     }
 
     mark_buffer_uptodate (bh, 0);
@@ -415,81 +507,394 @@ int valid_offset( int fd, loff_t offset)
     loff_t res;
 
     /*res = reiserfs_llseek (fd, offset, 0);*/
-    res = lseek64 (fd, offset, 0);
+    res = lseek64 (fd, offset, SEEK_SET);
     if (res < 0)
 	return 0;
 
+    /* if (read (fd, &ch, 1) < 0) does not wirk on files */
     if (read (fd, &ch, 1) < 1)
 	return 0;
+
 
     return 1;
 }
 
 
-struct buffer_head * reiserfs_bread (int dev, int block, int size, int *repeat)
-{
-    return bread (dev, block, size);
+#define ROLLBACK_FILE_START_MAGIC       "_RollBackFileForReiserfsFSCK"
+
+static struct block_handler * rollback_blocks_array;
+static __u32 rollback_blocks_number = 0;
+static FILE * s_rollback_file = 0;
+static FILE * log_file;
+static int do_rollback = 0;
+
+static char * rollback_data;
+static int rollback_blocksize;
+
+void init_rollback_file (char * rollback_file, int *blocksize, FILE * log) {
+    char * string;
+    struct stat64 buf;
+    
+    if (rollback_file == NULL)
+        return;
+        
+    stat64(rollback_file, &buf);
+    
+    s_rollback_file = fopen (rollback_file, "w+");    
+    if (s_rollback_file == NULL) {
+	fprintf (stderr, "Cannot create file %s, work w/out a rollback file\n", rollback_file);
+        return;
+    }
+
+    rollback_blocksize = *blocksize;
+
+    string = ROLLBACK_FILE_START_MAGIC;
+    fwrite (string, 28, 1, s_rollback_file);
+    fwrite (&rollback_blocksize, sizeof (rollback_blocksize), 1, s_rollback_file);
+    fwrite (&rollback_blocks_number, sizeof (rollback_blocks_number), 1, s_rollback_file);
+    fflush(s_rollback_file);
+        
+    rollback_data = getmem(rollback_blocksize);
+    
+//    printf("\ncheckmem1");
+//    fflush (stdout);
+//    checkmem (rollback_data, get_mem_size((char *)rollback_data));
+//    printf(" OK");
+    
+    log_file = log;
+    if (log_file)
+        fprintf (log_file, "rollback: file (%s) initialize\n", rollback_file);
+
+    do_rollback = 0;
 }
 
+#if 0
+static void erase_rollback_file (char * rollback_file) {
+    close_rollback_file ();
+    unlink (rollback_file);    
+}
+#endif
 
+int open_rollback_file (char * rollback_file, FILE * log) {
+    char string [28];
+    struct stat64 buf;
+    
+    if (rollback_file == NULL)
+        return -1;
+    
+    if (stat64(rollback_file, &buf)) {
+	fprintf (stderr, "Cannot stat rollback file (%s)\n", rollback_file);
+	return -1;
+    }
+        
+    s_rollback_file = fopen (rollback_file, "r+");
+    if (s_rollback_file == NULL) {
+	fprintf (stderr, "Cannot open file (%s)\n", rollback_file);
+	return -1;
+    }
+    
+    fread (string, 28, 1, s_rollback_file);
+    if (!strcmp (string, ROLLBACK_FILE_START_MAGIC)) {
+        fprintf (stderr, "Specified file (%s) does not look like a rollback file\n", rollback_file);
+        fclose (s_rollback_file);
+        s_rollback_file = 0;
+        return -1;
+    }
+    
+    fread (&rollback_blocksize, sizeof (rollback_blocksize), 1, s_rollback_file);
+    
+    if (rollback_blocksize <= 0) {
+        fprintf(stderr, "rollback: wrong rollback blocksize, exit\n");
+        return -1;
+    }
+    
+    log_file = log;
+    if (log_file)
+        fprintf (log_file, "rollback: file (%s) opened\n", rollback_file);
+    
+    do_rollback = 1;
+    return 0;
+}
+
+void close_rollback_file () {
+    if (s_rollback_file == 0)
+        return;   
+
+    if (!do_rollback) {
+        if (fseek (s_rollback_file, 28 + sizeof(int), SEEK_SET) == (loff_t)-1)
+            return;
+        fwrite (&rollback_blocks_number, sizeof (rollback_blocksize), 1, s_rollback_file);
+        if (log_file != 0) 
+            fprintf (log_file, "rollback: %d blocks backed up\n", rollback_blocks_number);
+    }
+        
+    fclose (s_rollback_file);
+
+    freemem (rollback_data);
+    freemem (rollback_blocks_array);
+
+//    fprintf (stdout, "rollback: (%u) blocks saved, \n", rollback_blocks_number);
+    
+/*    for (i = 0; i < rollback_blocks_number; i++) 
+        fprintf(stdout, "device (%Lu), block number (%u)\n", 
+                rollback_blocks_array [i].device, 
+                rollback_blocks_array [i].blocknr);
+    fprintf(stdout, "\n");
+    */
+}
+
+void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * progress) {
+    loff_t offset;
+    
+    struct stat64 buf;
+    int descriptor;
+    ssize_t retval;
+    int count_failed = 0;
+    int count_rollbacked = 0;
+    
+    dev_t b_dev;
+    dev_t n_dev = 0;
+    dev_t n_journal_dev = 0;
+    unsigned long total, done = 0;
+
+    if (fd_device == 0) {
+        fprintf(stderr, "rollback: unspecified device, exit\n");
+        return;
+    }
+        
+    if (fd_journal_device) {
+        if (!fstat64 (fd_journal_device, &buf)) {
+            n_journal_dev = buf.st_rdev;
+        } else {
+            fprintf(stderr, "rollback: specified journal device cannot be stated\n");
+        }
+    }
+    
+    if (!fstat64 (fd_device, &buf)) {
+        n_dev = buf.st_rdev;
+    } else {
+        fprintf(stderr, "rollback: specified device cannot be stated, exit\n");
+        return;
+    }
+    
+    rollback_data = getmem (rollback_blocksize);
+//    printf("\ncheckmem2");
+//    fflush (stdout);
+//    checkmem (rollback_data, get_mem_size((char *)rollback_data));
+//   printf(" OK");
+    
+    fread (&rollback_blocks_number, sizeof (rollback_blocks_number), 1, s_rollback_file);
+
+    total = rollback_blocks_number;
+    
+    while (1) {
+        print_how_far (progress, &done, rollback_blocks_number, 1, 0/*not quiet*/);
+	
+        descriptor = 0;
+        if ((retval = fread (&b_dev, sizeof (b_dev), 1, s_rollback_file)) <= 0) {
+            if (retval) 
+                fprintf (stderr, "rollback: fread: %s\n", strerror (errno));
+            break;            
+        }
+        if ((retval = fread (&offset, sizeof (offset), 1, s_rollback_file)) <= 0) {
+            if (retval) 
+                fprintf (stderr, "rollback: fread: %s\n", strerror (errno));
+            break;
+        }
+
+        if ((retval = fread (rollback_data, rollback_blocksize, 1, s_rollback_file)) <= 0) {
+            if (retval) 
+                fprintf (stderr, "rollback: fread: %s\n", strerror (errno));
+            break;
+        }
+                
+        if (n_dev == b_dev)
+            descriptor = fd_device;
+        if ((n_journal_dev) && (n_journal_dev == b_dev))
+            descriptor = fd_journal_device;
+        
+        if (descriptor == 0) {
+            fprintf(stderr, "rollback: block from unknown device, skip block\n");
+            count_failed ++;
+            continue;
+        }
+        
+        if (lseek64 (descriptor, offset, SEEK_SET) == (loff_t)-1) {
+            fprintf(stderr, "device cannot be lseeked, skip block\n");
+            count_failed ++;
+            continue;
+        }
+        
+        if (write (descriptor, rollback_data, rollback_blocksize) == -1) {
+            fprintf (stderr, "rollback: write %d bytes returned error (block=%Ld, dev=%Ld): %s\n",
+		rollback_blocksize, (long long)offset/rollback_blocksize, (long long)b_dev, strerror (errno));
+            count_failed ++;
+        } else {
+            count_rollbacked ++;
+              /*if you want to know what gets rollbacked, uncomment it*/
+/*            if (log_file != 0 && log_file != stdout) 
+                fprintf (log_file, "rollback: block %Lu of device %Lu was restored\n", 
+                        (loff_t)offset/rollback_blocksize, b_dev);
+*/
+//            fprintf (stdout, "rollback: block (%Ld) written\n", (loff_t)offset/rollback_blocksize);
+        }
+    }
+    
+    printf ("\n");
+    if (log_file != 0) 
+        fprintf (log_file, "rollback: (%u) blocks restored\n", count_rollbacked);
+}
+
+/*
+static void rollback__mark_block_saved (struct block_handler * rb_e) {
+    if (rollback_blocks_array == NULL)
+        rollback_blocks_array = getmem (ROLLBACK__INCREASE_BLOCK_NUMBER * sizeof (*rb_e));
+    
+    if (rollback_blocks_number == get_mem_size ((void *)rollback_blocks_array) / sizeof (*rb_e))
+        rollback_blocks_array = expandmem (rollback_blocks_array, get_mem_size((void *)rollback_blocks_array), 
+                        ROLLBACK__INCREASE_BLOCK_NUMBER * sizeof (*rb_e));
+
+//    checkmem ((char *)rollback_blocks_array, get_mem_size((char *)rollback_blocks_array));
+
+    rollback_blocks_array[rollback_blocks_number] = *rb_e;
+    rollback_blocks_number ++;
+    qsort (rollback_blocks_array, rollback_blocks_number, sizeof (*rb_e), rollback_compare);
+    
+//    printf("\ncheckmem3");
+//    fflush (stdout);
+//   checkmem ((char *)rollback_blocks_array, get_mem_size((char *)rollback_blocks_array));
+//    printf(" OK");
+}
+*/
+/* for now - just make sure that bad blocks did not get here */
 int bwrite (struct buffer_head * bh)
 {
     loff_t offset;
     ssize_t bytes;
     size_t size;
 
+    if (is_bad_block (bh->b_blocknr)) {
+	fprintf (stderr, "bwrite: bad block is going to be written: %lu\n",
+		 bh->b_blocknr);
+	exit (4);
+    }
+
     if (!buffer_dirty (bh) || !buffer_uptodate (bh))
 	return 0;
+
+    buffer_writes++ ;
+    if (bh->b_start_io)
+	/* this is used by undo feature of reiserfsck */
+	bh->b_start_io (bh->b_blocknr);
 
     size = bh->b_size;
     offset = (loff_t)size * (loff_t)bh->b_blocknr;
 
     if (lseek64 (bh->b_dev, offset, SEEK_SET) == (loff_t)-1){
 	fprintf (stderr, "bwrite: lseek to position %Ld (block=%lu, dev=%d): %s\n",
-		 offset, bh->b_blocknr, bh->b_dev, strerror (errno));
+		 (long long)offset, bh->b_blocknr, bh->b_dev, strerror (errno));
 	exit (4); /* File system errors left uncorrected */
     }
 
+    if (s_rollback_file != NULL && bh->b_size == rollback_blocksize) {
+        struct stat64 buf;
+        __u32 position;
+	struct block_handler block_h;
+        
+        /*log previous content into log*/
+        if (!fstat64 (bh->b_dev, &buf)) {
+	    block_h.blocknr = bh->b_blocknr;
+	    block_h.device = buf.st_rdev;
+	    if (reiserfs_bin_search (&block_h, rollback_blocks_array, rollback_blocks_number,
+		sizeof (block_h), &position, blockdev_list_compare) != POSITION_FOUND) {
+                /*read initial data from the disk*/
+                if (read (bh->b_dev, rollback_data, bh->b_size) == bh->b_size) {
+                    fwrite (&buf.st_rdev, sizeof (buf.st_rdev), 1, s_rollback_file);
+                    fwrite (&offset, sizeof (offset), 1, s_rollback_file);
+                    fwrite (rollback_data, rollback_blocksize, 1, s_rollback_file);
+                    fflush(s_rollback_file);
+                    blocklist__insert_in_position ((void **)&rollback_blocks_array, &rollback_blocks_number, &block_h,
+                                                sizeof(block_h), &position);
+                    /*if you want to know what gets saved, uncomment it*/
+/*                    if (log_file != 0 && log_file != stdout) {
+                        fprintf (log_file, "rollback: block %lu of device %Lu was backed up\n", 
+                                bh->b_blocknr, buf.st_rdev);
+                    }
+*/
+                    
+                } else {
+                    fprintf (stderr, "bwrite: read (block=%lu, dev=%d): %s\n", bh->b_blocknr,
+                    		bh->b_dev, strerror (errno));
+                    exit (4);
+                }
+                if (lseek64 (bh->b_dev, offset, SEEK_SET) == (loff_t)-1) {
+                    fprintf (stderr, "bwrite: lseek to position %Ld (block=%lu, dev=%d): %s\n",
+        		 (long long)offset, bh->b_blocknr, bh->b_dev, strerror (errno));
+                    exit (4);
+                }
+            }
+        } else {
+            fprintf (stderr, "bwrite: fstat of (%d) returned -1: %s\n", bh->b_dev, strerror (errno));
+        }
+    } else if (s_rollback_file != NULL) {
+	fprintf (stderr, "rollback: block (%lu) has the size different from the fs uses, block skipped\n",
+		bh->b_blocknr);
+    }
+    
     bytes = write (bh->b_dev, bh->b_data, size);
     if (bytes != (ssize_t)size) {
-	fprintf (stderr, "bwrite: write %d bytes returned %d (block=%ld, dev=%d): %s\n",
-		size, bytes, bh->b_blocknr, bh->b_dev, strerror (errno));
+	fprintf (stderr, "bwrite: write %ld bytes returned %ld (block=%ld, dev=%d): %s\n",
+		(long)size, (long)bytes, bh->b_blocknr, bh->b_dev, strerror (errno));
 	exit (4);
     }
 
     mark_buffer_clean (bh);
+
     if (bh->b_end_io) {
 	bh->b_end_io(bh, 1) ;
     }
+
     return 0;
 }
 
 
-void check_and_free_buffer_mem (void)
-{
-    int i = 0;
-    struct buffer_head * next = g_buffer_list_head;
+static int _check_and_free_buffer_list(struct buffer_head *list) {
+    struct buffer_head *next = list ;
+    int count = 0 ;
+    if (!list)
+	return 0 ;
 
-    //sync_buffers (0, 0);
-    for (;;) {
-	if (!next)
-	    die ("check_and_free_buffer_mem: buffer list is corrupted");
+    for(;;) {
 	if (next->b_count != 0)
-	    fprintf (stderr, "check_and_free_buffer_mem: not free buffer (%ld, %ld, %d)",
-		     next->b_blocknr, next->b_size, next->b_count);
+	    fprintf (stderr, "check_and_free_buffer_mem: not free buffer (%x, %ld, %ld, %d)\n",
+		     next->b_dev, next->b_blocknr, next->b_size, next->b_count);
 
 	if (buffer_dirty (next) && buffer_uptodate (next))
-	    fprintf (stderr, "check_and_free_buffer_mem: dirty buffer %lu found\n",
-		    next->b_blocknr);
+	    fprintf (stderr, "check_and_free_buffer_mem: dirty buffer (%x %lu) found\n",
+		     next->b_dev, next->b_blocknr);
 
 	freemem (next->b_data);
-	i ++;
+	count++;
 	next = next->b_next;
-	if (next == g_buffer_list_head)
-	    break;
+	if (next == list)
+            break;
     }
-    if (i != g_nr_buffers)
-	die ("check_and_free_buffer_mem: found %d buffers, must be %d", i, g_nr_buffers);
+    return count;
+}
+
+void check_and_free_buffer_mem (void)
+{
+    int count = 0;
+    struct buffer_head * next ;
+
+//    printf("check and free buffer mem, hits %d misses %d reads %d writes %d\n", buffer_hits, buffer_misses, buffer_reads, buffer_writes) ;
+    /*sync_buffers (0, 0);*/
+
+    count = _check_and_free_buffer_list(Buffer_list_head);
+    count += _check_and_free_buffer_list(g_free_buffers);
+
+    if (count != g_nr_buffers)
+       die ("check_and_free_buffer_mem: found %d buffers, must be %d", count, g_nr_buffers);
 
     /* free buffer heads */
     while ((next = g_buffer_heads)) {
@@ -505,4 +910,48 @@ void check_and_free_buffer_mem (void)
 void free_buffers (void)
 {
     check_and_free_buffer_mem ();
+}
+
+
+static void _invalidate_buffer_list(struct buffer_head *list, dev_t dev)
+{
+    struct buffer_head * next;
+
+    if (!list)
+	return;
+
+    next = list;
+
+    for (;;) {
+	if (next->b_dev == dev) {
+	    if (buffer_dirty (next) || next->b_count)
+		fprintf (stderr, "invalidate_buffers: dirty buffer or used buffer (%d %lu) found\n",
+			 next->b_count, next->b_blocknr);
+	    next->b_state = 0;
+	    remove_from_hash_queue (next);
+	}
+	next = next->b_next;
+	if (next == list)
+	    break;
+    }
+}
+
+/* forget all buffers of the given device */
+void invalidate_buffers (dev_t dev)
+{
+    _invalidate_buffer_list(Buffer_list_head, dev) ;
+    _invalidate_buffer_list(g_free_buffers, dev) ;
+}
+
+
+int user_confirmed (FILE * fp, char * q, char * yes)
+{
+    char * answer = 0;
+    size_t n = 0;
+
+    fprintf (fp, "%s", q);
+    if (getline (&answer, &n, stdin) != strlen (yes) || strcmp (yes, answer))
+	return 0;
+
+    return 1;
 }

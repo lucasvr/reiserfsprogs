@@ -1,4 +1,8 @@
-SUBDIRS = include lib reiserfscore mkreiserfs fsck debugreiserfs resize_reiserfs
+SUBDIRS = include lib reiserfscore fsck debugreiserfs resize_reiserfs mkreiserfs tune
 
-EXTRA_DIST = version.h reiserfsprogs.spec
+noinst_DATA = reiserfsprogs.spec
 
+EXTRA_DIST = version.h
+
+dist-hook:
+	cp -f reiserfsprogs.spec $(distdir)

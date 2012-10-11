@@ -26,7 +26,7 @@ extern int init_mode;
 
 
 /* copy copy_count entries from source directory item to dest buffer (creating new item if needed) */
-static void leaf_copy_dir_entries (reiserfs_filsys_t fs,
+static void leaf_copy_dir_entries (reiserfs_filsys_t * fs,
 			           struct buffer_info * dest_bi, struct buffer_head * source, 
 				   int last_first, int item_num, int from, int copy_count)
 {
@@ -42,17 +42,12 @@ static void leaf_copy_dir_entries (reiserfs_filsys_t fs,
 
     ih = B_N_PITEM_HEAD (source, item_num);
 
-#ifdef CONFIG_REISERFS_CHECK
-    if (!I_IS_DIRECTORY_ITEM (ih))
-	reiserfs_panic(0, "vs-10000: leaf_copy_dir_entries: item must be directory item");
-#endif
-
     /* length of all record to be copied and first byte of the last of them */
     deh = B_I_DEH (source, ih);
     if (copy_count) {
-	copy_records_len = (from ? deh[from - 1].deh_location : ih->ih_item_len) - 
-	    deh[from + copy_count - 1].deh_location;
-	records = source->b_data + ih->ih_item_location + deh[from + copy_count - 1].deh_location;
+	copy_records_len = (from ? get_deh_location (&deh[from - 1]) : get_ih_item_len (ih)) - 
+	    get_deh_location (&deh[from + copy_count - 1]);
+	records = source->b_data + get_ih_location (ih) + get_deh_location (&deh[from + copy_count - 1]);
     } else {
 	copy_records_len = 0;
 	records = 0;
@@ -63,13 +58,8 @@ static void leaf_copy_dir_entries (reiserfs_filsys_t fs,
 
     /* if there are no items in dest or the first/last item in dest is not item of the same directory */
     if ( (item_num_in_dest == - 1) ||
-#ifndef FU //REISERFS_FSCK
 	 (last_first == FIRST_TO_LAST && are_items_mergeable (B_N_PITEM_HEAD (dest, item_num_in_dest), ih, dest->b_size) == 0) ||
 	 (last_first == LAST_TO_FIRST && are_items_mergeable (ih, B_N_PITEM_HEAD (dest, item_num_in_dest), dest->b_size) == 0)) {
-#else
-	(last_first == FIRST_TO_LAST && get_offset (&ih->ih_key) == DOT_OFFSET) ||
-	    (last_first == LAST_TO_FIRST && not_of_one_file (&ih->ih_key, B_N_PKEY (dest, item_num_in_dest)))) {
-#endif
 	/* create new item in dest */
 	struct item_head new_ih;
 
@@ -77,37 +67,34 @@ static void leaf_copy_dir_entries (reiserfs_filsys_t fs,
 	memcpy (&new_ih.ih_key, &ih->ih_key, KEY_SIZE);
 
 	/* calculate item len */
-	new_ih.ih_item_len = cpu_to_le16 (DEH_SIZE * copy_count + copy_records_len);
-	set_entry_count (&new_ih, 0);
+	set_ih_item_len (&new_ih, DEH_SIZE * copy_count + copy_records_len);
+	set_ih_entry_count (&new_ih, 0);
     
 	if (last_first == LAST_TO_FIRST) {
 	    /* form key by the following way */
-	    if (from < ih_entry_count (ih)) {
-		new_ih.ih_key.u.k_offset_v1.k_offset = deh[from].deh_offset;
-		new_ih.ih_key.u.k_offset_v1.k_uniqueness = DIRENTRY_UNIQUENESS;
-		/*memcpy (&new_ih.ih_key.k_offset, &deh[from].deh_offset, SHORT_KEY_SIZE);*/
+	    if (from < get_ih_entry_count (ih)) {
+		set_key_offset_v1 (&new_ih.ih_key, get_deh_offset (&deh[from]));
 	    } else {
 		/* no entries will be copied to this item in this function */
-		new_ih.ih_key.u.k_offset_v1.k_offset = MAX_KEY1_OFFSET;
-		/* this item is not yet valid, but we want I_IS_DIRECTORY_ITEM to return 1 for it, so we -1 */
-		new_ih.ih_key.u.k_offset_v1.k_uniqueness = DIRENTRY_UNIQUENESS/*TYPE_DIRECTORY_MAX*/;
+		set_key_offset_v1 (&new_ih.ih_key, MAX_KEY1_OFFSET);
 	    }
+	    set_key_uniqueness (&new_ih.ih_key, DIRENTRY_UNIQUENESS);
 	}
-	set_key_format (&new_ih, ih_key_format (ih));
-	new_ih.ih_format.fsck_need = ih->ih_format.fsck_need;
+	set_ih_key_format (&new_ih, get_ih_key_format (ih));
+	set_ih_flags (&new_ih, get_ih_flags (ih));
     
 	/* insert item into dest buffer */
 	leaf_insert_into_buf (fs, dest_bi, (last_first == LAST_TO_FIRST) ? 0 : B_NR_ITEMS(dest), &new_ih, NULL, 0);
     } else {
 	/* prepare space for entries */
-	leaf_paste_in_buffer (fs, dest_bi, (last_first==FIRST_TO_LAST) ? (B_NR_ITEMS(dest) - 1) : 0, USHRT_MAX,
+	leaf_paste_in_buffer (fs, dest_bi, (last_first == FIRST_TO_LAST) ? (B_NR_ITEMS(dest) - 1) : 0, 0xffff /*MAX_US_INT */,
 			      DEH_SIZE * copy_count + copy_records_len, records, 0);
     }
   
     item_num_in_dest = (last_first == FIRST_TO_LAST) ? (B_NR_ITEMS(dest)-1) : 0;
   
     leaf_paste_entries (dest_bi->bi_bh, item_num_in_dest,
-			(last_first == FIRST_TO_LAST) ? ih_entry_count (B_N_PITEM_HEAD (dest, item_num_in_dest)) : 0,
+			(last_first == FIRST_TO_LAST) ? get_ih_entry_count (B_N_PITEM_HEAD (dest, item_num_in_dest)) : 0,
 			copy_count, deh + from, records,
 			DEH_SIZE * copy_count + copy_records_len
 	);
@@ -118,7 +105,7 @@ static void leaf_copy_dir_entries (reiserfs_filsys_t fs,
    part of it or nothing (see the return 0 below) from SOURCE to the end 
    (if last_first) or beginning (!last_first) of the DEST */
 /* returns 1 if anything was copied, else 0 */
-static int leaf_copy_boundary_item (reiserfs_filsys_t fs,
+static int leaf_copy_boundary_item (reiserfs_filsys_t * fs,
                                     struct buffer_info * dest_bi, struct buffer_head * src, int last_first,
 				    int bytes_or_entries)
 {
@@ -135,23 +122,14 @@ static int leaf_copy_boundary_item (reiserfs_filsys_t fs,
 	   that we copy, so we return */
 	ih = B_N_PITEM_HEAD (src, 0);
 	dih = B_N_PITEM_HEAD (dest, dest_nr_item - 1);
-#ifndef FU //REISERFS_FSCK
 	if (!dest_nr_item || (are_items_mergeable (dih, ih, src->b_size) == 0))
-#else
-	    if (!dest_nr_item || (!is_left_mergeable (ih, src->b_size)))
-#endif
-		/* there is nothing to merge */
-		return 0;
-      
-#ifdef CONFIG_REISERFS_CHECK
-	if ( ! ih->ih_item_len )
-	    reiserfs_panic (0, "vs-10010: leaf_copy_boundary_item: item can not have empty dynamic length");
-#endif
+	    /* there is nothing to merge */
+	    return 0;
       
 	if ( I_IS_DIRECTORY_ITEM(ih) ) {
 	    if ( bytes_or_entries == -1 )
 		/* copy all entries to dest */
-		bytes_or_entries = ih_entry_count(ih);
+		bytes_or_entries = get_ih_entry_count(ih);
 	    leaf_copy_dir_entries (fs, dest_bi, src, FIRST_TO_LAST, 0, 0, bytes_or_entries);
 	    return 1;
 	}
@@ -160,34 +138,17 @@ static int leaf_copy_boundary_item (reiserfs_filsys_t fs,
 	   part defined by 'bytes_or_entries'; if bytes_or_entries == -1 copy whole body; don't create new item header
 	*/
 	if ( bytes_or_entries == -1 )
-	    bytes_or_entries = ih->ih_item_len;
+	    bytes_or_entries = get_ih_item_len (ih);
 
-#ifdef CONFIG_REISERFS_CHECK
-	else {
-	    if (bytes_or_entries == ih->ih_item_len && I_IS_INDIRECT_ITEM(ih))
-		if (ih_free_space (ih))
-		    reiserfs_panic (0, "vs-10020: leaf_copy_boundary_item: "
-				    "last unformatted node must be filled entirely (free_space=%d)",
-				    ih_free_space (ih));
-	}
-#endif
-      
 	/* merge first item (or its part) of src buffer with the last
 	   item of dest buffer. Both are of the same file */
-	leaf_paste_in_buffer (fs, dest_bi,
-			      dest_nr_item - 1, dih->ih_item_len, bytes_or_entries, B_I_PITEM(src,ih), 0
-	    );
+	leaf_paste_in_buffer (fs, dest_bi, dest_nr_item - 1, get_ih_item_len (dih),
+		bytes_or_entries, B_I_PITEM(src,ih), 0);
       
 	if (I_IS_INDIRECT_ITEM(dih)) {
-#ifdef CONFIG_REISERFS_CHECK
-	    if (ih_free_space (dih))
-		reiserfs_panic (0, "vs-10030: leaf_copy_boundary_item: " 
-				"merge to left: last unformatted node of non-last indirect item must be filled entirely (free_space=%d)",
-				ih_free_space (dih));
-#endif
-	    if (bytes_or_entries == ih->ih_item_len)
+	    if (bytes_or_entries == get_ih_item_len (ih))
 		//dih->u.ih_free_space = ih->u.ih_free_space;
-		set_free_space (dih, ih_free_space (ih));
+		set_ih_free_space (dih, get_ih_free_space (ih));
 	}
     
 	return 1;
@@ -203,19 +164,15 @@ static int leaf_copy_boundary_item (reiserfs_filsys_t fs,
     ih = B_N_PITEM_HEAD (src, src_nr_item - 1);
     dih = B_N_PITEM_HEAD (dest, 0);
 
-#ifndef FU //REISERFS_FSCK
     if (!dest_nr_item || are_items_mergeable (ih, dih, src->b_size) == 0)
-#else
-	if (!dest_nr_item || !is_left_mergeable (dih, src->b_size))
-#endif
-	    return 0;
+	return 0;
   
     if ( I_IS_DIRECTORY_ITEM(ih)) {
 	if ( bytes_or_entries == -1 )
 	    /* bytes_or_entries = entries number in last item body of SOURCE */
-	    bytes_or_entries = ih_entry_count(ih);
+	    bytes_or_entries = get_ih_entry_count(ih);
     
-	leaf_copy_dir_entries (fs, dest_bi, src, LAST_TO_FIRST, src_nr_item - 1, ih_entry_count(ih) - bytes_or_entries, 
+	leaf_copy_dir_entries (fs, dest_bi, src, LAST_TO_FIRST, src_nr_item - 1, get_ih_entry_count(ih) - bytes_or_entries, 
 			       bytes_or_entries);
 	return 1;
     }
@@ -225,22 +182,9 @@ static int leaf_copy_boundary_item (reiserfs_filsys_t fs,
        don't create new item header
     */
   
-#ifdef CONFIG_REISERFS_CHECK  
-    if (I_IS_INDIRECT_ITEM(ih) && ih_free_space (ih))
-	reiserfs_panic (0, "vs-10040: leaf_copy_boundary_item: " 
-			"merge to right: last unformatted node of non-last indirect item must be filled entirely (free_space=%d)",
-			ih_free_space (ih));
-#endif
-
     if ( bytes_or_entries == -1 ) {
 	/* bytes_or_entries = length of last item body of SOURCE */
-	bytes_or_entries = ih->ih_item_len;
-
-#ifdef CONFIG_REISERFS_CHECK
-	if (get_offset (&dih->ih_key) != get_offset (&ih->ih_key) + get_bytes_number (ih, src->b_size))/*I_DNM_DATA_LEN(ih))*/
-	    reiserfs_panic (0, "vs-10050: leaf_copy_boundary_item: right item offset (%lu) must not be (%lu),it must be %lu",
-			    get_offset (&dih->ih_key), get_offset (&ih->ih_key) + get_bytes_number (ih, src->b_size), get_offset (&dih->ih_key));
-#endif
+	bytes_or_entries = get_ih_item_len (ih);
 
 	/* change first item key of the DEST */
 	//dih->ih_key.k_offset = ih->ih_key.k_offset;
@@ -252,34 +196,18 @@ static int leaf_copy_boundary_item (reiserfs_filsys_t fs,
 	set_type (key_format (&dih->ih_key), &dih->ih_key, get_type (&ih->ih_key));
     } else {
 	/* merge to right only part of item */
-#ifdef CONFIG_REISERFS_CHECK
-	if ( ih->ih_item_len <= bytes_or_entries )
-	    reiserfs_panic (0, "vs-10060: leaf_copy_boundary_item: no so much bytes %lu (needed %lu)",
-			    ih->ih_item_len, bytes_or_entries);
-#endif
-    
 	/* change first item key of the DEST */
 	if ( I_IS_DIRECT_ITEM(dih) ) {
-#ifdef CONFIG_REISERFS_CHECK
-	    if (get_offset (&dih->ih_key) <= (unsigned long)bytes_or_entries)
-		reiserfs_panic (0, "vs-10070: leaf_copy_boundary_item: dih->ih_key.k_offset(%d) <= bytes_or_entries(%d)", 
-				get_offset (&dih->ih_key), bytes_or_entries);
-#endif
 	    //dih->ih_key.k_offset -= bytes_or_entries;
 	    set_offset (key_format (&dih->ih_key), &dih->ih_key, get_offset (&dih->ih_key) - bytes_or_entries);
 	} else {
-#ifdef CONFIG_REISERFS_CHECK
-	    if (get_offset (&dih->ih_key) <=(bytes_or_entries/UNFM_P_SIZE)*dest->b_size )
-		reiserfs_panic (0, "vs-10080: leaf_copy_boundary_item: dih->ih_key.k_offset(%d) <= bytes_or_entries(%d)",
-				get_offset (&dih->ih_key), (bytes_or_entries/UNFM_P_SIZE)*dest->b_size);
-#endif
 	    //dih->ih_key.k_offset -= ((bytes_or_entries/UNFM_P_SIZE)*dest->b_size);
 	    set_offset (key_format (&dih->ih_key), &dih->ih_key, 
 			get_offset (&dih->ih_key) - ((bytes_or_entries/UNFM_P_SIZE)*dest->b_size));
 	}
     }
   
-    leaf_paste_in_buffer (fs, dest_bi, 0, 0, bytes_or_entries, B_I_PITEM(src,ih) + ih->ih_item_len - bytes_or_entries, 0);
+    leaf_paste_in_buffer (fs, dest_bi, 0, 0, bytes_or_entries, B_I_PITEM(src,ih) + get_ih_item_len (ih) - bytes_or_entries, 0);
     return 1;
 }
 
@@ -288,7 +216,7 @@ static int leaf_copy_boundary_item (reiserfs_filsys_t fs,
  * last_first == FIRST_TO_LAST means, that we copy cpy_num  items beginning from first-th item in src to tail of dest
  * last_first == LAST_TO_FIRST means, that we copy cpy_num  items beginning from first-th item in src to head of dest
  */
-static void leaf_copy_items_entirely (reiserfs_filsys_t fs, struct buffer_info * dest_bi, 
+static void leaf_copy_items_entirely (reiserfs_filsys_t * fs, struct buffer_info * dest_bi, 
                                       struct buffer_head * src, int last_first,
 				      int first, int cpy_num)
 {
@@ -300,33 +228,13 @@ static void leaf_copy_items_entirely (reiserfs_filsys_t fs, struct buffer_info *
     struct block_head * blkh;
     struct item_head * ih;
 
-
-#ifdef CONFIG_REISERFS_CHECK
-    if (last_first != LAST_TO_FIRST  && last_first != FIRST_TO_LAST) 
-	reiserfs_panic (0, "vs-10090: leaf_copy_items_entirely: bad last_first parameter %d", last_first);
-
-    if (B_NR_ITEMS (src) - first < cpy_num)
-	reiserfs_panic (0, "vs-10100: leaf_copy_items_entirely: too few items in source %d, required %d from %d",
-			B_NR_ITEMS(src), cpy_num, first);
-
-    if (cpy_num < 0)
-	reiserfs_panic (0, "vs-10110: leaf_copy_items_entirely: can not copy negative amount of items");
-
-    if ( ! dest_bi )
-	reiserfs_panic (0, "vs-10120: leaf_copy_items_entirely: can not copy negative amount of items");
-#endif
-
     dest = dest_bi->bi_bh;
-
-#ifdef CONFIG_REISERFS_CHECK
-    if ( ! dest )
-	reiserfs_panic (0, "vs-10130: leaf_copy_items_entirely: can not copy negative amount of items");
-#endif
 
     if (cpy_num == 0)
 	return;
 
-    nr = (blkh = B_BLK_HEAD(dest))->blk_nr_item;
+    blkh = B_BLK_HEAD(dest);
+    nr = get_blkh_nr_items (blkh);
   
     /* we will insert items before 0-th or nr-th item in dest buffer. It depends of last_first parameter */
     dest_before = (last_first == LAST_TO_FIRST) ? 0 : nr;
@@ -334,39 +242,26 @@ static void leaf_copy_items_entirely (reiserfs_filsys_t fs, struct buffer_info *
     /* location of head of first new item */
     ih = B_N_PITEM_HEAD (dest, dest_before);
 
-#ifdef CONFIG_REISERFS_CHECK
-    if (blkh->blk_free_space < cpy_num * IH_SIZE) {
-	reiserfs_panic (0, "vs-10140: leaf_copy_items_entirely: not enough free space for headers %d (needed %d)",
-			blkh->blk_free_space, cpy_num * IH_SIZE);
-    }
-#endif
-
     /* prepare space for headers */
     memmove (ih + cpy_num, ih, (nr-dest_before) * IH_SIZE);
 
     /* copy item headers */
     memcpy (ih, B_N_PITEM_HEAD (src, first), cpy_num * IH_SIZE);
 
-    blkh->blk_free_space -= IH_SIZE * cpy_num;
+    set_blkh_free_space (blkh, get_blkh_free_space (blkh) - IH_SIZE * cpy_num);
 
     /* location of unmovable item */
-    j = location = (dest_before == 0) ? dest->b_size : (ih-1)->ih_item_location;
-    for (i = dest_before; i < nr + cpy_num; i ++)
-	ih[i-dest_before].ih_item_location =
-	    (location -= ih[i-dest_before].ih_item_len);
+    j = location = (dest_before == 0) ? dest->b_size : get_ih_location (ih-1);
+    for (i = dest_before; i < nr + cpy_num; i ++) {
+	location -= get_ih_item_len (&ih[i-dest_before]);
+	set_ih_location (&ih[i-dest_before], location);
+    }
 
     /* prepare space for items */
-    last_loc = ih[nr+cpy_num-1-dest_before].ih_item_location;
-    last_inserted_loc = ih[cpy_num-1].ih_item_location;
+    last_loc = get_ih_location (&ih[nr+cpy_num-1-dest_before]);
+    last_inserted_loc = get_ih_location (&ih[cpy_num-1]);
 
     /* check free space */
-#ifdef CONFIG_REISERFS_CHECK
-    if (blkh->blk_free_space < j - last_inserted_loc) {
-	reiserfs_panic (0, "vs-10150: leaf_copy_items_entirely: not enough free space for items %d (needed %d)",
-			blkh->blk_free_space, j - last_inserted_loc);
-    }
-#endif
-
     memmove (dest->b_data + last_loc,
 	     dest->b_data + last_loc + j - last_inserted_loc,
 	     last_inserted_loc - last_loc);
@@ -376,22 +271,16 @@ static void leaf_copy_items_entirely (reiserfs_filsys_t fs, struct buffer_info *
 	    j - last_inserted_loc);
 
     /* sizes, item number */
-    blkh->blk_nr_item += cpy_num;  
-    blkh->blk_free_space -= j - last_inserted_loc;
+    set_blkh_nr_items (blkh, get_blkh_nr_items (blkh) + cpy_num);
+    set_blkh_free_space (blkh, 
+			 get_blkh_free_space (blkh) - (j - last_inserted_loc));
   
     mark_buffer_dirty (dest);
 
     if (dest_bi->bi_parent) {
-#ifdef CONFIG_REISERFS_CHECK
-	if (B_N_CHILD (dest_bi->bi_parent, dest_bi->bi_position)->dc_block_number != dest->b_blocknr) {
-	    reiserfs_panic (0, "vs-10160: leaf_copy_items_entirely: "
-			    "block number in bh does not match to field in disk_child structure %lu and %lu",
-			    dest->b_blocknr, B_N_CHILD (dest_bi->bi_parent, dest_bi->bi_position)->dc_block_number);
-	}
-#endif
-	B_N_CHILD (dest_bi->bi_parent, dest_bi->bi_position)->dc_size +=
-	    j - last_inserted_loc + IH_SIZE * cpy_num;
-    
+	struct disk_child * dc;
+	dc = B_N_CHILD (dest_bi->bi_parent, dest_bi->bi_position);
+	set_dc_child_size (dc, get_dc_child_size (dc) + j - last_inserted_loc + IH_SIZE * cpy_num);
 	mark_buffer_dirty(dest_bi->bi_parent);
     }
 }
@@ -399,18 +288,13 @@ static void leaf_copy_items_entirely (reiserfs_filsys_t fs, struct buffer_info *
 
 /* This function splits the (liquid) item into two items (useful when
    shifting part of an item into another node.) */
-static void leaf_item_bottle (reiserfs_filsys_t fs,
+static void leaf_item_bottle (reiserfs_filsys_t * fs,
 			      struct buffer_info * dest_bi, struct buffer_head * src, int last_first,
 			      int item_num, int cpy_bytes)
 {
     struct buffer_head * dest = dest_bi->bi_bh;
     struct item_head * ih;
   
-#ifdef CONFIG_REISERFS_CHECK  
-    if ( cpy_bytes == -1 ) 
-	reiserfs_panic (0, "vs-10170: leaf_item_bottle: bytes == - 1 means: do not split item");
-#endif
-
     if ( last_first == FIRST_TO_LAST ) {
 	/* if ( if item in position item_num in buffer SOURCE is directory item ) */
 	if (I_IS_DIRECTORY_ITEM(ih = B_N_PITEM_HEAD(src,item_num)))
@@ -423,31 +307,21 @@ static void leaf_item_bottle (reiserfs_filsys_t fs,
 	       n_ih = new item_header;
 	    */
 	    memcpy (&n_ih, ih, IH_SIZE);
-	    n_ih.ih_item_len = cpy_bytes;
+	    set_ih_item_len (&n_ih, cpy_bytes);
 	    if (I_IS_INDIRECT_ITEM(ih)) {
-#ifdef CONFIG_REISERFS_CHECK
-		if (cpy_bytes == ih->ih_item_len && ih_free_space (ih))
-		    reiserfs_panic (0, "vs-10180: leaf_item_bottle: " 
-				    "when whole indirect item is bottle to left neighbor, it must have free_space==0 (not %lu)",
-				    ih_free_space (ih));
-#endif
 		//n_ih.u.ih_free_space = 0;
-		set_free_space (&n_ih, 0);;
+		set_ih_free_space (&n_ih, 0);;
 	    }
 
-#ifdef CONFIG_REISERFS_CHECK
-	    if (is_left_mergeable (ih, src->b_size))
-		reiserfs_panic (0, "vs-10190: leaf_item_bottle: item %h should not be mergeable", ih);
-#endif
 	    //n_ih.ih_version = ih->ih_version;
-	    set_key_format (&n_ih, ih_key_format (ih));
-	    n_ih.ih_format.fsck_need = ih->ih_format.fsck_need;
+	    set_ih_key_format (&n_ih, get_ih_key_format (ih));
+	    set_ih_flags (&n_ih, get_ih_flags (ih));
 	    leaf_insert_into_buf (fs, dest_bi, B_NR_ITEMS(dest), &n_ih, B_N_PITEM (src, item_num), 0);
 	}
     } else {
 	/*  if ( if item in position item_num in buffer SOURCE is directory item ) */
 	if (I_IS_DIRECTORY_ITEM(ih = B_N_PITEM_HEAD (src, item_num)))
-	    leaf_copy_dir_entries (fs, dest_bi, src, LAST_TO_FIRST, item_num, ih_entry_count(ih) - cpy_bytes, cpy_bytes);
+	    leaf_copy_dir_entries (fs, dest_bi, src, LAST_TO_FIRST, item_num, get_ih_entry_count(ih) - cpy_bytes, cpy_bytes);
 	else {
 	    struct item_head n_ih;
       
@@ -459,32 +333,28 @@ static void leaf_item_bottle (reiserfs_filsys_t fs,
       
 	    if (I_IS_DIRECT_ITEM(ih)) {
 		//n_ih.ih_key.k_offset = ih->ih_key.k_offset + ih->ih_item_len - cpy_bytes;
-		set_offset (key_format (&ih->ih_key), &n_ih.ih_key, get_offset (&ih->ih_key) + ih->ih_item_len - cpy_bytes);
+		set_offset (key_format (&ih->ih_key), &n_ih.ih_key, get_offset (&ih->ih_key) + get_ih_item_len (ih) - cpy_bytes);
 		//n_ih.ih_key.k_uniqueness = TYPE_DIRECT;
 		set_type (key_format (&ih->ih_key), &n_ih.ih_key, TYPE_DIRECT);
 		//n_ih.u.ih_free_space = USHRT_MAX;
-		set_free_space (&n_ih, USHRT_MAX);
+		set_ih_free_space (&n_ih, USHRT_MAX);
 	    } else {
 		/* indirect item */
-#ifdef CONFIG_REISERFS_CHECK
-		if (!cpy_bytes && ih_free_space (ih))
-		    reiserfs_panic (0, "vs-10200: leaf_item_bottle: ih->ih_free_space must be 0 when indirect item will be appended");
-#endif
 		//n_ih.ih_key.k_offset = ih->ih_key.k_offset + (ih->ih_item_len - cpy_bytes) / UNFM_P_SIZE * dest->b_size;
 		set_offset (key_format (&ih->ih_key), &n_ih.ih_key,
-			    get_offset (&ih->ih_key) + (ih->ih_item_len - cpy_bytes) / UNFM_P_SIZE * dest->b_size);
+			    get_offset (&ih->ih_key) + (get_ih_item_len (ih) - cpy_bytes) / UNFM_P_SIZE * dest->b_size);
 		//n_ih.ih_key.k_uniqueness = TYPE_INDIRECT;
 		set_type (key_format (&ih->ih_key), &n_ih.ih_key, TYPE_INDIRECT);
 		//n_ih.u.ih_free_space = ih->u.ih_free_space;
-		set_free_space (&n_ih, ih_free_space (ih));
+		set_ih_free_space (&n_ih, get_ih_free_space (ih));
 	    }
       
 	    /* set item length */
-	    n_ih.ih_item_len = cpu_to_le16 (cpy_bytes);
+	    set_ih_item_len (&n_ih, cpy_bytes);
 	    //n_ih.ih_version = ih->ih_version;
-	    set_key_format (&n_ih, ih_key_format (ih));
-	    n_ih.ih_format.fsck_need = ih->ih_format.fsck_need;
-	    leaf_insert_into_buf (fs, dest_bi, 0, &n_ih, B_N_PITEM(src,item_num) + ih->ih_item_len - cpy_bytes, 0);
+	    set_ih_key_format (&n_ih, get_ih_key_format (ih));
+	    set_ih_flags (&n_ih, get_ih_flags (ih));
+	    leaf_insert_into_buf (fs, dest_bi, 0, &n_ih, B_N_PITEM(src,item_num) + get_ih_item_len (ih) - cpy_bytes, 0);
 	}
     }
 }
@@ -494,7 +364,7 @@ static void leaf_item_bottle (reiserfs_filsys_t fs,
    If cpy_bytes not equal to minus one than copy cpy_num-1 whole items from SOURCE to DEST.
    From last item copy cpy_num bytes for regular item and cpy_num directory entries for
    directory item. */
-static int leaf_copy_items (reiserfs_filsys_t fs,
+static int leaf_copy_items (reiserfs_filsys_t * fs,
                             struct buffer_info * dest_bi, struct buffer_head * src,
 			    int last_first, int cpy_num,
 			    int cpy_bytes)
@@ -503,20 +373,6 @@ static int leaf_copy_items (reiserfs_filsys_t fs,
     int pos, i, src_nr_item, bytes;
 
     dest = dest_bi->bi_bh;
-#ifdef CONFIG_REISERFS_CHECK
-    if (!dest || !src)
-	reiserfs_panic (0, "vs-10210: leaf_copy_items: !dest || !src");
-  
-    if ( last_first != FIRST_TO_LAST && last_first != LAST_TO_FIRST )
-	reiserfs_panic (0, "vs-10220: leaf_copy_items: last_first != FIRST_TO_LAST && last_first != LAST_TO_FIRST");
-
-    if ( B_NR_ITEMS(src) < cpy_num )
-	reiserfs_panic (0, "vs-10230: leaf_copy_items: No enough items: %d, required %d", B_NR_ITEMS(src), cpy_num);
-
-    if ( cpy_num < 0 )
-	reiserfs_panic (0, "vs-10240: leaf_copy_items: cpy_num < 0 (%d)", cpy_num);
-#endif
-
     if ( cpy_num == 0 )
 	return 0;
  
@@ -582,11 +438,6 @@ static void leaf_define_dest_src_infos (int shift_mode, struct tree_balance * tb
 					struct buffer_info * src_bi, int * first_last,
 					struct buffer_head * Snew)
 {
-#ifdef CONFIG_REISERFS_CHECK
-    memset (dest_bi, 0, sizeof (struct buffer_info));
-    memset (src_bi, 0, sizeof (struct buffer_info));
-#endif
-
     /* define dest, src, dest parent, dest position */
     switch (shift_mode) {
     case LEAF_FROM_S_TO_L:    /* it is used in leaf_shift_left */
@@ -642,12 +493,6 @@ static void leaf_define_dest_src_infos (int shift_mode, struct tree_balance * tb
     default:
 	reiserfs_panic (0, "vs-10250: leaf_define_dest_src_infos: shift type is unknown (%d)", shift_mode);
     }
-#ifdef CONFIG_REISERFS_CHECK
-    if (src_bi->bi_bh == 0 || dest_bi->bi_bh == 0) {
-	reiserfs_panic (0, "vs-10260: leaf_define_dest_src_etc: mode==%d, source (%p) or dest (%p) buffer is initialized incorrectly",
-			shift_mode, src_bi->bi_bh, dest_bi->bi_bh);
-    }
-#endif
 }
 
 
@@ -664,9 +509,9 @@ int leaf_move_items (int shift_mode, struct tree_balance * tb,
 
     leaf_define_dest_src_infos (shift_mode, tb, &dest_bi, &src_bi, &first_last, Snew);
 
-    ret_value = leaf_copy_items (tb->tb_sb, &dest_bi, src_bi.bi_bh, first_last, mov_num, mov_bytes);
+    ret_value = leaf_copy_items (tb->tb_fs, &dest_bi, src_bi.bi_bh, first_last, mov_num, mov_bytes);
 
-    leaf_delete_items (tb->tb_sb, &src_bi, first_last, (first_last == FIRST_TO_LAST) ? 0 : 
+    leaf_delete_items (tb->tb_fs, &src_bi, first_last, (first_last == FIRST_TO_LAST) ? 0 : 
 		       (B_NR_ITEMS(src_bi.bi_bh) - mov_num), mov_num, mov_bytes);
 
   
@@ -687,32 +532,12 @@ int leaf_shift_left (struct tree_balance * tb, int shift_num, int shift_bytes)
     if ( shift_num ) {
 	if (B_NR_ITEMS (S0) == 0) { 
 	    /* everything is moved from S[0] */
-
-#ifdef CONFIG_REISERFS_CHECK
-	    if ( shift_bytes != -1 )
-		reiserfs_panic (tb->tb_sb, "vs-10270: leaf_shift_left: S0 is empty now, but shift_bytes != -1 (%d)", shift_bytes);
-
-	    if (init_mode == M_PASTE || init_mode == M_INSERT) {
-		print_tb (init_mode, init_item_pos, init_pos_in_item, &init_tb, "vs-10275");
-		reiserfs_panic (tb->tb_sb, "vs-10275: leaf_shift_left: balance condition corrupted (%c)", init_mode);
-	    }
-#endif
-
 	    if (PATH_H_POSITION (tb->tb_path, 1) == 0)
-		replace_key(tb->tb_sb, tb->CFL[0], tb->lkey[0], PATH_H_PPARENT (tb->tb_path, 0), 0);
-
-	} else {     
+		replace_key(tb->tb_fs, tb->CFL[0], tb->lkey[0], PATH_H_PPARENT (tb->tb_path, 0), 0);
+	} else {
 	    /* replace lkey in CFL[0] by 0-th key from S[0]; */
-	    replace_key(tb->tb_sb, tb->CFL[0], tb->lkey[0], S0, 0);
+	    replace_key(tb->tb_fs, tb->CFL[0], tb->lkey[0], S0, 0);
       
-#ifdef CONFIG_REISERFS_CHECK
-	    if (shift_bytes != -1 && !(I_IS_DIRECTORY_ITEM (B_N_PITEM_HEAD (S0, 0))
-				       && !ih_entry_count (B_N_PITEM_HEAD (S0, 0)))) {
-		if (!is_left_mergeable (B_N_PITEM_HEAD (S0, 0), S0->b_size)) {
-		    reiserfs_panic (tb->tb_sb, "vs-10280: leaf_shift_left: item must be mergeable");
-		}
-	    }
-#endif
 	}
     }
   
@@ -738,7 +563,7 @@ int leaf_shift_right (struct tree_balance * tb, int shift_num, int shift_bytes)
 
     /* replace rkey in CFR[0] by the 0-th key from R[0] */
     if (shift_num) {
-	replace_key(tb->tb_sb, tb->CFR[0], tb->rkey[0], tb->R[0], 0);
+	replace_key(tb->tb_fs, tb->CFR[0], tb->rkey[0], tb->R[0], 0);
     }
 
     return ret_value;
@@ -746,7 +571,7 @@ int leaf_shift_right (struct tree_balance * tb, int shift_num, int shift_bytes)
 
 
 
-static void leaf_delete_items_entirely (struct super_block * sb,
+static void leaf_delete_items_entirely (reiserfs_filsys_t * sb,
 					/*struct reiserfs_transaction_handle *th,*/
 					struct buffer_info * bi,
 					int first,
@@ -758,25 +583,13 @@ static void leaf_delete_items_entirely (struct super_block * sb,
     If last_first == 1. Starting from position 'first+1' delete del_num-1 items in whole. Delete part of body of
     the last item . Part defined by del_bytes. Don't delete last item header.
 */
-void leaf_delete_items (reiserfs_filsys_t fs,
+void leaf_delete_items (reiserfs_filsys_t * fs,
 			struct buffer_info * cur_bi,
 			int last_first, 
 			int first, int del_num, int del_bytes)
 {
     struct buffer_head * bh;
     int item_amount = B_NR_ITEMS (bh = cur_bi->bi_bh);
-    
-#ifdef CONFIG_REISERFS_CHECK
-    if ( !bh )
-	reiserfs_panic (0, "leaf_delete_items: 10155: bh is not defined");
-    
-    if ( del_num < 0 )
-	reiserfs_panic (0, "leaf_delete_items: 10160: del_num can not be < 0. del_num==%d", del_num);
-    
-    if ( first < 0 || first + del_num > item_amount )
-	reiserfs_panic (0, "leaf_delete_items: 10165: invalid number of first item to be deleted (%d) or "
-			"no so much items (%d) to delete (only %d)", first, first + del_num, item_amount);
-#endif
     
     if ( del_num == 0 )
 	return;
@@ -807,10 +620,10 @@ void leaf_delete_items (reiserfs_filsys_t fs,
 	    
 	    if (I_IS_DIRECTORY_ITEM(ih = B_N_PITEM_HEAD(bh, B_NR_ITEMS(bh)-1))) 	/* the last item is directory  */
 	        /* len = numbers of directory entries in this item */
-	        len = ih_entry_count(ih);
+	        len = get_ih_entry_count(ih);
 	    else
 		/* len = body len of item */
- 	        len = ih->ih_item_len;
+ 	        len = get_ih_item_len (ih);
 	    
 	    /* delete the part of the last item of the bh 
 	       do not delete item header
@@ -822,7 +635,7 @@ void leaf_delete_items (reiserfs_filsys_t fs,
 
 
 /* insert item into the leaf node in position before */
-void leaf_insert_into_buf (struct super_block * s,
+void leaf_insert_into_buf (reiserfs_filsys_t * s,
 			   struct buffer_info * bi,
 			   int before,
 			   struct item_head * inserted_item_ih,
@@ -838,29 +651,20 @@ void leaf_insert_into_buf (struct super_block * s,
     int last_loc, unmoved_loc;
     char * to;
 
-    nr = (blkh = B_BLK_HEAD (bh))->blk_nr_item;
-
-#ifdef CONFIG_REISERFS_CHECK
-    /* check free space */
-    if (blkh->blk_free_space < inserted_item_ih->ih_item_len + IH_SIZE)
-	reiserfs_panic (0, "leaf_insert_into_buf: 10170: not enough free space: needed %d, available %d",
-			inserted_item_ih->ih_item_len + IH_SIZE, blkh->blk_free_space);
-    if (zeros_number > inserted_item_ih->ih_item_len)
-	reiserfs_panic (0, "vs-10172: leaf_insert_into_buf: zero number == %d, item length == %d", zeros_number, inserted_item_ih->ih_item_len);
-#endif /* CONFIG_REISERFS_CHECK */
-
+    blkh = B_BLK_HEAD (bh);
+    nr = get_blkh_nr_items (blkh);
 
     /* get item new item must be inserted before */
     ih = B_N_PITEM_HEAD (bh, before);
 
     /* prepare space for the body of new item */
-    last_loc = nr ? ih[nr - before - 1].ih_item_location : bh->b_size;
-    unmoved_loc = before ? (ih-1)->ih_item_location : bh->b_size;
+    last_loc = nr ? get_ih_location (&ih[nr - before - 1]) : bh->b_size;
+    unmoved_loc = before ? get_ih_location (ih-1) : bh->b_size;
 
-    memmove (bh->b_data + last_loc - inserted_item_ih->ih_item_len, 
+    memmove (bh->b_data + last_loc - get_ih_item_len (inserted_item_ih), 
 	     bh->b_data + last_loc, unmoved_loc - last_loc);
 
-    to = bh->b_data + unmoved_loc - inserted_item_ih->ih_item_len;
+    to = bh->b_data + unmoved_loc - get_ih_item_len (inserted_item_ih);
     memset (to, 0, zeros_number);
     to += zeros_number;
 
@@ -869,28 +673,33 @@ void leaf_insert_into_buf (struct super_block * s,
 	//if (mem_mode == REISERFS_USER_MEM)
 	//  copy_from_user (to, inserted_item_body, inserted_item_ih->ih_item_len - zeros_number);
 	//else {
-	memmove (to, inserted_item_body, inserted_item_ih->ih_item_len - zeros_number);
+	memmove (to, inserted_item_body, get_ih_item_len (inserted_item_ih) - zeros_number);
     //}
     else
-	memset(to, '\0', inserted_item_ih->ih_item_len - zeros_number);
+	memset(to, '\0', get_ih_item_len (inserted_item_ih) - zeros_number);
   
     /* insert item header */
     memmove (ih + 1, ih, IH_SIZE * (nr - before));
     memmove (ih, inserted_item_ih, IH_SIZE);
   
     /* change locations */
-    for (i = before; i < nr + 1; i ++)
-	ih[i-before].ih_item_location =
-	    (unmoved_loc -= ih[i-before].ih_item_len);
+    for (i = before; i < nr + 1; i ++) {
+	unmoved_loc -= get_ih_item_len (&ih[i-before]);
+	set_ih_location (&ih[i-before], unmoved_loc);
+    }
   
     /* sizes, free space, item number */
-    blkh->blk_nr_item ++;
-    blkh->blk_free_space -= (IH_SIZE + inserted_item_ih->ih_item_len);
+    set_blkh_nr_items (blkh, get_blkh_nr_items (blkh) + 1);
+    set_blkh_free_space (blkh, get_blkh_free_space (blkh) -
+			 (IH_SIZE + get_ih_item_len (inserted_item_ih)));
 
     mark_buffer_dirty(bh) ;
 
     if (bi->bi_parent) { 
-	B_N_CHILD (bi->bi_parent, bi->bi_position)->dc_size += (IH_SIZE + inserted_item_ih->ih_item_len);
+	struct disk_child * dc;
+
+	dc = B_N_CHILD (bi->bi_parent, bi->bi_position);
+	set_dc_child_size (dc, get_dc_child_size (dc) + IH_SIZE + get_ih_item_len (inserted_item_ih));
 	mark_buffer_dirty(bi->bi_parent) ;
     }
 
@@ -902,7 +711,7 @@ void leaf_insert_into_buf (struct super_block * s,
 
 /* paste paste_size bytes to affected_item_num-th item. 
    When item is a directory, this only prepare space for new entries */
-void leaf_paste_in_buffer (reiserfs_filsys_t fs,
+void leaf_paste_in_buffer (reiserfs_filsys_t * fs,
 			   struct buffer_info * bi,
 			   int affected_item_num,
 			   int pos_in_item,
@@ -918,27 +727,14 @@ void leaf_paste_in_buffer (reiserfs_filsys_t fs,
     int last_loc, unmoved_loc;
 
 
-    nr = (blkh = B_BLK_HEAD(bh))->blk_nr_item;
-
-#ifdef CONFIG_REISERFS_CHECK
-    /* check free space */
-    if (blkh->blk_free_space < paste_size)
-	reiserfs_panic (th->t_super, "vs-10175: leaf_paste_in_buffer: "
-			"not enough free space: needed %d, available %d",
-			paste_size, blkh->blk_free_space);
-    if (zeros_number > paste_size) {
-	print_tb (init_mode, init_item_pos, init_pos_in_item, &init_tb, "10177");
-	reiserfs_panic (th->t_super, "vs-10177: leaf_paste_in_buffer: "
-			"zero number == %d, paste_size == %d", zeros_number, paste_size);
-    }
-#endif /* CONFIG_REISERFS_CHECK */
-
+    blkh = B_BLK_HEAD (bh);
+    nr = get_blkh_nr_items (blkh);
 
     /* item to be appended */
     ih = B_N_PITEM_HEAD(bh, affected_item_num);
 
-    last_loc = ih[nr - affected_item_num - 1].ih_item_location;
-    unmoved_loc = affected_item_num ? (ih-1)->ih_item_location : bh->b_size;  
+    last_loc = get_ih_location (&ih[nr - affected_item_num - 1]);
+    unmoved_loc = affected_item_num ? get_ih_location (ih-1) : bh->b_size;  
 
     /* prepare space */
     memmove (bh->b_data + last_loc - paste_size, bh->b_data + last_loc,
@@ -947,7 +743,7 @@ void leaf_paste_in_buffer (reiserfs_filsys_t fs,
 
     /* change locations */
     for (i = affected_item_num; i < nr; i ++)
-	ih[i-affected_item_num].ih_item_location -= paste_size;
+	set_ih_location (&ih[i-affected_item_num], get_ih_location (&ih[i-affected_item_num]) - paste_size);
 
     if ( body ) {
 	if (!I_IS_DIRECTORY_ITEM(ih)) {
@@ -958,11 +754,11 @@ void leaf_paste_in_buffer (reiserfs_filsys_t fs,
 	    {
 		if (!pos_in_item) {
 		    /* shift data to right */
-		    memmove (bh->b_data + ih->ih_item_location + paste_size, 
-			     bh->b_data + ih->ih_item_location, ih->ih_item_len);
+		    memmove (bh->b_data + get_ih_location (ih) + paste_size, 
+			     bh->b_data + get_ih_location (ih), get_ih_item_len (ih));
 		    /* paste data in the head of item */
-		    memset (bh->b_data + ih->ih_item_location, 0, zeros_number);
-		    memcpy (bh->b_data + ih->ih_item_location + zeros_number, body, paste_size - zeros_number);
+		    memset (bh->b_data + get_ih_location (ih), 0, zeros_number);
+		    memcpy (bh->b_data + get_ih_location (ih) + zeros_number, body, paste_size - zeros_number);
 		} else {
 		    memset (bh->b_data + unmoved_loc - paste_size, 0, zeros_number);
 		    memcpy (bh->b_data + unmoved_loc - paste_size + zeros_number, body, paste_size - zeros_number);
@@ -973,21 +769,25 @@ void leaf_paste_in_buffer (reiserfs_filsys_t fs,
     else
 	memset(bh->b_data + unmoved_loc - paste_size,'\0',paste_size);
 
-    ih->ih_item_len += paste_size;
+    set_ih_item_len (ih, get_ih_item_len (ih) + paste_size);
 
     /* change free space */
-    blkh->blk_free_space -= paste_size;
+    set_blkh_free_space (blkh, get_blkh_free_space (blkh) - paste_size);
 
     mark_buffer_dirty(bh) ;
 
     if (bi->bi_parent) { 
-	B_N_CHILD (bi->bi_parent, bi->bi_position)->dc_size += paste_size;
+	struct disk_child * dc;
+
+	dc = B_N_CHILD (bi->bi_parent, bi->bi_position);
+	set_dc_child_size (dc, get_dc_child_size (dc) + paste_size);
 	mark_buffer_dirty(bi->bi_parent);
     }
     if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF)
 	reiserfs_panic ("leaf_paste_in_buffer: bad leaf %lu: %b",
 			bh->b_blocknr, bh);
 }
+
 
 /* cuts DEL_COUNT entries beginning from FROM-th entry. Directory item
    does not have free space, so it moves DEHs and remaining records as
@@ -1007,41 +807,44 @@ static int leaf_cut_entries (struct buffer_head * bh,
 
 
     /* first byte of item */
-    item = bh->b_data + ih_location (ih);
+    item = B_I_PITEM (bh, ih);
 
     /* entry head array */
     deh = B_I_DEH (bh, ih);
-    entry_count = ih_entry_count (ih);
+    entry_count = get_ih_entry_count (ih);
 
     if (del_count == 0) {
 	int shift;
 	int last_location;
 
-	last_location = deh_location (deh + entry_count - 1);
+	last_location = get_deh_location (deh + entry_count - 1);
 	shift = last_location - DEH_SIZE * entry_count;
 	
 	memmove (deh + entry_count, item + last_location,
-		 ih_item_len (ih) - last_location);
+		 get_ih_item_len (ih) - last_location);
 	for (i = 0; i < entry_count; i ++)
-	    deh[i].deh_location = cpu_to_le16 (deh_location (deh + i) - shift);
+	    set_deh_location (&deh[i], get_deh_location (&deh[i]) - shift);
+
 	return shift;
     }
 
     /* first byte of remaining entries, those are BEFORE cut entries
        (prev_record) and length of all removed records (cut_records_len) */
-    prev_record_offset = (from ? deh[from - 1].deh_location : ih->ih_item_len);
-    cut_records_len = prev_record_offset/*from_record*/ - deh[from + del_count - 1].deh_location;
+    prev_record_offset = (from ? get_deh_location (&deh[from - 1]) : get_ih_item_len (ih));
+    cut_records_len = prev_record_offset/*from_record*/ - get_deh_location (&deh[from + del_count - 1]);
     prev_record = item + prev_record_offset;
 
 
     /* adjust locations of remaining entries */
-    for (i = ih_entry_count (ih) - 1; i > from + del_count - 1; i --)
-	deh[i].deh_location -= (DEH_SIZE * del_count);
+    for (i = get_ih_entry_count (ih) - 1; i > from + del_count - 1; i --) {
+	set_deh_location (deh + i, get_deh_location (deh + i) - (DEH_SIZE * del_count));
+    }
 
-    for (i = 0; i < from; i ++)
-	deh[i].deh_location -= DEH_SIZE * del_count + cut_records_len;
+    for (i = 0; i < from; i ++) {
+	set_deh_location (deh + i, get_deh_location (deh + i) - (DEH_SIZE * del_count + cut_records_len));
+    }
 
-    set_entry_count (ih, ih_entry_count (ih) - del_count);
+    set_ih_entry_count (ih, get_ih_entry_count (ih) - del_count);
 
     /* shift entry head array and entries those are AFTER removed entries */
     memmove ((char *)(deh + from),
@@ -1050,7 +853,7 @@ static int leaf_cut_entries (struct buffer_head * bh,
   
     /* shift records, those are BEFORE removed entries */
     memmove (prev_record - cut_records_len - DEH_SIZE * del_count,
-	     prev_record, item + ih->ih_item_len - prev_record);
+	     prev_record, item + get_ih_item_len (ih) - prev_record);
 
     return DEH_SIZE * del_count + cut_records_len;
 }
@@ -1064,7 +867,7 @@ static int leaf_cut_entries (struct buffer_head * bh,
         pos_in_item - number of first deleted entry
         cut_size - count of deleted entries
     */
-void leaf_cut_from_buffer (reiserfs_filsys_t fs,
+void leaf_cut_from_buffer (reiserfs_filsys_t * fs,
 			   struct buffer_info * bi, int cut_item_num,
 			   int pos_in_item, int cut_size)
 {
@@ -1075,7 +878,8 @@ void leaf_cut_from_buffer (reiserfs_filsys_t fs,
     int last_loc, unmoved_loc;
     int i;
 
-    nr = (blkh = B_BLK_HEAD (bh))->blk_nr_item;
+    blkh = B_BLK_HEAD (bh);
+    nr = get_blkh_nr_items (blkh);
 
     /* item head of truncated item */
     ih = B_N_PITEM_HEAD (bh, cut_item_num);
@@ -1084,32 +888,17 @@ void leaf_cut_from_buffer (reiserfs_filsys_t fs,
         /* first cut entry ()*/
         cut_size = leaf_cut_entries (bh, ih, pos_in_item, cut_size);
         if (pos_in_item == 0) {
-	        /* change key */
-#ifdef CONFIG_REISERFS_CHECK
-            if (cut_item_num)
-                reiserfs_panic (th->t_super, "leaf_cut_from_buffer: 10190: " 
-                    "when 0-th enrty of item is cut, that item must be first in the node, not %d-th", cut_item_num);
-#endif
             /* change item key by key of first entry in the item */
-	    ih->ih_key.u.k_offset_v1.k_offset = B_I_DEH (bh, ih)->deh_offset;
-	    
+	    set_key_offset_v1 (&ih->ih_key, get_deh_offset (B_I_DEH (bh, ih)));
             /*memcpy (&ih->ih_key.k_offset, &(B_I_DEH (bh, ih)->deh_offset), SHORT_KEY_SIZE);*/
-	    }
+	}
     } else {
         /* item is direct or indirect */
-#ifdef CONFIG_REISERFS_CHECK
-        if (I_IS_STAT_DATA_ITEM (ih))
-	    reiserfs_panic (th->t_super, "leaf_cut_from_buffer: 10195: item is stat data");
-	
-        if (pos_in_item && pos_in_item + cut_size != ih->ih_item_len )
-            reiserfs_panic (th->t_super, "cut_from_buf: 10200: invalid offset (%lu) or trunc_size (%lu) or ih_item_len (%lu)",
-			    pos_in_item, cut_size, ih->ih_item_len);
-#endif
-
         /* shift item body to left if cut is from the head of item */
         if (pos_in_item == 0) {
-            memmove (bh->b_data + ih->ih_item_location, bh->b_data + ih->ih_item_location + cut_size,
-                ih->ih_item_len - cut_size);
+	    memmove (bh->b_data + get_ih_location (ih),
+		     bh->b_data + get_ih_location (ih) + cut_size,
+		     get_ih_item_len (ih) - cut_size);
 
             /* change key of item */
             if (I_IS_DIRECT_ITEM(ih)) {
@@ -1119,20 +908,16 @@ void leaf_cut_from_buffer (reiserfs_filsys_t fs,
                 //ih->ih_key.k_offset += (cut_size / UNFM_P_SIZE) * bh->b_size;
                 set_offset (key_format (&ih->ih_key), &ih->ih_key, 
 			    get_offset (&ih->ih_key) + (cut_size / UNFM_P_SIZE) * bh->b_size);
-#ifdef CONFIG_REISERFS_CHECK
-                if ( ih->ih_item_len == cut_size && ih_free_space (ih) )
-                    reiserfs_panic (th->t_super, "leaf_cut_from_buf: 10205: invalid ih_free_space (%lu)", ih_free_space (ih));
-#endif
-	        }
 	    }
+	}
     }
   
 
     /* location of the last item */
-    last_loc = ih[nr - cut_item_num - 1].ih_item_location;
+    last_loc = get_ih_location (&ih[nr - cut_item_num - 1]);
 
     /* location of the item, which is remaining at the same place */
-    unmoved_loc = cut_item_num ? (ih-1)->ih_item_location : bh->b_size;
+    unmoved_loc = cut_item_num ? get_ih_location (ih-1) : bh->b_size;
 
 
     /* shift */
@@ -1140,26 +925,30 @@ void leaf_cut_from_buffer (reiserfs_filsys_t fs,
 	       unmoved_loc - last_loc - cut_size);
 
     /* change item length */
-    ih->ih_item_len -= cut_size;
+    set_ih_item_len (ih, get_ih_item_len (ih) - cut_size);
   
     if (I_IS_INDIRECT_ITEM(ih)) {
         if (pos_in_item)
             //ih->u.ih_free_space = 0;
-            set_free_space (ih, 0);
+            set_ih_free_space (ih, 0);
     }
 
     /* change locations */
-    for (i = cut_item_num; i < nr; i ++)
-        ih[i-cut_item_num].ih_item_location += cut_size;
+    for (i = cut_item_num; i < nr; i ++) {
+	set_ih_location (&ih[i-cut_item_num], get_ih_location (&ih[i-cut_item_num]) + cut_size);
+    }
 
     /* size, free space */
-    blkh->blk_free_space += cut_size;
+    set_blkh_free_space (blkh, get_blkh_free_space (blkh) + cut_size);
 
     mark_buffer_dirty(bh);
     
-    if (bi->bi_parent) { 
-      B_N_CHILD (bi->bi_parent, bi->bi_position)->dc_size -= cut_size; 
-      mark_buffer_dirty(bi->bi_parent);
+    if (bi->bi_parent) {
+	struct disk_child * dc;
+
+	dc = B_N_CHILD (bi->bi_parent, bi->bi_position);
+	set_dc_child_size (dc, get_dc_child_size (dc) - cut_size);
+	mark_buffer_dirty(bi->bi_parent);
     }
     if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF)
 	reiserfs_panic ("leaf_cut_from_buffer: bad leaf %lu: %b",
@@ -1168,7 +957,7 @@ void leaf_cut_from_buffer (reiserfs_filsys_t fs,
 
 
 /* delete del_num items from buffer starting from the first'th item */
-static void leaf_delete_items_entirely (reiserfs_filsys_t fs,
+static void leaf_delete_items_entirely (reiserfs_filsys_t * fs,
 					struct buffer_info * bi,
 					int first, int del_num)
 {
@@ -1179,24 +968,11 @@ static void leaf_delete_items_entirely (reiserfs_filsys_t fs,
     struct block_head * blkh;
     struct item_head * ih;
 
-
-#ifdef CONFIG_REISERFS_CHECK
-    if (bh == NULL)
-	reiserfs_panic (0, "leaf_delete_items_entirely: 10210: buffer is 0");
-
-    if (del_num < 0)
-	reiserfs_panic (0, "leaf_delete_items_entirely: 10215: del_num less than 0 (%d)", del_num);
-#endif /* CONFIG_REISERFS_CHECK */
-    
     if (del_num == 0)
 	return;
     
-    nr = (blkh = B_BLK_HEAD(bh))->blk_nr_item;
-
-#ifdef CONFIG_REISERFS_CHECK
-    if (first < 0 || first + del_num > nr)
-	reiserfs_panic (0, "leaf_delete_items_entirely: 10220: first=%d, number=%d, there is %d items", first, del_num, nr);
-#endif /* CONFIG_REISERFS_CHECK */
+    blkh = B_BLK_HEAD (bh);
+    nr = get_blkh_nr_items (blkh);
 
     if (first == 0 && del_num == nr) {
 	/* this does not work */
@@ -1209,11 +985,11 @@ static void leaf_delete_items_entirely (reiserfs_filsys_t fs,
     ih = B_N_PITEM_HEAD (bh, first);
     
     /* location of unmovable item */
-    j = (first == 0) ? bh->b_size : (ih-1)->ih_item_location;
+    j = (first == 0) ? bh->b_size : get_ih_location (ih-1);
     
     /* delete items */
-    last_loc = ih[nr-1-first].ih_item_location;
-    last_removed_loc = ih[del_num-1].ih_item_location;
+    last_loc = get_ih_location (&ih[nr - 1 - first]);
+    last_removed_loc = get_ih_location (&ih[del_num-1]);
     
     memmove (bh->b_data + last_loc + j - last_removed_loc,
 	     bh->b_data + last_loc, last_removed_loc - last_loc);
@@ -1222,17 +998,21 @@ static void leaf_delete_items_entirely (reiserfs_filsys_t fs,
     memmove (ih, ih + del_num, (nr - first - del_num) * IH_SIZE);
     
     /* change item location */
-    for (i = first; i < nr - del_num; i ++)
-	ih[i-first].ih_item_location += j - last_removed_loc;
+    for (i = first; i < nr - del_num; i ++) {
+	set_ih_location (&ih[i-first], get_ih_location (&ih[i-first]) + j - last_removed_loc);
+    }
     
     /* sizes, item number */
-    blkh->blk_nr_item -= del_num;
-    blkh->blk_free_space += j - last_removed_loc + IH_SIZE * del_num;
+    set_blkh_nr_items (blkh, get_blkh_nr_items (blkh)/*nr*/ - del_num);
+    set_blkh_free_space (blkh, get_blkh_free_space (blkh) + j - last_removed_loc + IH_SIZE * del_num);
     
     mark_buffer_dirty(bh);
     
     if (bi->bi_parent) {
-	B_N_CHILD (bi->bi_parent, bi->bi_position)->dc_size -= j - last_removed_loc + IH_SIZE * del_num;
+	struct disk_child * dc;
+
+	dc = B_N_CHILD (bi->bi_parent, bi->bi_position);
+	set_dc_child_size (dc, get_dc_child_size (dc) - (j - last_removed_loc + IH_SIZE * del_num));
 	mark_buffer_dirty(bi->bi_parent);
     }
     if (who_is_this (bh->b_data, bh->b_size) != THE_LEAF)
@@ -1261,40 +1041,29 @@ void leaf_paste_entries (struct buffer_head * bh,
 
     ih = B_N_PITEM_HEAD(bh, item_num);
 
-#ifdef CONFIG_REISERFS_CHECK
-    /* make sure, that item is directory, and there are enough records in it */
-    if (!I_IS_DIRECTORY_ITEM (ih))
-	reiserfs_panic (0, "leaf_paste_entries: 10225: item is not directory item");
-
-    if (ih_entry_count (ih) < before)
-	reiserfs_panic (0, "leaf_paste_entries: 10230: there are no entry we paste entries before. entry_count = %d, before = %d",
-			ih_entry_count (ih), before);
-#endif
-
-
     /* first byte of dest item */
-    item = bh->b_data + ih->ih_item_location;
+    item = B_I_PITEM (bh, ih);
 
     /* entry head array */
     deh = B_I_DEH (bh, ih);
 
     /* new records will be pasted at this point */
-    insert_point = item + (before ? deh[before - 1].deh_location : (ih->ih_item_len - paste_size));
+    insert_point = item + (before ? get_deh_location (&deh[before - 1]) : (get_ih_item_len (ih) - paste_size));
 
     /* adjust locations of records that will be AFTER new records */
-    for (i = ih_entry_count (ih) - 1; i >= before; i --)
-	deh[i].deh_location += DEH_SIZE * new_entry_count;
+    for (i = get_ih_entry_count (ih) - 1; i >= before; i --)
+	set_deh_location (deh + i, get_deh_location (deh + i) + DEH_SIZE * new_entry_count);
 
     /* adjust locations of records that will be BEFORE new records */
     for (i = 0; i < before; i ++)
-	deh[i].deh_location += paste_size;
+	set_deh_location (deh + i, get_deh_location (deh + i) + paste_size);
 
-    old_entry_num = ih_entry_count (ih);
+    old_entry_num = get_ih_entry_count (ih);
     //I_ENTRY_COUNT(ih) += new_entry_count;
-    set_entry_count (ih, old_entry_num + new_entry_count);
+    set_ih_entry_count (ih, old_entry_num + new_entry_count);
 
     /* prepare space for pasted records */
-    memmove (insert_point + paste_size, insert_point, item + (ih->ih_item_len - paste_size) - insert_point);
+    memmove (insert_point + paste_size, insert_point, item + (get_ih_item_len (ih) - paste_size) - insert_point);
 
     /* copy new records */
     memcpy (insert_point + DEH_SIZE * new_entry_count, records,
@@ -1310,39 +1079,21 @@ void leaf_paste_entries (struct buffer_head * bh,
 
     /* set locations of new records */
     for (i = 0; i < new_entry_count; i ++)
-	deh[i].deh_location +=
-	    (- new_dehs[new_entry_count - 1].deh_location + insert_point + DEH_SIZE * new_entry_count - item);
+	set_deh_location (deh + i,
+			  get_deh_location (deh + i) + (- get_deh_location (&new_dehs[new_entry_count - 1]) +
+							insert_point + DEH_SIZE * new_entry_count - item));
 
 
     /* change item key if neccessary (when we paste before 0-th entry */
     if (!before)
-	ih->ih_key.u.k_offset_v1.k_offset = new_dehs->deh_offset;
-
-
-#ifdef CONFIG_REISERFS_CHECK
-    {
-	int prev, next;
-	/* check record locations */
-	deh = B_I_DEH (bh, ih);
-	for (i = 0; i < ih_entry_count(ih); i ++) {
-	    next = (i < ih_entry_count(ih) - 1) ? deh[i + 1].deh_location : 0;
-	    prev = (i != 0) ? deh[i - 1].deh_location : 0;
-      
-	    if (prev && prev <= deh[i].deh_location)
-		reiserfs_warning ("vs-10240: leaf_paste_entries: directory item corrupted (%d %d)\n", prev, deh[i].deh_location);
-	    if (next && next >= deh[i].deh_location)
-		reiserfs_warning ("vs-10250: leaf_paste_entries: directory item corrupted (%d %d)\n", prev, deh[i].deh_location);
-	}
-    }
-#endif
-
+	set_key_offset_v1 (&ih->ih_key, get_deh_offset (new_dehs));
 }
 
 
 
 /* wrappers for operations on one separated node */
 
-void delete_item (reiserfs_filsys_t fs,
+void delete_item (reiserfs_filsys_t * fs,
 		  struct buffer_head * bh, int item_num)
 {
     struct buffer_info bi;
@@ -1354,7 +1105,7 @@ void delete_item (reiserfs_filsys_t fs,
 }
 
 
-void cut_entry (reiserfs_filsys_t fs, struct buffer_head * bh,
+void cut_entry (reiserfs_filsys_t * fs, struct buffer_head * bh,
 		int item_num, int entry_num, int del_count)
 {
     struct buffer_info bi;

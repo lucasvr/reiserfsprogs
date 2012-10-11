@@ -1,11 +1,13 @@
 /*
- * Copyright 1996, 1997, 1998 Hans Reiser
+ * Copyright 1996-2002 Hans Reiser
  */
-/*#define _GNU_SOURCE*/
-/*#define _FILE_OFFSET_BITS 64*/
 
+/* for stat64() */
+#define _FILE_OFFSET_BITS 64
+
+/* for getline() proto and _LARGEFILE64_SOURCE */
+#define _GNU_SOURCE
 #include <stdio.h>
-#include <unistd.h>
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
@@ -13,114 +15,28 @@
 #include <stdlib.h>
 #include <mntent.h>
 #include <sys/vfs.h>
-#include <time.h>
 #include <fcntl.h>
-#include <sys/stat.h>
+#include <time.h>
+#include <utime.h>
+#include <ctype.h>
+
+#include <unistd.h>
+//#include <linux/unistd.h>
+//#include <sys/stat.h>
+
+#if defined(__linux__) && defined(_IOR) && !defined(BLKGETSIZE64)
+#   define BLKGETSIZE64 _IOR(0x12, 114, sizeof(__u64))
+#endif
+    
+
+#include "swab.h"
 
 #include "io.h"
+#include "misc.h"
 
-/*
- * These have been stolen somewhere from linux
- */
-int set_bit (int nr, void * addr)
-{
-    __u8 * p, mask;
-    int retval;
-
-    p = (__u8 *)addr;
-    p += nr >> 3;
-    mask = 1 << (nr & 0x7);
-    /*cli();*/
-    retval = (mask & *p) != 0;
-    *p |= mask;
-    /*sti();*/
-    return retval;
-}
-
-
-int clear_bit (int nr, void * addr)
-{
-    __u8 * p, mask;
-    int retval;
-
-    p = (__u8 *)addr;
-    p += nr >> 3;
-    mask = 1 << (nr & 0x7);
-    /*cli();*/
-    retval = (mask & *p) != 0;
-    *p &= ~mask;
-    /*sti();*/
-    return retval;
-}
-
-int test_bit(int nr, const void * addr)
-{
-    __u8 * p, mask;
-  
-    p = (__u8 *)addr;
-    p += nr >> 3;
-    mask = 1 << (nr & 0x7);
-    return ((mask & *p) != 0);
-}
-
-int find_first_zero_bit (const void *vaddr, unsigned size)
-{
-    const __u8 *p = vaddr, *addr = vaddr;
-    int res;
-
-    if (!size)
-	return 0;
-
-    size = (size >> 3) + ((size & 0x7) > 0);
-    while (*p++ == 255) {
-	if (--size == 0)
-	    return (p - addr) << 3;
-    }
-  
-    --p;
-    for (res = 0; res < 8; res++)
-	if (!test_bit (res, p))
-	    break;
-    return (p - addr) * 8 + res;
-}
-
-
-int find_next_zero_bit (const void *vaddr, unsigned size, unsigned offset)
-{
-    const __u8 *addr = vaddr;
-    const __u8 *p = addr + (offset >> 3);
-    int bit = offset & 7, res;
-  
-    if (offset >= size)
-	return size;
-  
-    if (bit) {
-	/* Look for zero in first char */
-	for (res = bit; res < 8; res++)
-	    if (!test_bit (res, p))
-		return (p - addr) * 8 + res;
-	p++;
-    }
-    /* No zero yet, search remaining full bytes for a zero */
-    res = find_first_zero_bit (p, size - 8 * (p - addr));
-    return (p - addr) * 8 + res;
-}
-
-
-/*int test_and_set_bit (int nr, void * addr)
-{
-  int oldbit = test_bit (nr, addr);
-  set_bit (nr, addr);
-  return oldbit;
-}
-
-
-int test_and_clear_bit (int nr, void * addr)
-{
-  int oldbit = test_bit (nr, addr);
-  clear_bit (nr, addr);
-  return oldbit;
-}*/
+/* Debian modifications by Ed Boraas <ed@debian.org> */
+#include <sys/mount.h>
+/* End Debian mods */
 
 
 void die (char * fmt, ...)
@@ -133,9 +49,8 @@ void die (char * fmt, ...)
     va_end (args);
 
     fprintf (stderr, "\n%s\n\n\n", buf);
-    exit (-1);
+    abort ();
 }
-
 
 
 #define MEM_BEGIN "_mem_begin_"
@@ -144,7 +59,7 @@ void die (char * fmt, ...)
 #define CONTROL_SIZE (strlen (MEM_BEGIN) + 1 + sizeof (int) + strlen (MEM_END) + 1)
 
 
-static int get_mem_size (char * p)
+int get_mem_size (char * p)
 {
     char * begin;
 
@@ -189,7 +104,7 @@ void * getmem (int size)
     p += size;
     strcpy (p, MEM_END);
 
-    checkmem (mem, size);
+//    checkmem (mem, size);
 
     return mem;
 }
@@ -223,7 +138,7 @@ void * expandmem (void * vp, int size, int by)
     if(by > 0)
         memset (mem + size, 0, by);
     strcpy (mem + size + by, MEM_END);
-    checkmem (mem, size + by);
+//    checkmem (mem, size + by);
 
     return mem;
 }
@@ -246,48 +161,81 @@ void freemem (void * vp)
 }
 
 
-
 typedef int (*func_t) (char *);
 
 static int is_readonly_dir (char * dir)
 {
-    char * name;
-    FILE * f;
+/*
+    int fd;
+    char template [1024];
 
-    name = tempnam (dir, 0);
-    if (!name) {	
-	fprintf (stderr, "is_readonly: tempnam failed, think fs is not readonly\n");
+    snprintf (template, 1024, "%s/testXXXXXX", dir);
+    fd = mkstemp (template);
+    if (fd >= 0) {
+	close (fd);
 	return 0;
     }
-
-    f = fopen (name, "w");
-    if (f) {
-	unlink (name);
-	free (name);
+*/
+    if (utime (dir, 0) != -1)
+	/* this is not ro mounted fs */
 	return 0;
-    }
-    free (name);
     return (errno == EROFS) ? 1 : 0;
 }
 
-int user_confirmed (char * q, char * yes)
-{
-    char * answer = 0;
-    size_t n = 0;
 
-    fprintf (stderr, "%s", q);
-    if (getline (&answer, &n, stdin) != strlen (yes) || strcmp (yes, answer))
-	return 0;
-
-    return 1;
-}
-
+#ifdef __i386__
 
 #include <unistd.h>
 #include <linux/unistd.h>
 
-#define __NR_stat64 195
-_syscall2(long, stat64, char *, filename, struct stat *, statbuf);
+#define __NR_bad_stat64 195
+_syscall2(long, bad_stat64, char *, filename, struct stat64 *, statbuf);
+
+#else
+
+#define bad_stat64 stat64
+
+#endif
+
+/* yes, I know how ugly it is */
+#define return_stat_field(field) \
+    struct stat st;\
+    struct stat64 st64;\
+\
+    if (bad_stat64 (file_name, &st64) == 0) {\
+	return st64.st_##field;\
+    } else if (stat (file_name, &st) == 0)\
+	return st.st_##field;\
+\
+    perror ("stat failed");\
+    exit (1);\
+
+
+mode_t get_st_mode (char * file_name)
+{
+    return_stat_field (mode);
+}
+
+
+/* may I look at this undocumented (at least in the info of libc 2.3.1-58)
+   field? */
+dev_t get_st_rdev (char * file_name)
+{
+    return_stat_field (rdev);
+}
+
+
+off64_t get_st_size (char * file_name)
+{
+    return_stat_field (size);
+}
+
+
+blkcnt64_t get_st_blocks (char * file_name)
+{
+    return_stat_field (blocks);
+}
+
 
 
 static int _is_mounted (char * device_name, func_t f)
@@ -297,27 +245,22 @@ static int _is_mounted (char * device_name, func_t f)
     struct mntent *mnt;
     struct statfs stfs;
     struct stat root_st;
-    struct stat device_st;
-    /*    struct stat64 device_st64;*/
-    int used_stat64 = 1;
+    mode_t mode;
 
     if (stat ("/", &root_st) == -1)
 	die ("is_mounted: could not stat \"/\": %m\n");
 
-    if (stat64 (device_name, &device_st) == -1) {
-	used_stat64 = 0;
-	if (stat (device_name, &device_st) == -1)
-	    die ("is_mounted: could not stat file \"%s\": %m",
-		 device_name);
-    }
 
-    if ((used_stat64 && !S_ISBLK (device_st.st_mode)) || !S_ISBLK (device_st.st_mode))
-	/* not block device file could not be mounted */
+    mode = get_st_mode (device_name);
+    if (S_ISREG (mode))
+	/* regular file can not be mounted */
 	return 0;
 
-    if ((used_stat64 && root_st.st_dev == device_st.st_rdev) ||
-	root_st.st_dev == device_st.st_rdev) {
-	/* device is mounted as root */
+    if (!S_ISBLK (mode))
+	die ("is_mounted: %s is neither regular file nor block device", device_name);
+
+    if (root_st.st_dev == get_st_rdev (device_name)) {
+	/* device is mounted as root. Check whether it is mounted read-only */
 	return (f ? f ("/") : 1);
     }
 
@@ -327,17 +270,17 @@ static int _is_mounted (char * device_name, func_t f)
 	/* proc filesystem is not mounted, or /proc/mounts does not
            exist */
 	if (f)
-	    return (user_confirmed (" (could not figure out) Is filesystem mounted read-only? (Yes)",
+	    return (user_confirmed (stderr, " (could not figure out) Is filesystem mounted read-only? (Yes)",
 				    "Yes\n"));
 	else
-	    return (user_confirmed (" (could not figure out) Is filesystem mounted? (Yes)",
+	    return (user_confirmed (stderr, " (could not figure out) Is filesystem mounted? (Yes)",
 				    "Yes\n"));
     }
     
     retval = 0;
     while ((mnt = getmntent (fp)) != NULL)
 	if (strcmp (device_name, mnt->mnt_fsname) == 0) {
-	    retval = (f ? f (mnt->mnt_dir) : 1);
+	    retval = (f ? f (mnt->mnt_dir) : 1/*mounted*/);
 	    break;
 	}
     endmntent (fp);
@@ -364,7 +307,7 @@ char buf2 [100];
 void print_how_fast (unsigned long passed, unsigned long total,
 		     int cursor_pos, int reset_time)
 {
-    static time_t t0, t1;
+    static time_t t0 = 0, t1 = 0, t2 = 0;
     int speed;
     int indent;
 
@@ -372,9 +315,14 @@ void print_how_fast (unsigned long passed, unsigned long total,
 	time (&t0);
 
     time (&t1);
-    if (t1 != t0)
+    if (t1 != t0) {
 	speed = passed / (t1 - t0);
-    else
+	if (total - passed) {
+	    if (t1 - t2 < 1)
+	        return;
+	    t2 = t1;
+	}	
+    } else
 	speed = 0;
 
     /* what has to be written */
@@ -414,7 +362,8 @@ static void str_to_be (char * buf, int prosents)
 }
 
 
-void print_how_far (unsigned long * passed, unsigned long total,
+void print_how_far (FILE * fp,
+		    unsigned long * passed, unsigned long total,
 		    int inc, int quiet)
 {
     int percent;
@@ -424,8 +373,8 @@ void print_how_far (unsigned long * passed, unsigned long total,
 
     (*passed) += inc;
     if (*passed > total) {
-	fprintf (stderr, "\nprint_how_far: total %lu has been reached already. cur=%lu\n",
-		 total, *passed);
+/*	fprintf (fp, "\nprint_how_far: total %lu has been reached already. cur=%lu\n",
+	total, *passed);*/
 	return;
     }
 
@@ -434,7 +383,7 @@ void print_how_far (unsigned long * passed, unsigned long total,
     str_to_be (progress_to_be, percent);
 
     if (strlen (current_progress) != strlen (progress_to_be)) {
-	fprintf (stderr, "%s", progress_to_be + strlen (current_progress));
+	fprintf (fp, "%s", progress_to_be + strlen (current_progress));
     }
 
     strcat (current_progress, progress_to_be + strlen (current_progress));
@@ -443,149 +392,47 @@ void print_how_far (unsigned long * passed, unsigned long total,
 	print_how_fast (*passed/* - inc*/, total, strlen (progress_to_be),
 			(*passed == inc) ? 1 : 0);
 
-    fflush (stderr);
+    fflush (fp);
 }
 
 
 
-#define ENDIANESS_NOT_DEFINED 0
-#define LITTLE_ENDIAN_ARCH 1
-#define BIG_ENDIAN_ARCH 2
 
-static int endianess = ENDIANESS_NOT_DEFINED;
-
-
-static void find_endianess (void)
-{
-    __u32 x = 0x0f0d0b09;
-    char * s;
-
-    s = (char *)&x;
-
-    // little-endian is 1234
-    if (s[0] == '\11' && s[1] == '\13' && s[2] == '\15' && s[3] == '\17')
-	endianess = LITTLE_ENDIAN_ARCH;
-
-    // big-endian is 4321
-    if (s[0] == '\17' && s[1] == '\15' && s[2] == '\13' && s[3] == '\11')
-	die ("big-endian archs are not supported");
-
-    // nuxi/pdp-endian is 3412
-    if (s[0] == '\15' && s[1] == '\17' && s[2] == '\11' && s[3] == '\13')
-	die ("nuxi/pdp-endian archs are not supported");
-}
-
-
-// we used to use such function in the kernel stuff of reiserfs. Lets
-// have them in utils as well
-inline __u32 cpu_to_le32 (__u32 val)
-{
-    if (endianess == ENDIANESS_NOT_DEFINED)
-	find_endianess ();
-
-    if (endianess == LITTLE_ENDIAN_ARCH)
-	return val;
-
-    die ("neither big- nor any other endian archs are supported yet ");
-
-    return ((val>>24) | ((val>>8)&0xFF00) |
-	    ((val<<8)&0xFF0000) | (val<<24));
-}
-
-
-inline __u32 le32_to_cpu (__u32 val)
-{
-    return cpu_to_le32 (val);
-}
-
-
-inline __u16 cpu_to_le16 (__u16 val)
-{
-    return val;
-
-    if (endianess == ENDIANESS_NOT_DEFINED)
-	find_endianess ();
-
-    if (endianess == LITTLE_ENDIAN_ARCH)
-	return val;
-    die ("neither big- nor pdp- endian arch are supported yet ");
-
-    return (val >> 8) | (val << 8);
-}
-
-
-inline __u16 le16_to_cpu (__u16 val)
-{
-    /*printf ("%s:%u %p %p %p\n", __FILE__, __LINE__,
-	    __builtin_return_address (0),
-	    __builtin_return_address (1),
-	    __builtin_return_address (2));*/
-    return val;
-    return cpu_to_le16 (val);
-}
-
-
-inline __u64 cpu_to_le64 (__u64 val)
-{
-    if (endianess == ENDIANESS_NOT_DEFINED)
-	find_endianess ();
-
-    if (endianess == LITTLE_ENDIAN_ARCH)
-	return val;
-    die ("neither big- nor pdp- endian arch are supported yet ");
-
-    return 0;
-}
-
-
-inline __u64 le64_to_cpu (__u64 val)
-{
-    return cpu_to_le64 (val);
-}
-
-
-/* Given a file descriptor and an offset, check whether the offset is
-   a valid offset for the file - return 0 if it isn't valid or 1 if it
-   is */
-loff_t reiserfs_llseek (unsigned int fd, loff_t offset, unsigned int origin);
-#if 0
-static int valid_offset( int fd, loff_t offset )
-{
-    char ch;
-    loff_t res;
-
-    /*res = reiserfs_llseek (fd, offset, 0);*/
-    res = lseek64 (fd, offset, 0);
-    if (res < 0)
-	return 0;
-
-    if (read (fd, &ch, 1) < 1)
-	return 0;
-
-    return 1;
-}
-#endif
-
-/* calculates number of blocks on device */
-unsigned long count_blocks (char * filename, int blocksize, int fd)
+/* calculates number of blocks in a file. Returns 0 for "sparse"
+   regular files and files other than regular files and block devices */
+unsigned long count_blocks (char * filename, int blocksize)
 {
     loff_t high, low;
-    int opened_here = 0;
+    int fd;
 
-    if (fd < 0) {
-	fd = open (filename, O_RDONLY);
-	opened_here = 1;
-    }
-    if (fd < 0)
+    if (!S_ISBLK (get_st_mode (filename)) && !S_ISREG (get_st_mode (filename)))
+	return 0;
+
+    fd = open (filename, O_RDONLY);
+    if (fd == -1)
 	die ("count_blocks: open failed (%s)", strerror (errno));
+
+#ifdef BLKGETSIZE64
+    {
+	__u64 size;
+	unsigned long sz;
+
+	if (ioctl (fd, BLKGETSIZE64, &size) >= 0) {
+	    size /= blocksize;
+	    sz = size;
+	    if ((__u64)sz != size)
+		    die ("count_blocks: block device too large");
+	    return sz;
+	}
+    }
+#endif
+
 
 #ifdef BLKGETSIZE
     {
-	long size;
+	unsigned long size;
 
 	if (ioctl (fd, BLKGETSIZE, &size) >= 0) {
-	    if (opened_here)
-		close (fd);
 	    return  size / (blocksize / 512);
 	}
     }
@@ -603,11 +450,413 @@ unsigned long count_blocks (char * filename, int blocksize, int fd)
 	    high = mid;
     }
     valid_offset (fd, 0);
-    if (opened_here)
-        close (fd);
+
+    close (fd);
 
     return (low + 1) / (blocksize);
 }
 
 
+
+/*
+ * These have been stolen somewhere from linux
+ */
+int le_set_bit (int nr, void * addr)
+{
+    __u8 * p, mask;
+    int retval;
+
+    p = (__u8 *)addr;
+    p += nr >> 3;
+    mask = 1 << (nr & 0x7);
+    /*cli();*/
+    retval = (mask & *p) != 0;
+    *p |= mask;
+    /*sti();*/
+    return retval;
+}
+
+
+int le_clear_bit (int nr, void * addr)
+{
+    __u8 * p, mask;
+    int retval;
+
+    p = (__u8 *)addr;
+    p += nr >> 3;
+    mask = 1 << (nr & 0x7);
+    /*cli();*/
+    retval = (mask & *p) != 0;
+    *p &= ~mask;
+    /*sti();*/
+    return retval;
+}
+
+int le_test_bit(int nr, const void * addr)
+{
+    __u8 * p, mask;
+  
+    p = (__u8 *)addr;
+    p += nr >> 3;
+    mask = 1 << (nr & 0x7);
+    return ((mask & *p) != 0);
+}
+
+int le_find_first_zero_bit (const void *vaddr, unsigned size)
+{
+    const __u8 *p = vaddr, *addr = vaddr;
+    int res;
+
+    if (!size)
+	return 0;
+
+    size = (size >> 3) + ((size & 0x7) > 0);
+    while (*p++ == 255) {
+	if (--size == 0)
+	    return (p - addr) << 3;
+    }
+  
+    --p;
+    for (res = 0; res < 8; res++)
+	if (!test_bit (res, p))
+	    break;
+    return (p - addr) * 8 + res;
+}
+
+
+int le_find_next_zero_bit (const void *vaddr, unsigned size, unsigned offset)
+{
+    const __u8 *addr = vaddr;
+    const __u8 *p = addr + (offset >> 3);
+    int bit = offset & 7, res;
+  
+    if (offset >= size)
+	return size;
+  
+    if (bit) {
+	/* Look for zero in first char */
+	for (res = bit; res < 8; res++)
+	    if (!test_bit (res, p))
+		return (p - addr) * 8 + res;
+	p++;
+    }
+    /* No zero yet, search remaining full bytes for a zero */
+    res = find_first_zero_bit (p, size - 8 * (p - addr));
+    return (p - addr) * 8 + res;
+}
+
+int be_set_bit (int nr, void * addr)
+{
+    __u8 mask = 1 << (nr & 0x7);
+    __u8 *p = (__u8 *) addr + (nr >> 3);
+    __u8 old = *p;
+
+    *p |= mask;
+
+    return (old & mask) != 0;
+}
+ 
+int be_clear_bit (int nr, void * addr)
+{
+    __u8 mask = 1 << (nr & 0x07);
+    __u8 *p = (unsigned char *) addr + (nr >> 3);
+    __u8 old = *p;
+ 
+    *p = *p & ~mask;
+    return (old & mask) != 0;
+}
+ 
+int be_test_bit(int nr, const void * addr)
+{
+    const __u8 *ADDR = (__const__ __u8 *) addr;
+ 
+    return ((ADDR[nr >> 3] >> (nr & 0x7)) & 1) != 0;
+}
+ 
+int be_find_first_zero_bit (const void *vaddr, unsigned size)
+{
+    return find_next_zero_bit( vaddr, size, 0 );
+}
+
+static unsigned long ffz(unsigned long word)
+{
+        unsigned long result = 0;
+ 
+        while(word & 1) {
+                result++;
+                word >>= 1;
+        }
+        return result;
+}
+
+/* stolen from linux/include/asm-mips/bitops.h:ext2_find_next_zero_bit()
+ * the bitfield is assumed to be little endian, which is the case here,
+ * since we're reading/writing from the disk in LE order */
+int be_find_next_zero_bit (const void *vaddr, unsigned size, unsigned offset)
+{
+    __u32 *p = ((__u32 *) vaddr) + (offset >> 5);
+    __u32 result = offset & ~31UL;
+    __u32 tmp;
+
+    if (offset >= size)
+        return size;
+    size -= result;
+    offset &= 31UL;
+    if (offset) {
+        tmp = *(p++);
+        tmp |= swab32(~0UL >> (32-offset));
+        if (size < 32)
+            goto found_first;
+        if (~tmp)
+            goto found_middle;
+        size -= 32;
+        result += 32;
+    }
+    while (size & ~31UL) {
+        if (~(tmp = *(p++)))
+            goto found_middle;
+        result += 32;
+        size -= 32;
+    }
+    if (!size)
+        return result;
+    tmp = *p;
+
+found_first:
+    return result + ffz(swab32(tmp) | (~0UL << size));
+found_middle:
+    return result + ffz(swab32(tmp));
+}
+
+/* there are masks for certain bits  */
+__u16 mask16 (int from, int count)
+{
+    __u16 mask;
+
+
+    mask = (0xffff >> from);
+    mask <<= from;
+    mask <<= (16 - from - count);
+    mask >>= (16 - from - count);
+    return mask;
+}
+
+
+__u32 mask32 (int from, int count)
+{
+    __u32 mask;
+
+
+    mask = (0xffffffff >> from);
+    mask <<= from;
+    mask <<= (32 - from - count);
+    mask >>= (32 - from - count);
+    return mask;
+}
+
+
+__u64 mask64 (int from, int count)
+{
+    __u64 mask;
+
+
+    mask = (0xffffffffffffffffLL >> from);
+    mask <<= from;
+    mask <<= (64 - from - count);
+    mask >>= (64 - from - count);
+    return mask;
+}
+
+
+__u32 get_random (void)
+{
+    srandom (time (0));
+    return random ();
+}
+
+/* this implements binary search in the array 'base' among 'num' elements each
+   of those is 'width' bytes long. 'comp_func' is used to compare keys */
+int reiserfs_bin_search (void * key, void * base, __u32 num, int width,
+			 __u32 * ppos, comparison_fn_t comp_func)
+{
+    __u32 rbound, lbound, j;
+    int ret;
+
+    if (num == 0 || base == NULL) {
+	/* objectid map may be 0 elements long */
+	*ppos = 0;
+	return POSITION_NOT_FOUND;
+    }
+
+    lbound = 0;
+    rbound = num - 1;
+
+    for (j = (rbound + lbound) / 2; lbound <= rbound; j = (rbound + lbound) / 2) {
+	ret =  comp_func ((void *)((char *)base + j * width), key ) ;
+	if (ret < 0) { /* second is greater */
+	    lbound = j + 1;
+	    continue;
+
+	} else if (ret > 0) { /* first is greater */
+	    if (j == 0)
+	    	break;
+	    rbound = j - 1;
+	    continue;
+	} else { /* equal */
+	    *ppos = j;
+	    return POSITION_FOUND;
+	}
+    }
+
+    *ppos = lbound;
+    return POSITION_NOT_FOUND;
+}
+
+
+#define BLOCKLIST__INCREASE_BLOCK_NUMBER 10
+
+/*element is block number and device*/
+int blockdev_list_compare (const void * block1, const void * block2) {
+    if (*(__u32 *)block1 < *(__u32 *)block2)
+        return -1;
+    if (*(__u32 *)block1 > *(__u32 *)block2)
+        return 1;
+        
+    if (*((__u32 *)block1 + 1) < *((__u32 *)block2 + 1))
+        return -1;        
+    if (*((__u32 *)block1 + 1) > *((__u32 *)block2 + 1))
+        return 1;
+        
+    return 0;
+}
+
+/* return -1 if smth found, otherwise return position which new item should be inserted into */
+/*
+int blocklist__is_block_saved (struct block_handler ** base, __u32 * count,
+				__u32 blocknr, dev_t device, __u32 * position) {
+    struct block_handler block_h;
+    
+    *position = 0;
+           
+    if (*base == NULL) 
+        return 0;
+
+    block_h.blocknr = blocknr;
+    block_h.device = device;
+    
+    if (reiserfs_bin_search (&block_h, *base, *count, sizeof (block_h),
+		position, blocklist_compare) == POSITION_FOUND)
+        return 1;
+        
+    return 0;
+}
+*/
+void blocklist__insert_in_position (void ** base, __u32 * count, void * elem,
+		int elem_size, __u32 * position) {
+    if (elem_size == 0)
+    	return;
+    	
+    if (*base == NULL)
+        *base = getmem (BLOCKLIST__INCREASE_BLOCK_NUMBER * elem_size);
+    
+    if (*count == get_mem_size ((void *)*base) / elem_size)
+        *base = expandmem (*base, get_mem_size((void *)*base), 
+                        BLOCKLIST__INCREASE_BLOCK_NUMBER * elem_size);
+    
+    if (*position < *count) {
+        memmove (*base + (*position + 1), 
+                 *base + (*position),
+                 (*count - *position) * elem_size);
+    }
+
+    memcpy (*base + (char) *position * elem_size, elem, elem_size);
+    *count+=1;
+}
+
+static int get_random_bytes (void *out, int size) {
+    int fd;
+    
+    if ((fd = open("/dev/urandom", O_RDONLY)) == -1)
+        return 1;
+    
+    if (read(fd, out, size) <= 0) {
+        close (fd);
+        return 1;
+    }
+    
+    close (fd);
+    return 0;
+}
+
+int generate_random_uuid (unsigned char * uuid)
+{
+    if (get_random_bytes(uuid, 16)) {
+        return -1;
+    }
+
+    /* Set the UUID variant to DCE */
+    uuid[8] = (uuid[8] & 0x3F) | 0x80;
+    /* Set UUID version to 4 --- truely random generation */
+    uuid[6] = (uuid[6] & 0x0F) | 0x40;
+
+    return 0;
+}
+
+int uuid_is_correct (unsigned char * uuid)
+{
+    int i;
+
+    for (i = 0; i < 16; i++)
+        if (uuid[i])
+            break;
+
+    if (i == 16)
+	return 0;
+
+    if (!test_bit(7, &uuid[8]) || test_bit(6, &uuid[8]))
+    	return 0;
+
+    if (test_bit(7, &uuid[6]) || !test_bit(6, &uuid[6]) ||
+    	test_bit(5, &uuid[6]) ||  test_bit(4, &uuid[6]))
+    	return 0;
+    	
+    return 1;
+}
+
+static int parse_uuid (const unsigned char * in, unsigned char * uuid)
+{
+    int i, j = 0;
+    unsigned char frame[3];
+
+    if (strlen(in) != 36)
+	return -1;
+	
+    for (i = 0; i < 36; i++) {
+	if ((i == 8) || (i == 13) || (i == 18) || (i == 23)) {
+	    if (in[i] != '-')
+		return 0;
+	} else if (!isxdigit(in[i])) {
+	    return -1;
+	}
+    }
+
+    frame[2] = 0;
+    for (i = 0; i < 36; i ++) {
+	if ((i == 8) || (i == 13) || (i == 18) || (i == 23))
+	    continue;
+	
+	frame[0] = in[i++];
+	frame[1] = in[i];
+	uuid[j++] = strtoul(frame, NULL, 16);
+    }
+    return 0;
+}
+
+int set_uuid (const unsigned char * text, unsigned char * UUID)
+{
+    if (parse_uuid (text, UUID) || !uuid_is_correct(UUID))
+	return -1;
+
+    return 0;
+}
 

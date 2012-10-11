@@ -1,14 +1,17 @@
 .\" -*- nroff -*-
-.\" Copyright 1996-2001 Hans Reiser.
+.\" Copyright 1996-2002 Hans Reiser.
 .\" 
-.TH RESIZE_REISERFS 8 "March 2001" "Reiserfsprogs-3.x.0j"
+.TH RESIZE_REISERFS 8 "January 2002" "Reiserfsprogs-3.6.2"
 .SH NAME
 resize_reiserfs \- Reiserfs filesystem resizer
 .SH SYNOPSIS
 .BR resize_reiserfs
 [
 .B \-s
-.IR \fR[\fB+\fR|\fB\- ]\fIsize [\fBK\fR|\fBM\fR|\fBG\fR]
+.IR \fR[\fB+\fR|\fB\- ]\fIsize\fB[\fBK\fR|\fBM\fR|\fBG\fR]
+] [
+.B \-j
+.IR \fR\fIdev
 ] [
 .B \-fqv
 ]
@@ -68,6 +71,9 @@ you do not make it smaller than the reduced size of the reiserfs filesystem.
 .BR \-s\ [+|\-]\fIsize
 Set the new size in bytes.
 .TP
+.BR \-j\ \fIdev
+Set the journal device name.
+.TP 
 .BR \-f
 Force, do not perform checks.
 .TP
@@ -112,5 +118,6 @@ has been written by Alexander Zarochentcev <zam@namesys.com>.
 Please, report about the bugs to Alexander Zarochentcev <zam@namesys.com> or 
 to Hans Reiser <reiser@namesys.com>.
 .SH SEE ALSO
-.BR cfsck (8),
+.BR cfdisk (8),
+.BR reiserfsck (8),
 .BR debugreiserfs (8)

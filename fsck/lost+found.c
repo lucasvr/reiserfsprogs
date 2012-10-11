@@ -1,12 +1,17 @@
 /*
- * Copyright 2000-2001 Hans Reiser
+ * Copyright 2000-2002 Hans Reiser
  */
 
 #include "fsck.h"
 
 
+void erase_name (int len);
+void print_name (char * name, int len);
+
+void modify_item (struct item_head * ih, void * item);
+
 /* fixme: search_by_key is not needed after any add_entry */
-static __u64 _look_for_lost (reiserfs_filsys_t fs, int link_lost_dirs)
+static __u64 _look_for_lost (reiserfs_filsys_t * fs, int link_lost_dirs)
 {
     struct key key, prev_key, * rdkey;
     INITIALIZE_PATH (path);
@@ -36,12 +41,12 @@ static __u64 _look_for_lost (reiserfs_filsys_t fs, int link_lost_dirs)
     /* total size of added entries */
     size = 0;
     while (1) {
-	retval = usearch_by_key (fs, &key, &path);
+	retval = reiserfs_search_by_key_4 (fs, &key, &path);
 	/* fixme: we assume path ends up with a leaf */
 	bh = get_bh (&path);
 	item_pos = get_item_pos (&path);
 	if (retval != ITEM_FOUND) {
-	    if (item_pos == node_item_number (bh)) {
+	    if (item_pos == get_blkh_nr_items (B_BLK_HEAD (bh))) {
 		rdkey = uget_rkey (&path);
 		if (!rdkey) {
 		    pathrelse (&path);
@@ -56,9 +61,9 @@ static __u64 _look_for_lost (reiserfs_filsys_t fs, int link_lost_dirs)
 
 	/* print ~ how many leaves were scanned and how fast it was */
 	if (!fsck_quiet (fs))
-	    print_how_fast (0, leaves++, 50);
+	    print_how_fast (leaves++, 0, 50, 0);
 
-	for (ih = get_ih (&path); item_pos < node_item_number (bh); item_pos ++, ih ++) {
+	for (ih = get_ih (&path); item_pos < get_blkh_nr_items (B_BLK_HEAD (bh)); item_pos ++, ih ++, PATH_LAST_POSITION(&path)++) {
 	    if (is_item_reachable (ih))
 		continue;
 
@@ -74,14 +79,15 @@ static __u64 _look_for_lost (reiserfs_filsys_t fs, int link_lost_dirs)
 
 		sd = ih->ih_key;
 		set_type_and_offset (KEY_FORMAT_1, &sd, SD_OFFSET, TYPE_STAT_DATA);
-		if (usearch_by_key (fs, &sd, &tmp) == ITEM_FOUND) {
+		if (reiserfs_search_by_key_4 (fs, &sd, &tmp) == ITEM_FOUND) {
 		    /* should not happen - because if there were a stat data -
                        we would have done with the whole directory */
 		    pathrelse (&tmp);
 		    continue;
 		}
-		stats(fs)->dir_recovered ++;
-		create_dir_sd (fs, &tmp, &sd);
+		lost_found_pass_stat (fs)->dir_recovered ++;
+		create_dir_sd (fs, &tmp, &sd, modify_item);
+                mark_objectid_really_used (proper_id_map (fs), get_key_objectid (&sd));			
 		key = sd;
 		pathrelse (&path);
 		goto cont;
@@ -89,7 +95,10 @@ static __u64 _look_for_lost (reiserfs_filsys_t fs, int link_lost_dirs)
 
 
 	    /* stat data marked "not having name" found */
-	    is_it_dir = ((not_a_directory (B_I_PITEM (bh,ih))) ? 0 : 1);
+	    if (is_stat_data_ih (get_ih(&path)))
+		fix_obviously_wrong_sd_mode (&path);
+		
+    	    is_it_dir = ((not_a_directory (B_I_PITEM (bh,ih))) ? 0 : 1);
 
 	    if (is_it_dir) {
 		struct key tmp_key;
@@ -99,17 +108,17 @@ static __u64 _look_for_lost (reiserfs_filsys_t fs, int link_lost_dirs)
 		/* there is no need to link empty lost directories into /lost+found */
 		tmp_key = ih->ih_key;
 		set_type_and_offset (KEY_FORMAT_1, &tmp_key, 0xffffffff, TYPE_DIRENTRY);
-		usearch_by_key (fs, &tmp_key, &tmp_path);
+		reiserfs_search_by_key_4 (fs, &tmp_key, &tmp_path);
 		tmp_ih = get_ih (&tmp_path);
 		tmp_ih --;
 		if (not_of_one_file (&tmp_key, tmp_ih))
 		    reiserfs_panic ("not directory found");
 		if (!is_direntry_ih (tmp_ih) ||
-		    (deh_offset (B_I_DEH (get_bh (&tmp_path), ih) + 
-		     ih_entry_count (tmp_ih) - 1) == DOT_DOT_OFFSET)) {
+		    (get_deh_offset (B_I_DEH (get_bh (&tmp_path), tmp_ih) + 
+				     get_ih_entry_count (tmp_ih) - 1) == DOT_DOT_OFFSET)) {
 		    /* last directory item is either stat data or empty
                        directory item - do not link this dir into lost+found */
-		    stats(fs)->empty_lost_dirs ++;
+		    lost_found_pass_stat (fs)->empty_lost_dirs ++;
 		    pathrelse (&tmp_path);
 		    continue;
 		}
@@ -122,72 +131,75 @@ static __u64 _look_for_lost (reiserfs_filsys_t fs, int link_lost_dirs)
 		continue;
 	    }
 
-	    stats(fs)->lost_found ++;
+	    lost_found_pass_stat (fs)->lost_found ++;
 
 	    {
 		struct key obj_key = {0, 0, {{0, 0},}};
 		char * lost_name;
 		struct item_head tmp_ih;
-		int pos_in_map;
+		__u32 pos_in_map;
 
 		/* key to continue */
 		key = ih->ih_key;
-		key.k_objectid ++;
+		set_key_objectid (&key, get_key_objectid (&key) + 1);
 
 		tmp_ih = *ih;
-		if (is_objectid_really_used (semantic_id_map (fs), ih->ih_key.k_objectid,
+		if (is_objectid_really_used (semantic_id_map (fs), 
+					     get_key_objectid (&ih->ih_key),
 					     &pos_in_map)) {
 		    /* objectid is used, relocate an object */
-		    stats(fs)->oid_sharing ++;
-		    if (fsck_fix_non_critical (fs)) {
+		    lost_found_pass_stat (fs)->oid_sharing ++;
+		    if (1/*fsck_adjust_file_size (fs)*/) {
 			if (is_it_dir) {
 			    relocate_dir (&tmp_ih, 1);
-			    stats(fs)->oid_sharing_dirs_relocated ++;
+			    lost_found_pass_stat (fs)->oid_sharing_dirs_relocated ++;
 			} else {
 			    relocate_file (&tmp_ih, 1);
-			    stats(fs)->oid_sharing_files_relocated ++;
+			    lost_found_pass_stat (fs)->oid_sharing_files_relocated ++;
 			}
 		    }
 		} else {
 		    if (!is_it_dir)
-			mark_objectid_really_used (semantic_id_map (fs), ih->ih_key.k_objectid);
+			mark_objectid_really_used (semantic_id_map (fs), get_key_objectid (&ih->ih_key));
 		}
 
-		asprintf (&lost_name, "%u_%u", le32_to_cpu (tmp_ih.ih_key.k_dir_id),
-			 le32_to_cpu (tmp_ih.ih_key.k_objectid));
+		asprintf (&lost_name, "%u_%u", get_key_dirid (&tmp_ih.ih_key),
+			  get_key_objectid (&tmp_ih.ih_key));
 
 		/* entry in lost+found directory will point to this key */
-		obj_key.k_dir_id = tmp_ih.ih_key.k_dir_id;
-		obj_key.k_objectid = tmp_ih.ih_key.k_objectid;
-
+		set_key_dirid (&obj_key, get_key_dirid (&tmp_ih.ih_key));
+		set_key_objectid (&obj_key, get_key_objectid (&tmp_ih.ih_key));
 
 		pathrelse (&path);
 		
 		/* 0 does not mean anyting - item w/ "." and ".." already
 		   exists and reached, so only name will be added */
-		size += reiserfs_add_entry (fs, &lost_found_dir_key, lost_name, &obj_key, 0/*fsck_need*/);
+		size += reiserfs_add_entry (fs, &lost_found_dir_key, lost_name,
+			name_length (lost_name, lost_found_dir_format), &obj_key, 0/*fsck_need*/);
 
 		if (is_it_dir) {
 		    /* fixme: we hope that if we will try to pull all the
 		       directory right now - then there will be less
 		       lost_found things */
-		    fsck_progress ("\tChecking lost dir \"%s\":", lost_name);
+		    print_name (lost_name, strlen (lost_name));
+		    /*fsck_progress ("\tChecking lost dir \"%s\":", lost_name);*/
 		    rebuild_semantic_pass (&obj_key, &lost_found_dir_key, /*dot_dot*/0, /*reloc_ih*/0);
-		    fsck_progress ("ok\n");
-		    stats(fs)->lost_found_dirs ++;
+		    erase_name (strlen (lost_name));
+		    /*fsck_progress ("ok\n");*/
+		    
+		    lost_found_pass_stat (fs)->lost_found_dirs ++;
 		} else {
-		    if (usearch_by_key (fs, &obj_key, &path) != ITEM_FOUND)
+		    if (reiserfs_search_by_key_4 (fs, &obj_key, &path) != ITEM_FOUND)
 			reiserfs_panic ("look_for_lost: lost file stat data %K not found",
 					&obj_key);
 
 		    /* check_regular_file does not mark stat data reachable */
 		    mark_item_reachable (get_ih (&path), get_bh (&path));
-		    mark_buffer_dirty (get_bh (&path));
 
 		    rebuild_check_regular_file (&path, get_item (&path), 0/*reloc_ih*/);
 		    pathrelse (&path);
 
-		    stats(fs)->lost_found_files ++;
+		    lost_found_pass_stat (fs)->lost_found_files ++;
 		    lost_files --;
 		}
 
@@ -197,7 +209,14 @@ static __u64 _look_for_lost (reiserfs_filsys_t fs, int link_lost_dirs)
 	} /* for */
 
 	prev_key = key;
-	get_next_key (&path, item_pos - 1, &key);
+	
+	PATH_LAST_POSITION(&path) = item_pos - 1;
+	rdkey = reiserfs_next_key (&path);
+	if (rdkey)
+	    key = *rdkey;
+	else
+	    break;
+	    	
 	if (comp_keys (&prev_key, &key) != -1)
 	    reiserfs_panic ("pass_3a: key must grow 2: prev=%k next=%k",
 			    &prev_key, &key);
@@ -227,16 +246,90 @@ static __u64 _look_for_lost (reiserfs_filsys_t fs, int link_lost_dirs)
 
 }
 
+static void save_lost_found_result (reiserfs_filsys_t * fs)
+{
+    FILE * file;
+    int retval;
 
-void pass_3a_look_for_lost (reiserfs_filsys_t fs)
+    /* save bitmaps with which we will be able start reiserfs from
+       pass 1 */
+    file = open_file ("temp_fsck_file.deleteme", "w+");
+    if (!file)
+	return;
+
+    reiserfs_begin_stage_info_save (file, LOST_FOUND_DONE);
+    reiserfs_end_stage_info_save (file);
+    close_file (file);
+
+    retval = unlink (state_dump_file (fs));
+    retval = rename ("temp_fsck_file.deleteme", state_dump_file (fs));
+    if (retval != 0)
+	fsck_progress ("pass 0: could not rename temp file temp_fsck_file.deleteme to %s",
+		       state_dump_file (fs));
+}
+
+/* we have nothing to load from a state file, but we have to fetch
+   on-disk bitmap, copy it to allocable bitmap, and fetch objectid
+   map */
+void load_lost_found_result (reiserfs_filsys_t * fs)
+{
+    fsck_new_bitmap (fs) = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+    reiserfs_bitmap_copy (fsck_new_bitmap (fs), fs->fs_bitmap2);
+
+    fsck_allocable_bitmap (fs) = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+    reiserfs_bitmap_copy (fsck_allocable_bitmap (fs), fs->fs_bitmap2);
+
+    fs->block_allocator = reiserfsck_reiserfs_new_blocknrs;
+    fs->block_deallocator = reiserfsck_reiserfs_free_block;
+
+    /* we need objectid map on semantic pass to be able to relocate files */
+    proper_id_map (fs) = init_id_map ();
+    fetch_objectid_map (proper_id_map (fs), fs);
+}
+
+void after_lost_found (reiserfs_filsys_t * fs)
+{
+    /* update super block: objectid map, fsck state */
+    set_sb_fs_state (fs->fs_ondisk_sb, LOST_FOUND_DONE);
+    mark_buffer_dirty (fs->fs_super_bh);
+
+    /* write all dirty blocks */
+    fsck_progress ("Flushing..");
+    flush_objectid_map (proper_id_map (fs), fs);
+    fs->fs_dirt = 1;
+    reiserfs_flush_to_ondisk_bitmap (fsck_new_bitmap(fs), fs);
+    reiserfs_flush (fs);
+    fsck_progress ("done\n");
+
+    stage_report (0x3a, fs);
+
+    if (!fsck_run_one_step (fs)) {
+	if (fsck_user_confirmed (fs, "Continue? (Yes):", "Yes\n", 1))
+	    /* reiserfsck continues */
+	    return;
+    }
+
+    save_lost_found_result (fs);
+
+    free_id_map (proper_id_map (fs));
+    proper_id_map (fs) = 0;
+
+    fs->fs_dirt = 1;
+    reiserfs_close (fs);
+    exit (4);
+}
+
+void pass_3a_look_for_lost (reiserfs_filsys_t * fs)
 {
     INITIALIZE_PATH (path);
     struct item_head * ih;
     void * sd;
     __u64 size, sd_size;
     __u32 blocks;
-
-    fsck_progress ("Pass 3a (looking for lost files):\n");
+    __u16 mode;
+    __u32 objectid;
+    int gen_counter;
+    fsck_progress ("Pass 3a (looking for lost dir/files):\n");
 
     /* when warnings go not to stderr - separate then in the log */
     if (fsck_log_file (fs) != stderr)
@@ -250,20 +343,33 @@ void pass_3a_look_for_lost (reiserfs_filsys_t fs)
     size += _look_for_lost (fs, 0);
 
     /* update /lost+found sd_size and sd_blocks (nlink is correct already) */
-    if (usearch_by_key (fs, &lost_found_dir_key, &path) != ITEM_FOUND)
+
+    objectid = reiserfs_find_entry (fs, &root_dir_key, "lost+found",
+                                       &gen_counter, &lost_found_dir_key);
+
+    if (!objectid) {
+       reiserfs_panic ("look_for_lost: 'lost+found' direntry not found");
+    }
+
+    if (reiserfs_search_by_key_4 (fs, &lost_found_dir_key, &path) != ITEM_FOUND)
 	reiserfs_panic ("look_for_lost: /lost+found stat data %K not found",
 			&lost_found_dir_key);
     ih = get_ih (&path);
     sd = get_item (&path);
     get_sd_size (ih, sd, &sd_size);
     size += sd_size;
-    blocks = dir_size2st_blocks (fs->s_blocksize, size);
+    blocks = dir_size2st_blocks (size);
 
     set_sd_size (ih, sd, &size);
     set_sd_blocks (ih, sd, &blocks);
+
+    /* make lost+found to be drwx------ */
+    mode = S_IFDIR | S_IRUSR | S_IWUSR | S_IXUSR;
+    set_sd_mode (ih, sd, &mode);
+
     mark_buffer_dirty (get_bh (&path));
     pathrelse (&path);
-    
-    stage_report (0x3a, fs);
+
+    after_lost_found (fs);
 }
 

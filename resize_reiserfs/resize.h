@@ -1,5 +1,5 @@
 /* 
- * Copyright 2000 by Hans Reiser, licensing governed by reiserfs/README
+ * Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
  */
 #define _GNU_SOURCE
 
@@ -24,25 +24,28 @@
 #include "io.h"
 #include "misc.h"
 #include "reiserfs_lib.h"
+#include "../include/config.h"
 #include "../version.h"
 
 
-#define print_usage_and_exit()\
- die ("Usage: %s  [-s[+|-]#[G|M|K]] [-fqv] device", argv[0])
- 
+#define print_usage_and_exit() {\
+ fprintf (stderr, "Usage: %s  [-s[+|-]#[G|M|K]] [-fqv] device\n\n", argv[0]);\
+ exit(16);\
+}
+
+#define DIE(form, args...) die("%s: " form "\n", g_progname , ## args)
 
 /* reiserfs_resize.c */
 extern struct buffer_head * g_sb_bh;
+extern char * g_progname;
 
 extern int opt_force;
 extern int opt_verbose;
 extern int opt_nowrite;
 extern int opt_safe;
 
-int expand_fs(struct super_block * s, unsigned long block_count_new);
-
 /* fe.c */
 int resize_fs_online(char * devname, unsigned long blocks);
 
 /* do_shrink.c */
-int shrink_fs(struct super_block * s, unsigned long blocks);
+int shrink_fs(reiserfs_filsys_t *, unsigned long blocks);

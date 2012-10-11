@@ -1,6 +1,6 @@
-# Makefile.in generated automatically by automake 1.4 from Makefile.am
+# Makefile.in generated automatically by automake 1.4-p5 from Makefile.am
 
-# Copyright (C) 1994, 1995-8, 1999 Free Software Foundation, Inc.
+# Copyright (C) 1994, 1995-8, 1999, 2001 Free Software Foundation, Inc.
 # This Makefile.in is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
@@ -62,6 +62,7 @@ MAKEINFO = @MAKEINFO@
 PACKAGE = @PACKAGE@
 RANLIB = @RANLIB@
 VERSION = @VERSION@
+sbindir = @sbindir@
 
 sbin_PROGRAMS = resize_reiserfs
 
@@ -69,22 +70,21 @@ resize_reiserfs_SOURCES = fe.c resize_reiserfs.c do_shrink.c resize.h
 man_MANS = resize_reiserfs.8
 EXTRA_DIST = $(man_MANS)
 
-LDADD = ../lib/libmisc.a ../reiserfscore/libcore.a
-
-INCLUDES = -I../include
+LDADD = $(top_srcdir)/lib/libmisc.a $(top_srcdir)/reiserfscore/libcore.a
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
+CONFIG_HEADER = ../include/config.h
 CONFIG_CLEAN_FILES = 
 PROGRAMS =  $(sbin_PROGRAMS)
 
 
-DEFS = @DEFS@ -I. -I$(srcdir) 
+DEFS = @DEFS@ -I. -I$(srcdir) -I../include
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
 resize_reiserfs_OBJECTS =  fe.o resize_reiserfs.o do_shrink.o
 resize_reiserfs_LDADD = $(LDADD)
-resize_reiserfs_DEPENDENCIES =  ../lib/libmisc.a \
-../reiserfscore/libcore.a
+resize_reiserfs_DEPENDENCIES =  $(top_srcdir)/lib/libmisc.a \
+$(top_srcdir)/reiserfscore/libcore.a
 resize_reiserfs_LDFLAGS = 
 CFLAGS = @CFLAGS@
 COMPILE = $(CC) $(DEFS) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -239,7 +239,7 @@ distdir: $(DISTFILES)
 	@for file in $(DISTFILES); do \
 	  d=$(srcdir); \
 	  if test -d $$d/$$file; then \
-	    cp -pr $$/$$file $(distdir)/$$file; \
+	    cp -pr $$d/$$file $(distdir)/$$file; \
 	  else \
 	    test -f $(distdir)/$$file \
 	    || ln $$d/$$file $(distdir)/$$file 2> /dev/null \
@@ -247,12 +247,14 @@ distdir: $(DISTFILES)
 	  fi; \
 	done
 do_shrink.o: do_shrink.c resize.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h ../version.h
-fe.o: fe.c resize.h ../include/io.h ../include/misc.h \
-	../include/reiserfs_lib.h ../include/reiserfs_fs.h ../version.h
+	../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h ../include/config.h ../version.h
+fe.o: fe.c resize.h ../include/io.h ../include/misc.h ../include/swab.h \
+	../include/reiserfs_lib.h ../include/reiserfs_fs.h \
+	../include/config.h ../version.h
 resize_reiserfs.o: resize_reiserfs.c resize.h ../include/io.h \
-	../include/misc.h ../include/reiserfs_lib.h \
-	../include/reiserfs_fs.h ../version.h
+	../include/misc.h ../include/swab.h ../include/reiserfs_lib.h \
+	../include/reiserfs_fs.h ../include/config.h ../version.h
 
 info-am:
 info: info-am

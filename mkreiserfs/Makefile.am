@@ -4,6 +4,5 @@ mkreiserfs_SOURCES = mkreiserfs.c
 man_MANS = mkreiserfs.8
 EXTRA_DIST = $(man_MANS)
 
-LDADD = ../lib/libmisc.a ../reiserfscore/libcore.a
+LDADD = $(top_srcdir)/lib/libmisc.a $(top_srcdir)/reiserfscore/libcore.a
 
-INCLUDES = -I../include
