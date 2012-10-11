@@ -792,8 +792,9 @@ static void make_map(const void *nodep, VISIT value, int level) {
 
 		if (fp == 0) {
 		    fp = fopen (file_name, "w+");
-		    if (!fp)
-			reiserfs_panic ("could open %s: %m", file_name);
+		    if (!fp) {
+			reiserfs_exit (1, "could open %s: %m", file_name);
+		    }
 		}
 	    }
 

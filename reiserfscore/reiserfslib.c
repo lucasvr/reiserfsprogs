@@ -52,7 +52,8 @@ int is_block_count_correct (unsigned long journal_offset, unsigned int block_siz
 /* read super block. fixme: only 4k blocks, pre-journaled format
    is refused. Journal and bitmap are to be opened separately.
    skip_check is set to 1 if checks of openned SB should be omitted.*/
-reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void * vp, int check)
+reiserfs_filsys_t * reiserfs_open (char * filename, int flags, 
+				   int *error, void * vp, int check)
 {
     reiserfs_filsys_t * fs;
     struct buffer_head * bh;
@@ -838,16 +839,11 @@ void reiserfs_insert_item (reiserfs_filsys_t * fs, struct path * path,
 
 /*===========================================================================*/
 
-static __u32 hash_value (reiserfs_filsys_t * fs, char * name)
+__u32 hash_value (hashf_t func, char * name, int namelen)
 {
     __u32 res;
 
-    if (!strcmp (name, "."))
-	return DOT_OFFSET;
-    if (!strcmp (name, ".."))
-	return DOT_DOT_OFFSET;
-
-    res = reiserfs_hash (fs) (name, strlen (name));    
+    res = func (name, namelen);
     res = GET_HASH_VALUE(res);
     if (res == 0)
 	res = 128;
@@ -864,14 +860,12 @@ int reiserfs_locate_entry (reiserfs_filsys_t * fs, struct key * dir, char * name
     struct key entry_key;
     struct item_head * ih;
     struct reiserfs_de_head * deh;
-    __u32 hash;
     int i, retval;
     struct key * rdkey;
     
     set_key_dirid (&entry_key, get_key_dirid (dir));
     set_key_objectid (&entry_key, get_key_objectid (dir));
-    hash = hash_value (fs, name);
-    set_key_offset_v1 (&entry_key, hash);
+    set_key_offset_v1 (&entry_key, 0);
     set_key_uniqueness (&entry_key, DIRENTRY_UNIQUENESS);
 
  
@@ -884,12 +878,6 @@ int reiserfs_locate_entry (reiserfs_filsys_t * fs, struct key * dir, char * name
 	ih = get_ih (path);
 	deh = B_I_DEH (get_bh (path), ih) + path->pos_in_item;
 	for (i = path->pos_in_item; i < get_ih_entry_count (ih); i ++, deh ++) {
-	    if (GET_HASH_VALUE (get_deh_offset (deh)) != GET_HASH_VALUE (hash)) {
-		/* all entries having the same hash were scanned */
-		pathrelse (path);
-		return 0;
-	    }
-
 	    /* the name in directory has the same hash as the given name */
 	    if ((name_in_entry_length (ih, deh, i) == (int)strlen (name)) &&
 		!memcmp (name_in_entry (deh, i), name, strlen (name))) {
@@ -906,13 +894,6 @@ int reiserfs_locate_entry (reiserfs_filsys_t * fs, struct key * dir, char * name
 	
 	if (!is_direntry_key (rdkey))
 	    reiserfs_panic ("reiserfs_locate_entry: can not find name in broken directory yet");
-
-	/* next item is the item of the directory we are looking name in */
-	if (GET_HASH_VALUE (get_offset (rdkey)) != hash) {
-	    /* but there is no names with given hash */
-	    pathrelse (path);
-	    return 0;
-	}
 
 	/* first name of that item may be a name we are looking for */
 	entry_key = *rdkey;
@@ -947,7 +928,12 @@ int reiserfs_find_entry (reiserfs_filsys_t * fs, struct key * dir, char * name,
 
     set_key_dirid (&entry_key, get_key_dirid (dir));
     set_key_objectid (&entry_key, get_key_objectid (dir));
-    hash = hash_value (fs, name);
+    if (!strcmp (name, "."))
+	hash = DOT_OFFSET;
+    else if (!strcmp (name, ".."))
+	hash = DOT_DOT_OFFSET;
+    else
+	hash = hash_value (reiserfs_hash (fs), name, strlen (name));
     set_key_offset_v1 (&entry_key, hash);
     set_key_uniqueness (&entry_key, DIRENTRY_UNIQUENESS);
 
@@ -1059,11 +1045,12 @@ int reiserfs_add_entry (reiserfs_filsys_t * fs, struct key * dir, char * name, i
     /* compose entry key to look for its place in the tree */
     set_key_dirid (&(entry_ih.ih_key), get_key_dirid (dir));
     set_key_objectid (&(entry_ih.ih_key), get_key_objectid (dir));
-    hash = hash_value (fs, name) + gen_counter;
     if (!strcmp (name, "."))
 	hash = DOT_OFFSET;
-    if (!strcmp (name, ".."))
+    else if (!strcmp (name, ".."))
 	hash = DOT_DOT_OFFSET;
+    else
+	hash = hash_value (reiserfs_hash (fs), name, strlen (name)) + gen_counter;
     set_key_offset_v1 (&(entry_ih.ih_key), hash);
     set_key_uniqueness (&(entry_ih.ih_key), DIRENTRY_UNIQUENESS);
 

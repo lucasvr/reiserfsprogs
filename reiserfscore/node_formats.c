@@ -528,7 +528,7 @@ int known_hashes (void)
 
 
 #define good_name(hashfn,name,namelen,deh_offset) \
-(GET_HASH_VALUE ((hashfn) (name, namelen)) == GET_HASH_VALUE (deh_offset))
+(hash_value (hashfn, name, namelen) == GET_HASH_VALUE (deh_offset))
 
 
 /* this also sets hash function */
@@ -579,7 +579,7 @@ int is_properly_hashed (reiserfs_filsys_t * fs,
 }
 
 
-int find_hash_in_use (char * name, int namelen, __u32 hash_value_masked, unsigned int code_to_try_first)
+int find_hash_in_use (char * name, int namelen, __u32 offset, unsigned int code_to_try_first)
 {
     unsigned int i;
 
@@ -587,14 +587,14 @@ int find_hash_in_use (char * name, int namelen, __u32 hash_value_masked, unsigne
 	return UNSET_HASH;
 
     if (code_to_try_first) {
-	if (hash_value_masked == GET_HASH_VALUE (hashes [code_to_try_first].func (name, namelen)))
+	if (good_name (hashes [code_to_try_first].func, name, namelen, offset))
 	    return code_to_try_first;
     }
     
     for (i = 1; i < HASH_AMOUNT; i ++) {
 	if (i == code_to_try_first)
 	    continue;
-	if (hash_value_masked == GET_HASH_VALUE (hashes [i].func (name, namelen)))
+	if (good_name (hashes [i].func, name, namelen, offset))
 	    return i;
     }
 
@@ -1051,17 +1051,18 @@ char * name_in_entry (struct reiserfs_de_head * deh, int pos_in_item)
 int name_in_entry_length (struct item_head * ih,
 		 struct reiserfs_de_head * deh, int pos_in_item)
 {
-    int len;
+    int len, i;
     char * name;
 
     len = entry_length (ih, deh, pos_in_item);
     name = name_in_entry (deh, pos_in_item);
 
     // name might be padded with 0s
-    while (!name [len - 1] && len > 0)
-	len --;
+    i = 0;
+    while (name[i] && i < len)
+	i++;
 
-    return len;
+    return i;
 }
 
 int name_length (char * name, int key_format)

@@ -25,19 +25,24 @@ static void quit_resizer(reiserfs_filsys_t * fs)
 	/* save changes to bitmap blocks */
 	reiserfs_close (fs);
 	/* leave fs in ERROR state */
-	DIE ("fs shrinking was not completed successfully, run reiserfsck.");
+	reiserfs_exit(1, "fs shrinking was not completed successfully, "
+		      "run reiserfsck.");
 }
 
 /* block moving */
-static unsigned long move_generic_block(reiserfs_filsys_t * fs, unsigned long block, unsigned long bnd, int h)
+static unsigned long move_generic_block(reiserfs_filsys_t * fs, 
+					unsigned long block, 
+					unsigned long bnd, int h)
 {
     struct buffer_head * bh, * bh2;
 
 	/* primitive fsck */
 	if (block > get_sb_block_count(ondisk_sb)) {
-		fprintf(stderr, "resize_reiserfs: invalid block number (%lu) found.\n", block);
+		fprintf(stderr, "resize_reiserfs: invalid block number "
+			"(%lu) found.\n", block);
 		quit_resizer(fs);
 	}
+	
 	/* progress bar, 3D style :) */
 	if (opt_verbose)
 	    print_how_far(stderr, &total_node_cnt, blocks_used, 1, 0);
@@ -57,7 +62,7 @@ static unsigned long move_generic_block(reiserfs_filsys_t * fs, unsigned long bl
 	bh = bread(fs->fs_dev, block, fs->fs_blocksize);
 
 	if (!bh)
-	    reiserfs_panic ("move_generic_block: bread failed.\n");
+	    reiserfs_exit (1, "move_generic_block: bread failed.\n");
 
 	reiserfs_bitmap_find_zero_bit(bmp, &unused_block);
 	if (unused_block == 0 || unused_block >= bnd) {
@@ -103,7 +108,7 @@ static unsigned long move_formatted_block(reiserfs_filsys_t * fs, unsigned long 
 	
 	bh = bread(fs->fs_dev, block, fs->fs_blocksize);
 	if (!bh)
-	    reiserfs_panic ("move_formatted_block: bread failed");
+	    reiserfs_exit (1, "move_formatted_block: bread failed");
 	
 	if (is_leaf_node (bh)) {
 		
@@ -208,7 +213,7 @@ int shrink_fs(reiserfs_filsys_t * fs, long long int blocks)
 
 	reiserfs_reopen(fs, O_RDWR);
 	if (reiserfs_open_ondisk_bitmap (fs))
-	    DIE("cannot open ondisk bitmap");
+	    reiserfs_exit(1, "cannot open ondisk bitmap");
 	bmp = fs->fs_bitmap2;
 	ondisk_sb = fs->fs_ondisk_sb;
 

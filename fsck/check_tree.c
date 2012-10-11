@@ -541,8 +541,8 @@ static int bad_directory_item (reiserfs_filsys_t * fs,
 			       struct buffer_head * bh, 
 			       struct item_head * ih)
 {
-    char * name;
-    int namelen;
+    char *name, *prev_name;
+    __u32 off, prev_off;
     unsigned int count, i;
     struct reiserfs_de_head * deh = B_I_DEH (bh, ih);
     int min_entry_size = 1;/* We have no way to understand whether the
@@ -550,6 +550,7 @@ static int bad_directory_item (reiserfs_filsys_t * fs,
                               converted to it. So, we assume that minimal name
                               length is 1 */
     __u16 state;
+    int namelen;
 
     count = get_ih_entry_count (ih);
 
@@ -580,17 +581,34 @@ static int bad_directory_item (reiserfs_filsys_t * fs,
     }
     
     /* check name hashing */
+    prev_name = B_I_PITEM(bh, ih) + get_ih_item_len(ih);
+    prev_off = 0;
+
     for (i = 0; i < count; i ++, deh ++) {
 	namelen = name_in_entry_length (ih, deh, i);
 	name = name_in_entry (deh, i);
-	if (!is_properly_hashed (fs, name, namelen, get_deh_offset (deh))) {
+	off = get_deh_offset (deh);
+	
+	if (namelen > (int)REISERFS_MAX_NAME_LEN(fs->fs_blocksize) || 
+	    name >= prev_name || off <= prev_off) 
+	{
+	    fsck_log ("%s: block %lu: The directory item %k has a broken entry "
+		      "(%d)\n", __FUNCTION__, bh->b_blocknr, &ih->ih_key, i);
+	    one_more_corruption (fs, FATAL);
+	    return 1;
+	}
+
+	if (!is_properly_hashed (fs, name, namelen, off)) {
 	    fsck_log ("%s: block %lu: The directory item %k has a not properly "
 		      "hashed entry (%d)\n", __FUNCTION__, bh->b_blocknr, 
 		      &ih->ih_key, i);
 	    
-	    one_more_corruption (fs, FATAL);	
+	    one_more_corruption (fs, FATAL);
 	    return 1;
 	}
+
+	prev_name = name;
+	prev_off = off;
     }
 
     deh = B_I_DEH (bh, ih);

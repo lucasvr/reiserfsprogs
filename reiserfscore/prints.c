@@ -332,8 +332,7 @@ void print_directory_item (FILE * fp, reiserfs_filsys_t * fs,
 			  GET_HASH_VALUE (get_deh_offset (deh)),
 			  GET_GENERATION_NUMBER (get_deh_offset (deh)),
 			  get_deh_location (deh), get_deh_state (deh),
-			  code2name (find_hash_in_use (name, namelen, 
-						       GET_HASH_VALUE (get_deh_offset (deh)),
+			  code2name (find_hash_in_use (name, namelen, get_deh_offset (deh),
 						       fs ? get_sb_hash_code (fs->fs_ondisk_sb) : UNSET_HASH)));
 	/*fs ? (is_properly_hashed (fs, name, namelen, deh_offset (deh)) ? "" : "(BROKEN)") : "??");*/
     }
@@ -648,7 +647,7 @@ int print_super_block (FILE * fp, reiserfs_filsys_t * fs, char * file_name,
 		      "bitmaps, data, reserved] blocks): %u\n", get_sb_free_blocks (sb));
 	reiserfs_warning (fp, "Root block: %u\n", get_sb_root_block (sb));
     }
-    reiserfs_warning (fp, "Filesystem marked as %scleanly umounted\n",
+    reiserfs_warning (fp, "Filesystem is %sclean\n",
 		      (get_sb_umount_state (sb) == FS_CLEANLY_UMOUNTED) ? "" : "NOT ");
 
     if (short_print)

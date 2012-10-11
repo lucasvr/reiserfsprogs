@@ -462,7 +462,13 @@ void print_how_far (FILE * fp,
 }
 
 #if defined(__linux__) && defined(_IOR) && !defined(BLKGETSIZE64)
-#   define BLKGETSIZE64 _IOR(0x12, 114, __u64)
+/* Note! Despite this call being called with *64, it must be encoded to
+ * return only sizeof(size_t), since in earlier kernel versions it was
+ * declared _IOR(0x12, 114, sizeof(u64)), making it use sizeof(sizeof(u64)).
+ *
+ * However, the call itself does always return 64bit!
+ */
+#   define BLKGETSIZE64 _IOR(0x12, 114, size_t)
 #endif
 
 /* To not have problem with last sectors on the block device when switching 
@@ -500,8 +506,10 @@ unsigned long count_blocks (char * filename, int blocksize)
 	return 0;
 
     fd = open (filename, O_RDONLY);
-    if (fd == -1)
-	die ("count_blocks: open failed (%s)", strerror (errno));
+    if (fd == -1) {
+	fprintf(stderr, "Failed to open '%s': %s.\n", filename, strerror(errno));
+	return 0;
+    }
 
 #ifdef BLKGETSIZE64
     {

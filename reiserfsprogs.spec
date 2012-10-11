@@ -1,4 +1,4 @@
-%define reiserfsprogsversion 3.6.18
+%define reiserfsprogsversion 3.6.19
 
 Vendor:       Hans Reiser
 Distribution: Hans Reiser

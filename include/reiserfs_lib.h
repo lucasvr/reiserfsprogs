@@ -135,6 +135,8 @@ int comp_keys_3 (const void * k1, const void * k2);
 int  comp_short_keys (const void * p_s_key1, const void * p_s_key2);
 int comp_items (struct item_head  * p_s_ih, struct path * p_s_path);
 
+__u32 hash_value (hashf_t func, char * name, int namelen);
+
 int create_dir_sd (reiserfs_filsys_t * fs,
 		    struct path * path, struct key * key,
 		    void (*modify_item)(struct item_head *, void *));
@@ -279,7 +281,7 @@ char *code2name (unsigned int code);
 int func2code (hashf_t func);
 hashf_t code2func (unsigned int code);
 hashf_t name2func (char * hash);
-int find_hash_in_use (char * name, int namelen, __u32 hash_value_masked, unsigned int code_to_try_first);
+int find_hash_in_use (char * name, int namelen, __u32 deh_offset, unsigned int code_to_try_first);
 
 int entry_length (struct item_head * ih, struct reiserfs_de_head * deh,
 		  int pos_in_item);
@@ -385,7 +387,6 @@ int can_we_format_it (char * device_name, int force);
 #define reiserfs_exit(val, fmt, list...) \
 {\
 	fflush (stdout);\
-	fprintf (stderr, "%s %d %s\n", __FILE__, __LINE__, __FUNCTION__);\
 	reiserfs_warning (stderr, (const char *)fmt, ## list);\
         reiserfs_warning (stderr, "\n" );\
         exit (val);\

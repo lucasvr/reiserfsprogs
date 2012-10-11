@@ -365,8 +365,7 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
 	    hash_code = 0;
 
 	    for (j = min_length; j <= max_length; j ++) {
-		hash_code = find_hash_in_use (name, j,
-					      GET_HASH_VALUE (get_deh_offset (deh + i)),
+		hash_code = find_hash_in_use (name, j, get_deh_offset (deh + i),
 					      get_sb_hash_code (fs->fs_ondisk_sb));
 /*		add_hash_hit (fs, hash_code);*/
 		if (code2func (hash_code) != 0) {
@@ -527,9 +526,11 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
 	}
     }
     
-    if (bad == get_ih_entry_count (&tmp) && lost_found != bad) {	
-	fsck_log ("%s: block %lu, item %H: All entries were deleted from the directory\n", 
-	    __FUNCTION__, bh->b_blocknr, &tmp);	
+    if (bad == get_ih_entry_count (&tmp)) {
+	if (lost_found != bad) {
+	    fsck_log ("%s: block %lu, item %H: All entries were deleted from the directory\n", 
+		      __FUNCTION__, bh->b_blocknr, &tmp);	
+	}
 	return -1;
     }
 
@@ -586,6 +587,9 @@ int leaf_structure_check (reiserfs_filsys_t * fs, struct buffer_head * bh) {
 	return 1;
     }
 
+    if (get_blkh_nr_items (blkh) == 0)
+	return 0;
+    
     counted = leaf_count_ih(bh->b_data, bh->b_size);
 
     if (counted < get_blkh_nr_items (blkh)) {
@@ -1770,12 +1774,19 @@ static void init_source_bitmap (reiserfs_filsys_t * fs)
 
     case EXTERN_BITMAP:
 	fp = fopen (fsck_data (fs)->rebuild.bitmap_file_name, "r");
-	if (!fp)
-	    reiserfs_panic ("Could not load bitmap: %s\n", strerror(errno));
+	
+	if (!fp) {
+	    reiserfs_exit (EXIT_OPER, "Could not load bitmap: %s\n", 
+			   strerror(errno));
+	}
+	
 	fsck_source_bitmap (fs) = reiserfs_bitmap_load (fp);
-	if (!fsck_source_bitmap (fs))
-	    reiserfs_panic ("Could not load fitmap from \"%s\"", 
-			    fsck_data (fs)->rebuild.bitmap_file_name);
+	
+	if (!fsck_source_bitmap (fs)) {
+	    reiserfs_exit (EXIT_OPER, "Could not load fitmap from \"%s\"", 
+			   fsck_data (fs)->rebuild.bitmap_file_name);
+	}
+
 	fsck_progress ("%d blocks marked used in extern bitmap\n", 
 		       reiserfs_bitmap_ones (fsck_source_bitmap (fs)));
 	fclose (fp);
@@ -1967,7 +1978,10 @@ void pass_0 (reiserfs_filsys_t * fs)
 {
     if (get_reiserfs_format (fs->fs_ondisk_sb) != fs->fs_format || 
         get_reiserfs_format (fs->fs_ondisk_sb) == REISERFS_FORMAT_UNKNOWN)
-	reiserfs_panic ("pass 0: ReiserFS format version mismatch found, you should run --rebuild-sb");
+    {
+	reiserfs_exit (EXIT_OPER, "pass 0: ReiserFS format version mismatch "
+		       "found, you should run --rebuild-sb");
+    }
   
     fsck_progress ("\nPass 0:\n");
     if (fsck_log_file (fs) != stderr)

@@ -349,11 +349,13 @@ static void pass1_correct_leaf (reiserfs_filsys_t * fs,
     for (i = 0; i < B_NR_ITEMS (bh); i ++, ih ++) {
 	if (is_direntry_ih (ih)) {
 	    struct reiserfs_de_head * deh;
+	    __u32 offset;
 	    char * name;
 	    int name_len;
 	    unsigned int hash_code;
 
 	    deh = B_I_DEH (bh, ih);
+	    offset = 0;
 	    for (j = 0; j < get_ih_entry_count (ih); j ++) {
 		name = name_in_entry (deh + j, j);
 		name_len = name_in_entry_length (ih, deh + j, j);
@@ -363,8 +365,7 @@ static void pass1_correct_leaf (reiserfs_filsys_t * fs,
 		    continue;
 		}
 
-		hash_code = find_hash_in_use (name, name_len,
-					      GET_HASH_VALUE (get_deh_offset (deh + j)),
+		hash_code = find_hash_in_use (name, name_len, get_deh_offset (deh + j),
 					      get_sb_hash_code (fs->fs_ondisk_sb));
 		if (hash_code != get_sb_hash_code (fs->fs_ondisk_sb)) {
 		    fsck_log ("pass1: block %lu, item %d, entry %d: The entry \"%.*s\" of the %k is hashed with %s "
@@ -381,8 +382,24 @@ static void pass1_correct_leaf (reiserfs_filsys_t * fs,
 			fsck_log(" - deleted\n");
 			j --;
 			deh = B_I_DEH (bh, ih);
+			continue;
 		    }
 		}
+
+		if (j && offset >= get_deh_offset (deh + j)) {
+		    fsck_log ("pass1: block %lu, item %d, entry %d: The entry "
+			      "\"%.*s\" of the %k has hash offset %lu not "
+			      "larger smaller than the previous one %lu. The "
+			      "entry is deleted.\n", bh->b_blocknr, 
+			      i, j, name_len, name, &ih->ih_key, 
+			      get_deh_offset(deh + j), offset);
+		    cut_entry (fs, bh, i, j, 1);
+		    j --;
+		    deh = B_I_DEH (bh, ih);
+		    continue;
+		}
+
+		offset = get_deh_offset (deh + j);
 	    }
 	    continue;
 	}

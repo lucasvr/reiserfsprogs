@@ -99,7 +99,7 @@ static int expand_fs (reiserfs_filsys_t * fs, long long int block_count_new) {
 
     reiserfs_reopen(fs, O_RDWR);
     if (reiserfs_open_ondisk_bitmap (fs))
-	DIE("cannot open ondisk bitmap");
+	reiserfs_exit(1, "cannot open ondisk bitmap");
 
     sb = fs->fs_ondisk_sb;
 
@@ -109,7 +109,7 @@ static int expand_fs (reiserfs_filsys_t * fs, long long int block_count_new) {
 
 
     if (reiserfs_expand_bitmap(fs->fs_bitmap2, block_count_new))
-	DIE("cannot expand bitmap\n");
+	reiserfs_exit(1, "cannot expand bitmap\n");
 
 
     /* count bitmap blocks in new fs */
@@ -201,12 +201,12 @@ int main(int argc, char *argv[]) {
 	switch (c) {
 	case 's' :
 	    if (!optarg)
-		DIE("Missing argument to -s option");
+		reiserfs_exit(1, "Missing argument to -s option");
 	    bytes_count_str = optarg;
 	    break;
 	case 'j' :
 	    if (!optarg) 
-		DIE("Missing argument to -j option");
+		reiserfs_exit(1, "Missing argument to -j option");
 	    jdevice_name = optarg;
 	case 'f':
 	    opt_force = 1;
@@ -244,26 +244,38 @@ int main(int argc, char *argv[]) {
     devname = argv[optind];
 
     fs = reiserfs_open(devname, O_RDONLY, &error, 0, 1);
-    if (!fs)
-	DIE ("cannot open '%s': %s", devname, strerror(error));
+    if (!fs) {
+	if (error) {
+		reiserfs_exit(1, "cannot open '%s': %s", 
+			      devname, strerror(error));
+        } else {
+		exit(1);
+	}
+    }
 
-    if (reiserfs_open_journal (fs, jdevice_name, O_RDWR | O_LARGEFILE))
-	DIE ("Failed to open the journal device (%s).", jdevice_name);
+    if (reiserfs_open_journal (fs, jdevice_name, O_RDWR | O_LARGEFILE)) {
+	reiserfs_exit(1, "Failed to open the journal device (%s).", 
+		      jdevice_name);
+    }
     
     if (reiserfs_journal_params_check(fs)) {
-	if (!opt_skipj)
-	    DIE ("Wrong journal parameters detected on (%s)", jdevice_name);
-	else
+	if (!opt_skipj) {
+	    reiserfs_exit(1, "Wrong journal parameters detected on (%s)", 
+			  jdevice_name);
+	} else {
 	    reiserfs_close_journal(fs);
+	}
     }
 
     /* forced to continue without journal available/specified */
 
     if (no_reiserfs_found (fs)) {
-	DIE ("no reiserfs found on the device.");
+	reiserfs_exit(1, "no reiserfs found on the device.");
     }
+    
     if (!spread_bitmaps (fs)) {
-	DIE ("cannot resize reiserfs in old (not spread bitmap) format.");
+	reiserfs_exit(1, "cannot resize reiserfs in old (not spread "
+		      "bitmap) format.");
     }
 
     sb = fs->fs_ondisk_sb;
@@ -295,7 +307,7 @@ int main(int argc, char *argv[]) {
 
     if (get_sb_umount_state(sb) != FS_CLEANLY_UMOUNTED)
 	/* fixme: shouldn't we check for something like: fsck guarantees: fs is ok */
-	DIE ("the file system isn't in valid state.");
+	reiserfs_exit(1, "the file system isn't in valid state.");
 		
     /* Needed to keep idiot compiler from issuing false warning */
     sb_old = 0;		

@@ -501,25 +501,37 @@ int reiserfs_open_journal (reiserfs_filsys_t * fs, char * j_filename, int flags)
 	    "specified journal device %s.\nMust be not less than (%lu).\n",
 	    get_jp_journal_size (sb_jp (sb)) + 1, j_filename, 
 	    JOURNAL_MIN_SIZE + 1);
+	close(fs->fs_journal_dev);
 	return 1;
     }
     
-    count = count_blocks (j_filename, fs->fs_blocksize);
-    if (get_jp_journal_1st_block (sb_jp (sb)) + get_jp_journal_size (sb_jp (sb)) + 1 > count) {
-	reiserfs_warning (stderr, "Detected journal on specified device %s does not fit to "
-	    "the device.\nStart block (%lu) + size (%lu) less than device size (%lu).\n", 
-	    j_filename, get_jp_journal_1st_block(sb_jp (sb)), 
-	    get_jp_journal_size(sb_jp (sb)) + 1, count);
+    if (!(count = count_blocks (j_filename, fs->fs_blocksize))) {
+	close(fs->fs_journal_dev);
+	return -1;
+    }
+
+    if (get_jp_journal_1st_block (sb_jp (sb)) + 
+	get_jp_journal_size (sb_jp (sb)) + 1 > count) 
+    {
+	reiserfs_warning (stderr, "Detected journal on specified device %s "
+			  "does not fit to the device.\nStart block (%lu) + "
+			  "size (%lu) less than device size (%lu).\n", 
+			  j_filename, get_jp_journal_1st_block(sb_jp (sb)), 
+			  get_jp_journal_size(sb_jp (sb)) + 1, count);
+	close(fs->fs_journal_dev);
 	return 1;
     }
     
     /* read journal header */
-    fs->fs_jh_bh = bread (fs->fs_journal_dev, get_jp_journal_1st_block (sb_jp (sb)) 
-	+ get_jp_journal_size (sb_jp (sb)), fs->fs_blocksize);
+    fs->fs_jh_bh = bread (fs->fs_journal_dev, 
+			  get_jp_journal_1st_block (sb_jp (sb)) + 
+			  get_jp_journal_size (sb_jp (sb)), 
+			  fs->fs_blocksize);
 
     if (!fs->fs_jh_bh) {
-	reiserfs_warning (stderr, "reiserfs_open_journal: bread failed reading "
-	    "journal  header.\n");
+	reiserfs_warning (stderr, "reiserfs_open_journal: bread failed "
+			  "reading journal  header.\n");
+	close(fs->fs_journal_dev);
 	return -1;
     }
 
@@ -574,7 +586,9 @@ int reiserfs_create_journal(
 	st.st_rdev = 0;
     } else {
 	/* journal is to be on separate device */
-	blocks = count_blocks (j_device, fs->fs_blocksize);
+	if (!(blocks = count_blocks (j_device, fs->fs_blocksize)))
+		return 0;
+
 	if (!len) {
 	    /* default size of a journal on a separate device is whole device */
 	    if (blocks < offset) {

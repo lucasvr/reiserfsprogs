@@ -525,7 +525,8 @@ int main (int argc, char **argv)
 #if defined(O_LARGEFILE)
 				   | O_LARGEFILE
 #endif
-				   )) {
+				   )) 
+	{
 	    message ("Failed to open the journal device (%s).", jdevice_name);
 	    return 1;
 	}
@@ -577,10 +578,10 @@ int main (int argc, char **argv)
     } else {
 #if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
         if (!uuid_is_null(UUID))
-            reiserfs_panic ("UUID cannot be specified for 3.5 format\n");
+            reiserfs_exit (1, "UUID cannot be specified for 3.5 format\n");
 #endif
         if (LABEL)
-            reiserfs_panic ("LABEL cannot be specified for 3.5 format\n");
+            reiserfs_exit (1, "LABEL cannot be specified for 3.5 format\n");
     }
 
     if (!j_new_device_name) {

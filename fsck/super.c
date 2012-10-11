@@ -220,7 +220,8 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
 	    fs->fs_blocksize = retval;
 	}
 
-        block_count = count_blocks (filename, fs->fs_blocksize);
+        if (!(block_count = count_blocks (filename, fs->fs_blocksize)))
+		exit(EXIT_OPER);
 
         /* save ondisk_sb somewhere and work in temp area */
         ondisk_sb = fs->fs_ondisk_sb;
@@ -358,7 +359,8 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
 		retval = 4096;
 	}
 
-        block_count = count_blocks (filename, retval);
+        if (!(block_count = count_blocks (filename, retval)))
+		exit(EXIT_OPER);
 
         switch(version){
         case 1:
@@ -601,8 +603,8 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
 	    }
 
 	    if (!reiserfs_journal_opened(fs)) {
-		fsck_log ("Journal cannot be opened, assuming specified journal device "
-			"is correct\n");
+		fsck_log ("Journal cannot be opened, assuming specified "
+			  "journal device is correct\n");
 	    }
 	}
 	
@@ -629,7 +631,9 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
             } else
                 set_jp_journal_1st_block (sb_jp(sb), default_value);
 
-            p_jp_dev_size = count_blocks (journal_dev_name, fs->fs_blocksize);
+            if (!(p_jp_dev_size = count_blocks (journal_dev_name, fs->fs_blocksize)))
+		    exit(EXIT_OPER);
+
             /* some checks for journal offset */
             if (strcmp(fs->fs_file_name, journal_dev_name) != 0) {
                 if (p_jp_dev_size < get_jp_journal_1st_block (sb_jp(sb)) + 1)

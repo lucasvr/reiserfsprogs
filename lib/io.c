@@ -408,7 +408,8 @@ struct buffer_head * getblk (int dev, unsigned long block, int size)
 	if (buffers_memory >= buffer_soft_limit) {
 	    if (sync_buffers (&Buffer_list_head, dev, 32) == 0) {
 		grow_buffers(size);
-		buffer_soft_limit = buffers_memory + GROW_BUFFERS__NEW_BUFERS_PER_CALL * size;
+		buffer_soft_limit = buffers_memory + 
+			GROW_BUFFERS__NEW_BUFERS_PER_CALL * size;
 	    }
 	} else {
 	    if (grow_buffers(size) == 0)
@@ -418,7 +419,8 @@ struct buffer_head * getblk (int dev, unsigned long block, int size)
 	bh = get_free_buffer (&g_free_buffers, size);
 	if (bh == NULL) {
 	    show_buffers (dev, size);
-	    die ("getblk: no free buffers after grow_buffers and refill (%d)", g_nr_buffers);
+	    die ("getblk: no free buffers after grow_buffers "
+		 "and refill (%d)", g_nr_buffers);
 	}
     }
 
@@ -499,19 +501,20 @@ struct buffer_head * bread (int dev, unsigned long block, size_t size)
 
     ret = f_read(bh);
     
-    if (ret > 0)
-	die ("%s: End of file, cannot read the block (%lu).\n", __FUNCTION__, block);
-    else if (ret < 0) {
+    if (ret > 0) {
+	die ("%s: End of file, cannot read the block (%lu).\n", 
+	     __FUNCTION__, block);
+    } else if (ret < 0) {
 	/* BAD BLOCK LIST SUPPORT
 	 * die ("%s: Cannot read a block # %lu. Specify list of badblocks\n",*/
 
 	if (errno == EIO) {
 	    check_hd_msg();
-	    die ("%s: Cannot read the block (%lu): (%s).\n", __FUNCTION__, 
-		block, strerror(errno));
+	    die ("%s: Cannot read the block (%lu): (%s).\n", 
+		 __FUNCTION__, block, strerror(errno));
 	} else	{
-	    fprintf (stderr, "%s: Cannot read the block (%lu): (%s).\n", __FUNCTION__, 
-		block, strerror(errno));
+	    fprintf (stderr, "%s: Cannot read the block (%lu): (%s).\n", 
+		     __FUNCTION__, block, strerror(errno));
 	    return NULL;
 	}
     }
@@ -904,11 +907,14 @@ static void check_and_free_buffer_mem (void)
     count += _check_and_free_buffer_list(g_free_buffers);
 
     if (count != g_nr_buffers)
-       die ("check_and_free_buffer_mem: found %d buffers, must be %d", count, g_nr_buffers);
+       die ("check_and_free_buffer_mem: found %d buffers, must be %d", 
+	    count, g_nr_buffers);
 
     /* free buffer heads */
     while ((next = g_buffer_heads)) {
-	g_buffer_heads = *(struct buffer_head **)(next + GROW_BUFFERS__NEW_BUFERS_PER_CALL);
+	g_buffer_heads = *(struct buffer_head **)
+		(next + GROW_BUFFERS__NEW_BUFERS_PER_CALL);
+
 	freemem (next);
     }
   

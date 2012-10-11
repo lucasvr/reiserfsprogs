@@ -228,6 +228,7 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 
 	case 'a':
 	case 'p':
+		data->options |= OPT_QUIET;
 		mode = FSCK_AUTO;
 		break;
 	
@@ -673,7 +674,8 @@ static void mark_filesystem_consistent (reiserfs_filsys_t * fs)
     if (!reiserfs_journal_opened (fs)) {
 	/* make sure journal is not standard */
 	if (!is_reiserfs_jr_magic_string (fs->fs_ondisk_sb))
-	    die ("Filesystem with default journal must be opened.");
+	    reiserfs_exit(EXIT_OPER, "Filesystem with default journal "
+			  "must be opened.");
 	
 	fsck_progress ("WARNING: You must use reiserfstune to specify a new "
 	    "journal before mounting it.\n");
@@ -785,11 +787,15 @@ static void prepare_fs_for_check(reiserfs_filsys_t * fs) {
 	/* If not CHECK mode, lock the process in the memory. */
 	if (fsck_mode (fs) != FSCK_CHECK) {
 	    if (mlockall(MCL_CURRENT)) {
-		    reiserfs_warning (stderr, "Failed to lock the process to "
-				      "fsck the mounted ro partition. %s.\n", 
-				      strerror(errno));
-		    exit(EXIT_OPER);
+		    reiserfs_exit(EXIT_OPER, "Failed to lock the process to "
+				  "fsck the mounted ro partition. %s.\n", 
+				  strerror(errno));
 	    }
+	}
+	
+	if (fsck_skip_journal (fs)) {
+		reiserfs_exit(EXIT_USER, "Jounrnal of the mounted "
+			      "filesystem must be specified.\n");
 	}
 	
 	if (!reiserfs_journal_opened (fs)) {
@@ -879,7 +885,7 @@ static void clean_attributes (reiserfs_filsys_t * fs) {
     time (&t);
 
     if (get_sb_umount_state (fs->fs_ondisk_sb) != FS_CLEANLY_UMOUNTED) {
-        fsck_progress ("Filesystem does not look cleanly umounted\n"
+        fsck_progress ("Filesystem is not clean\n"
 	    "Check consistency of the partition first.\n");
         exit(EXIT_USER);
     }
@@ -1227,8 +1233,9 @@ int main (int argc, char * argv [])
            'fsck.run'. Logs get there if log file was not specified*/
 	data->options |= OPT_QUIET;
 	data->progress = fopen ("fsck.run", "a+");
-	if (!data->progress)
-	    reiserfs_panic ("reiserfsck: Cannot not open \"fsck.run\"");
+	if (!data->progress) {
+	    reiserfs_exit(EXIT_OPER, "reiserfsck: Cannot not open \"fsck.run\"");
+	}
 
 	if (data->log == stdout)
 	    /* no log file specifed - redirect log into 'fsck.run' */
@@ -1255,19 +1262,20 @@ int main (int argc, char * argv [])
     } else {
 	fs = reiserfs_open (file_name, O_RDONLY, &error, data, 
 	    data->mode != FSCK_SB);
-
+		
+	if (error) {
+		reiserfs_exit(EXIT_OPER, "Failed to open the device "
+			      "'%s': %s\n\n", file_name, strerror(error));
+	} 
+	
 	if (data->mode != FSCK_SB) {
 	    if (no_reiserfs_found (fs)) {
-		if (error) {
-		    die ("Failed to open the device '%s': %s\n\n", 
-			 file_name, strerror(error));
-		} else {
-		    die ("Failed to open the filesystem.\n\n"
-			 "If the partition table has not been changed, and the partition is\n"
-			 "valid  and  it really  contains  a reiserfs  partition,  then the\n"
-			 "superblock  is corrupted and you need to run this utility with\n"
-			 "--rebuild-sb.\n");
-		}
+		reiserfs_exit(EXIT_OPER, "Failed to open the filesystem.\n\n"
+			      "If the partition table has not been changed, "
+			      "and the partition is\nvalid  and  it really  "
+			      "contains  a reiserfs  partition,  then the\n"
+			      "superblock  is corrupted and you need to run "
+			      "this utility with\n--rebuild-sb.\n");
 	    }
 	    if (fsck_skip_journal (fs) && 
 		!is_reiserfs_jr_magic_string (fs->fs_ondisk_sb)) 

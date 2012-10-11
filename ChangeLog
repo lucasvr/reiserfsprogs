@@ -1,3 +1,20 @@
+2004-10-13
+	3.6.19 release.
+2004-09-22
+	Some bug fixes:
+	- stop handling directory item if it has been removed on fsck pass0
+	- handle correctly cases when hash functions return 0
+	- additional check for wrong order of hashes when generation counters
+	differ.
+2004-08-18
+	{get|set}_unaligned macroses fix for broken powerpc linux kernel 
+	headers.
+2004-08-18
+	Patches from Jeff Mahoney:
+	- warnings cleanups
+	- sd_blocks check fix for quota
+	- make fsck -a works quitely
+	- fix the definition of BLKGETSIZE64
 2004-08-03
 	3.6.18 release.
 2004-06-18

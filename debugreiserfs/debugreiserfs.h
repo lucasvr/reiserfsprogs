@@ -39,7 +39,7 @@ extern reiserfs_filsys_t * fs;
 #define DO_SCAN_JOURNAL  	13 /* -J */
 #define DO_EXTRACT_BADBLOCKS	14
 #define DO_FILE_MAP 		15
-#define DO_ZERO_BITMAP		16
+#define DO_ZERO 		16
 #define DO_NOTHING		17
 
 

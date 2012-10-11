@@ -40,6 +40,14 @@
 
 #include <asm/unaligned.h>
 
+#ifndef get_unaligned
+#if defined(__ppc__) || defined(ppc) || defined(__ppc) || \
+    defined(__PPC) || defined(powerpc) || defined(__powerpc__)
+#	define get_unaligned(ptr)	(*(ptr))
+#	define put_unaligned(val,ptr)	((void)(*(ptr) = (val)))
+#endif
+#endif
+
 #define get_leXX(xx,p,field)	(le##xx##_to_cpu ((p)->field))
 #define set_leXX(xx,p,field,val) do { (p)->field = cpu_to_le##xx(val); } while (0)
 

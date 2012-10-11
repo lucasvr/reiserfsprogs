@@ -128,8 +128,7 @@ static void unpack_direntry (struct packed_item * pi, struct buffer_head * bh,
 	    /* old or new ".." */
 	    set_deh_offset (deh, DOT_DOT_OFFSET);
 	else if (hash_func)
-	    set_deh_offset (deh, GET_HASH_VALUE (hash_func (item + location,
-							    namelen)));
+	    set_deh_offset (deh, hash_value(hash_func, item + location, namelen));
 	if (mask & HAS_GEN_COUNTER) {
 	    fread_le16 (&gen_counter);
 	    set_deh_offset (deh, get_deh_offset (deh) | gen_counter);

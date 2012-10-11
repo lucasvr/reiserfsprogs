@@ -728,7 +728,7 @@ void do_leaves_corruption (reiserfs_filsys_t * fs,
 	}
 
     if (reiserfs_open_ondisk_bitmap (fs) < 0)
-		reiserfs_panic ("Could not open ondisk bitmap");
+		reiserfs_exit (1, "Could not open ondisk bitmap");
 
     for (i = 0; (i < get_sb_block_count (fs->fs_ondisk_sb)) &&
 			 nr_leaves < nr_leaves_cr; i ++) {
@@ -853,7 +853,7 @@ void do_ih_random_corrupt (reiserfs_filsys_t * fs,
 	}
 
     if (reiserfs_open_ondisk_bitmap (fs) < 0)
-		reiserfs_panic ("Could not open ondisk bitmap");
+		reiserfs_exit (1, "Could not open ondisk bitmap");
 
     for (i = 0; (i < get_sb_block_count (fs->fs_ondisk_sb)) &&
 			 nr_leaves < nr_leaves_cr; i ++) {
@@ -960,7 +960,7 @@ void do_dir_random_corrupt (reiserfs_filsys_t * fs,
 	}
 
     if (reiserfs_open_ondisk_bitmap (fs) < 0)
-		reiserfs_panic ("Could not open ondisk bitmap");
+		reiserfs_exit (1, "Could not open ondisk bitmap");
 
     for (i = 0; (i < get_sb_block_count (fs->fs_ondisk_sb)) &&
 			 nr_leaves < nr_leaves_cr; i ++) {
@@ -1041,7 +1041,7 @@ void do_sd_random_corrupt (reiserfs_filsys_t * fs,
 	}
 
     if (reiserfs_open_ondisk_bitmap (fs) < 0)
-		reiserfs_panic ("Could not open ondisk bitmap");
+		reiserfs_exit (1, "Could not open ondisk bitmap");
 
     for (i = 0; (i < get_sb_block_count (fs->fs_ondisk_sb)) &&
 			 nr_leaves < nr_leaves_cr; i ++) {
@@ -1122,7 +1122,7 @@ void do_ind_random_corrupt (reiserfs_filsys_t * fs,
 	}
 
     if (reiserfs_open_ondisk_bitmap (fs) < 0)
-		reiserfs_panic ("Could not open ondisk bitmap");
+		reiserfs_exit (1, "Could not open ondisk bitmap");
 
     for (i = 0; (i < get_sb_block_count (fs->fs_ondisk_sb)) &&
 			 nr_leaves < nr_leaves_cr; i ++) {

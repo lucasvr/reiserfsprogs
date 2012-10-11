@@ -253,9 +253,13 @@ static int reiserfs_fetch_ondisk_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys
 	if (!bh) {
 	    reiserfs_warning (stderr, "reiserfs_fetch_ondisk_bitmap: "
 			      "bread failed reading bitmap (%lu)\n", block);
+	    
 	    bh = getblk (fs->fs_dev, block, fs->fs_blocksize); 
-	    if (!bh)
-		reiserfs_panic ("reiserfs_fetch_ondisk_bitmap: getblk failed");
+	    if (!bh) {
+		reiserfs_exit (1, "reiserfs_fetch_ondisk_bitmap: "
+			       "getblk failed");
+	    }
+
 	    memset (bh->b_data, 0xff, bh->b_size);
 	    mark_buffer_uptodate (bh, 1);
 	}
@@ -341,9 +345,10 @@ int reiserfs_flush_to_ondisk_bitmap (reiserfs_bitmap_t * bm, reiserfs_filsys_t *
     while (to_copy) {
 	/* we bread to make sure that filesystem contains enough blocks */
 	bh = getblk (fs->fs_dev, block, fs->fs_blocksize);
-	if (!bh)
-	    reiserfs_panic ("reiserfs_flush_to_ondisk_bitmap: "
-			    "getblk failed for (%lu)\n", block);
+	if (!bh) {
+	    reiserfs_exit (1, "Getblk failed for (%lu)\n", block);
+	}
+	
 	memset (bh->b_data, 0xff, bh->b_size);
 	mark_buffer_uptodate (bh, 1);
 
@@ -685,7 +690,8 @@ void reiserfs_free_ondisk_bitmap (reiserfs_filsys_t * fs)
 int reiserfs_open_ondisk_bitmap (reiserfs_filsys_t * fs)
 {
     if (fs->fs_bitmap2)
-	reiserfs_panic ("%s: bitmap is initiaized already", __FUNCTION__);
+	reiserfs_panic ("bitmap is initiaized already");
+
     fs->fs_bitmap2 = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
     if (!fs->fs_bitmap2)
 	return -1;
@@ -705,7 +711,8 @@ int reiserfs_open_ondisk_bitmap (reiserfs_filsys_t * fs)
 int reiserfs_create_ondisk_bitmap (reiserfs_filsys_t * fs)
 {
     if (fs->fs_bitmap2)
-	reiserfs_panic ("create: bitmap is initiaized already");
+	reiserfs_panic ("bitmap is initiaized already");
+
     fs->fs_bitmap2 = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
     if (!fs->fs_bitmap2)
 	return 0;
