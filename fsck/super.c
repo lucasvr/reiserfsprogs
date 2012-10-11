@@ -191,12 +191,6 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
     struct stat stat_buf;
     int retval, exit_code = EXIT_OK;
 
-#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
-    char uuid[37];
-    
-    uuid[36] = '\0';
-#endif
-
     if (!no_reiserfs_found (fs)) {
         sb = getmem (sizeof (*sb));
         if (!is_opened_rw (fs)) {

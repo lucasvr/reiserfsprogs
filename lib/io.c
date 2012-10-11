@@ -658,7 +658,7 @@ void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * progress) {
     int b_dev;
     int n_dev = 0;
     int n_journal_dev = 0;
-    unsigned long total, done = 0;
+    unsigned long done = 0;
 
     if (fd_device == 0) {
         fprintf(stderr, "rollback: unspecified device, exit\n");
@@ -688,8 +688,6 @@ void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * progress) {
     
     fread (&rollback_blocks_number, sizeof (rollback_blocks_number), 1, s_rollback_file);
 
-    total = rollback_blocks_number;
-    
     while (1) {
         print_how_far (progress, &done, rollback_blocks_number, 1, 0/*not quiet*/);
 	

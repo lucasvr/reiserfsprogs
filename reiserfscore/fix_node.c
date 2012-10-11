@@ -1918,11 +1918,6 @@ static int dc_check_balance_leaf (struct tree_balance * tb, int h)
 {
     struct virtual_node * vn = tb->tb_vn;
 
-    /* Number of bytes that must be deleted from (value is negative if bytes
-       are deleted) buffer which contains node being balanced.  The mnemonic
-       is that the attempted change in node space used level is levbytes
-       bytes. */
-    int levbytes;
     /* the maximal item size */
     int n_ret_value;
     /* F0 is the parent of the node whose balance is currently being checked */
@@ -1930,8 +1925,6 @@ static int dc_check_balance_leaf (struct tree_balance * tb, int h)
     int lfree, rfree /* free space in L and R */;
     
     F0 = PATH_H_PPARENT (tb->tb_path, 0);
-
-    levbytes = tb->insert_size[h];
 
     if ( ! F0 ) {
 	/* S[0] is the root now. */

@@ -370,10 +370,8 @@ static int leaf_copy_items (reiserfs_filsys_t * fs,
 			    int last_first, int cpy_num,
 			    int cpy_bytes)
 {
-    struct buffer_head * dest;
     int pos, i, src_nr_item, bytes;
 
-    dest = dest_bi->bi_bh;
     if ( cpy_num == 0 )
 	return 0;
  

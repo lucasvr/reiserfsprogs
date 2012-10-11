@@ -751,10 +751,7 @@ static void reiserfsck_replay_journal (reiserfs_filsys_t * fs) {
 
 static int the_end (reiserfs_filsys_t * fs)
 {
-    struct reiserfs_super_block * sb;
     int ret = EXIT_FIXED;
-
-    sb = fs->fs_ondisk_sb;
 
     /* put bitmap and objectid map on place */
     reiserfs_delete_bitmap (fs->fs_bitmap2);

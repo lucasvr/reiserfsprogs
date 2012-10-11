@@ -511,7 +511,6 @@ static int is_symlink = 0;
 static int print_leaf (FILE * fp, reiserfs_filsys_t * fs, struct buffer_head * bh,
 		       int print_mode, int first, int last)
 {
-    struct block_head * blkh;
     struct item_head * ih;
     int i;
     int from, to;
@@ -520,7 +519,6 @@ static int print_leaf (FILE * fp, reiserfs_filsys_t * fs, struct buffer_head * b
     if (!is_tree_node (bh, DISK_LEAF_NODE_LEVEL))
 	return 1;
     
-    blkh = B_BLK_HEAD (bh);
     ih = B_N_PITEM_HEAD (bh,0);
     real_nr = leaf_count_ih(bh->b_data, bh->b_size);
     nr = get_blkh_nr_items((struct block_head *)bh->b_data);

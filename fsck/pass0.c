@@ -244,9 +244,7 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
     int bad, lost_found;
     int i, j;
     char buf[4096];
-    int dirty;
     int hash_code;
-    int bad_locations;
     int min_entry_size = 1;
 
 #ifdef DEBUG_VERIFY_DENTRY
@@ -258,9 +256,6 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
     item = B_I_PITEM (bh,ih);
     deh = (struct reiserfs_de_head *)item;
 
-    dirty = 0;
-    bad_locations = 0;
- 
     if ( (get_ih_entry_count (ih) > (get_ih_item_len(ih) / (DEH_SIZE + min_entry_size))) ||
           (get_ih_entry_count (ih) == 0))
     {
@@ -417,21 +412,29 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
        screwed up */
     {
 	int prev_loc;
+#ifdef DEBUG_VERIFY_DENTRY
 	int loc_fixed;
+#endif
 
 
 	prev_loc = get_ih_item_len (ih);
 	for (i = 0; i < get_ih_entry_count (ih); i ++) {
+#ifdef DEBUG_VERIFY_DENTRY
 	    loc_fixed = 0;
+#endif
 	    if (de_bad_location (deh + i)) {
 		set_deh_location (deh + i, prev_loc/* - 1*/);
 		mark_buffer_dirty (bh);
+#ifdef DEBUG_VERIFY_DENTRY
 		loc_fixed = 1;
+#endif
 	    } else {
 		if (get_deh_location (deh + i) >= prev_loc) {
 		    set_deh_location (deh + i, prev_loc/* - 1*/);
 		    mark_buffer_dirty (bh);
+#ifdef DEBUG_VERIFY_DENTRY
 		    loc_fixed = 1;
+#endif
 		}
 	    }
 
@@ -448,7 +451,9 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
 		}
 		if (get_deh_location (deh + i) != (DEH_SIZE * get_ih_entry_count (ih))) {
 		    set_deh_location (&deh[i], (DEH_SIZE * get_ih_entry_count (ih)));
+#ifdef DEBUG_VERIFY_DENTRY
 		    loc_fixed = 1;
+#endif
 		    mark_buffer_dirty (bh);
 		}
 	    }
@@ -639,7 +644,6 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
     __u64 fs_size;
     __u64 offset;
     int symlnk = 0;
-    int bad_order;
     
     unsigned long unfm_ptr;
 //    unsigned int nr_items;
@@ -664,7 +668,6 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
  start_again:
 
     ih = B_N_PITEM_HEAD (bh, 0);
-    bad_order = 0;
     for (i = 0; i < (nr_items = get_blkh_nr_items (B_BLK_HEAD (bh))); i ++, ih ++) {
 
 	if (is_indirect_ih(ih) && (get_ih_item_len (ih) % 4 != 0)) {
