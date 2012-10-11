@@ -13,7 +13,6 @@
 #include <asm/types.h>
 #include <sys/vfs.h>
 #include <errno.h>
-#include <unistd.h>
 #include <time.h>
 #include <asm/types.h>
 #include <assert.h>
@@ -37,7 +36,6 @@ int main (int argc, char * argv []);
 #define FSCK_SB                 3
 #define FSCK_REBUILD            4
 #define FSCK_ROLLBACK_CHANGES   5
-#define FSCK_FAST_REBUILD       6
 #define FSCK_CLEAN_ATTRIBUTES	7
 #define AUTO                    8 /* -p specified */
 
@@ -66,7 +64,6 @@ void pass_0 (reiserfs_filsys_t *);
 void load_pass_0_result (FILE *, reiserfs_filsys_t *);
 
 int is_used_leaf (unsigned long block);
-int how_many_leaves_were_there (void);
 int is_good_unformatted (unsigned long block);
 void mark_good_unformatted (unsigned long block);
 int is_bad_unformatted (unsigned long block);
@@ -75,9 +72,7 @@ int are_there_allocable_blocks (int amout_needed);
 unsigned long alloc_block (void);
 void make_allocable (unsigned long block);
 void register_uninsertable (unsigned long block);
-unsigned long how_many_uninsertables_were_there (void);
 void register_saved_item (void);
-unsigned long how_many_items_were_saved (void);
 int still_bad_unfm_ptr_1 (unsigned long block);
 int still_bad_unfm_ptr_2 (unsigned long block);
 void make_alloc_bitmap (reiserfs_filsys_t *);
@@ -114,15 +109,15 @@ void make_single_leaf_tree (struct buffer_head * bh);
 /* pass2.c */
 void pass_2 (reiserfs_filsys_t *);
 void load_pass_2_result (reiserfs_filsys_t *);
-void insert_item_separately (struct item_head * ih, char * item,
-			     int was_in_tree);
+void insert_item_separately (struct item_head * ih, char * item, int was_in_tree);
+void save_item (struct si ** head, struct item_head * ih, char * item, __u32 blocknr);
 struct si * save_and_delete_file_item (struct si * si, struct path * path);
 void take_bad_blocks_put_into_tree (void);
 void rewrite_object (struct item_head * ih, int do_remap);
 void pass_2_take_bad_blocks_put_into_tree (void);
 /*int is_remapped (struct item_head * ih);*/
 void link_relocated_files (void);
-void relocate_file (struct item_head * ih, int change_ih);
+//void relocate_file (struct item_head * ih, int change_ih);
 int should_relocate (struct item_head * ih);
 void relocate_dir (struct item_head * ih, int change_ih);
 __u32 objectid_for_relocation (struct key * key);
@@ -141,6 +136,8 @@ struct si {
 void put_saved_items_into_tree (struct si *);
 int reiserfsck_file_write (struct item_head * ih, char * item, int);
 int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, __u32 * blocks, int mark_passed_items, int * symlink);
+int delete_N_items_after_key(struct key * start_key, struct si ** save_here, int skip_dir_items, int n_to_delete);
+void rewrite_file (struct item_head * ih, int should_relocate, int should_change_ih);
 
 
 
@@ -200,7 +197,6 @@ int is_bad_directory (struct item_head * ih, char * item, int dev, int blocksize
 /* check_tree.c */
 void check_fs_tree (reiserfs_filsys_t *);
 void do_clean_attributes (reiserfs_filsys_t * fs);
-//int check_sb (reiserfs_filsys_t *);
 int bad_pair (reiserfs_filsys_t *, struct buffer_head * bh, int i);
 int bad_leaf_2 (reiserfs_filsys_t *, struct buffer_head * bh);
 
@@ -410,6 +406,7 @@ struct check_info {
     unsigned long safe;
     unsigned long unfm_pointers;
     unsigned long zero_unfm_pointers;
+    reiserfs_bitmap_t * deallocate_bitmap;
 };
 
 
@@ -456,6 +453,7 @@ struct fsck_data {
 #define fsck_allocable_bitmap(fs) fsck_data(fs)->rebuild.allocable_bitmap
 #define fsck_uninsertables(fs) fsck_data(fs)->rebuild.uninsertables
 
+#define fsck_deallocate_bitmap(fs) fsck_data(fs)->check.deallocate_bitmap
 
 #define fsck_interactive(fs) (fsck_data(fs)->options & OPT_INTERACTIVE)
 //#define fsck_fix_fixable(fs) (fsck_data(fs)->options & OPT_FIX_FIXABLE)
@@ -516,5 +514,5 @@ fflush (fsck_progress_file(fs));\
 #define fsck_exit(fmt, list...) \
 {\
 reiserfs_warning (fsck_progress_file(fs), fmt, ## list);\
-exit (4);\
+exit (16);\
 }

@@ -66,7 +66,7 @@ sbindir = @sbindir@
 
 sbin_PROGRAMS = reiserfsck
 
-reiserfsck_SOURCES = main.c pass0.c pass1.c pass2.c semantic_check.c semantic_rebuild.c pass4.c lost+found.c ubitmap.c uobjectid.c ustree.c ufile.c check.c check_tree.c info.c super.c fsck.h
+reiserfsck_SOURCES = main.c pass0.c pass1.c pass2.c semantic_check.c semantic_rebuild.c pass4.c lost+found.c ubitmap.c uobjectid.c ustree.c ufile.c check_tree.c info.c super.c fsck.h
 
 
 man_MANS = reiserfsck.8
@@ -85,7 +85,7 @@ LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@
 reiserfsck_OBJECTS =  main.o pass0.o pass1.o pass2.o semantic_check.o \
 semantic_rebuild.o pass4.o lost+found.o ubitmap.o uobjectid.o ustree.o \
-ufile.o check.o check_tree.o info.o super.o
+ufile.o check_tree.o info.o super.o
 reiserfsck_LDADD = $(LDADD)
 reiserfsck_DEPENDENCIES =  $(top_srcdir)/lib/libmisc.a \
 $(top_srcdir)/reiserfscore/libcore.a
@@ -250,9 +250,6 @@ distdir: $(DISTFILES)
 	    || cp -p $$d/$$file $(distdir)/$$file || :; \
 	  fi; \
 	done
-check.o: check.c fsck.h ../include/io.h ../include/misc.h \
-	../include/swab.h ../include/reiserfs_lib.h \
-	../include/reiserfs_fs.h
 check_tree.o: check_tree.c fsck.h ../include/io.h ../include/misc.h \
 	../include/swab.h ../include/reiserfs_lib.h \
 	../include/reiserfs_fs.h

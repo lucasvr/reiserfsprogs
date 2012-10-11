@@ -28,7 +28,6 @@
 #include <time.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
-#include <linux/major.h>
 #include <sys/stat.h>
 #include <linux/kdev_t.h>
 #include <sys/utsname.h>

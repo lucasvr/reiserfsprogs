@@ -113,7 +113,12 @@ int reiserfs_bitmap_compare (reiserfs_bitmap_t * bm1, reiserfs_bitmap_t * bm2)
     return diff;
 }
 
-
+/* 
+    Does X | Y for every bit of the bitmap `to`, where 
+    X - bit of the `to` bitmap, 
+    Y - `from` bitmap. 
+    Save result in the `to` bitmap.
+*/
 void reiserfs_bitmap_disjunction (reiserfs_bitmap_t * to, reiserfs_bitmap_t * from)
 {
     int i;
@@ -130,6 +135,26 @@ void reiserfs_bitmap_disjunction (reiserfs_bitmap_t * to, reiserfs_bitmap_t * fr
     }
 }
 
+/* 
+    Does X & !Y for every bit of the bitmap `base`, where 
+    X - bit of the `base` bitmap, 
+    Y - `exclude` bitmap. 
+    Save result in the `base` bitmap.
+*/
+void reiserfs_bitmap_delta (reiserfs_bitmap_t * base, reiserfs_bitmap_t * exclude) {
+   int i;
+
+    assert (base->bm_byte_size == exclude->bm_byte_size &&
+	    base->bm_bit_size == exclude->bm_bit_size);
+
+    for (i = 0; i < base->bm_bit_size; i++) {
+	if (test_bit(i, exclude->bm_map) && test_bit(i, base->bm_map)) {
+	    clear_bit(i, base->bm_map);
+	    base->bm_set_bits --;
+	    base->bm_dirty = 1;
+	}
+    }
+}
 
 void reiserfs_bitmap_set_bit (reiserfs_bitmap_t * bm, unsigned int bit_number)
 {

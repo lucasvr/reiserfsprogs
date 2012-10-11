@@ -19,9 +19,12 @@ void print_name (char * name, int len)
 	return;
 
     if ( len + screen_curr_pos + 1 > screen_savebuffer_len) {
-	char *t = expandmem(screen_savebuffer, screen_savebuffer_len + 1, len + screen_curr_pos - screen_savebuffer_len + 1);
+	char *t;
+	
+	t = expandmem(screen_savebuffer, screen_savebuffer_len + 1, 
+	    len + screen_curr_pos - screen_savebuffer_len + 1);
 	if (!t) {
-	    printf("\nNot enough memory\n");
+	    fsck_progress("\nOut of memory\n");
 	    return; // ????
 	}
 	screen_savebuffer = t;
@@ -37,7 +40,8 @@ void print_name (char * name, int len)
     screen_savebuffer[screen_curr_pos]=0;
 
     if ( screen_width < screen_curr_pos ) {
-	printf("\r... %.*s",screen_width - 4, screen_savebuffer + ( screen_curr_pos - (screen_width - 4)));
+	printf("\r... %.*s",screen_width - 4, 
+	    screen_savebuffer + ( screen_curr_pos - (screen_width - 4)));
     } else
 	printf("/%.*s", len, screen_savebuffer + screen_curr_pos - len);
 
@@ -66,13 +70,14 @@ void erase_name (int len)
     } else {
 	screen_curr_pos-=len+1;
 	if (screen_curr_pos < 0 )
-	    die("semantic_rebuild.c: run out of buffer data in erase_name!\n");
+	    die("%s: Get out of buffer's data!\n", __FUNCTION__);
 
 	screen_savebuffer[screen_curr_pos]=0;
 	printf("\r");
 	if (screen_curr_pos >= screen_width ) {
 	    int t_preface=MIN(screen_curr_pos-screen_width,4);
-	    printf("%.*s%.*s", t_preface, "... ", screen_width-t_preface - 1, screen_savebuffer + ( screen_curr_pos - (screen_width - t_preface)) + 1);
+	    printf("%.*s%.*s", t_preface, "... ", screen_width-t_preface - 1, 
+		screen_savebuffer + ( screen_curr_pos - (screen_width - t_preface)) + 1);
 	} else {
 	    int space_used=printf("%s", screen_savebuffer);
 	    for ( i=space_used; i < screen_width; i++)
@@ -97,8 +102,9 @@ int wrong_st_size (struct key * key, loff_t max_file_size, int blocksize,
 
 	if (is_dir) {
 	    /* directory size must match to the sum of length of its entries */
-	    fsck_log ("dir %K has wrong sd_size %Ld, has to be %Ld\n",
-		      key, sd_size, *size);
+	    fsck_log ("vpf-10650: The directory %K has the wrong size in the StatData "
+		"(%Ld)%s(%Ld)\n", key, sd_size, fsck_mode(fs) == FSCK_CHECK ? 
+		", should be " : " - corrected to ", *size);
 	    return 1;
 	}
 	
@@ -106,8 +112,8 @@ int wrong_st_size (struct key * key, loff_t max_file_size, int blocksize,
 	    /* size in stat data can be bigger than size calculated by items */
 	    if (fsck_adjust_file_size (fs)) {
 		/* but it -o is given - fix that */
-		fsck_log ("file %K has too big file size sd_size %Ld - fixed to %Ld\n",
-			  key, sd_size, *size);
+		fsck_log ("vpf-10660: The file %K has too big size in the StatData (%Ld) "
+		    "- corrected to (%Ld)\n", key, sd_size, *size);
 		sem_pass_stat (fs)->fixed_sizes ++;
 		return 1;
 	    }
@@ -117,7 +123,9 @@ int wrong_st_size (struct key * key, loff_t max_file_size, int blocksize,
 	
 	if (!(*size % blocksize)) {
 	    /* last item is indirect */
-	    if (((sd_size & ~(blocksize - 1)) == (*size - blocksize)) && sd_size % blocksize) {
+	    if (((sd_size & ~(blocksize - 1)) == (*size - blocksize)) && 
+		sd_size % blocksize) 
+	    {
 		/* size in stat data is correct */
 		*size = sd_size;
 		return 0;
@@ -134,8 +142,9 @@ int wrong_st_size (struct key * key, loff_t max_file_size, int blocksize,
 	}
     }
 
-    fsck_log ("file %K has wrong sd_size %Ld, has to be %Ld\n",
-	      key, sd_size, *size);
+    fsck_log ("vpf-10670: The file %K has wrong size in StatData (%Ld)%s(%Ld)\n", key, 
+	sd_size, fsck_mode(fs) == FSCK_CHECK ? ", should be " : " - corrected to ", 
+	*size);
     sem_pass_stat (fs)->fixed_sizes ++;
     return 1;
 }
@@ -154,20 +163,23 @@ int wrong_st_size (struct key * key, loff_t max_file_size, int blocksize,
 |   file, dir, link  |  blocks |    generation      |   blocks     |
 |------------------------------------------------------------------|
 */
-int wrong_st_blocks (struct key * key, __u32 * blocks, __u32 sd_blocks, __u16 mode, int new_format)
+int wrong_st_blocks (struct key * key, __u32 * blocks, __u32 sd_blocks, __u16 mode, 
+    int new_format)
 {
     int ret = 0;
 
     if (S_ISREG (mode) || S_ISLNK (mode) || S_ISDIR (mode)) {
 	if (*blocks != sd_blocks) {
-	    fsck_log ("%s %K has wrong sd_blocks %u, has to be %u\n",
-		S_ISDIR (mode) ? "dir" : "file", key, sd_blocks, *blocks);
+	    fsck_log ("vpf-10680: The %s %K has the wrong block count in the StatData "
+		"(%u)%s(%u)\n", S_ISDIR (mode) ? "directory" : "file",  key, sd_blocks, 
+		fsck_mode(fs) == FSCK_CHECK ? ", should be " : " - corrected to ", *blocks);
 	    ret = 1;
 	}
     } else if (new_format || (S_ISFIFO (mode) || S_ISSOCK (mode))) {
 	if (sd_blocks != 0) {
-	    fsck_log ("node %K has wrong sd_blocks %u, has to be %u\n",
-		key, sd_blocks, 0);
+	    fsck_log ("vpf-10690: The object %K has the wrong block count in the StatData "
+		"(%u)%s(%u)\n",	key, sd_blocks, fsck_mode(fs) == FSCK_CHECK ? 
+		", should be " : " - corrected to ", 0);
 	    *blocks = 0;	
 	    ret = 1;
 	}
@@ -195,12 +207,14 @@ int wrong_st_rdev (struct key * key, __u32 * sd_rdev, __u16 mode, int new_format
 }
 */
 /* only regular files and symlinks may have items but stat
-   data. Symlink shold have body */
+   data. Symlink should have body */
 int wrong_mode (struct key * key, __u16 * mode, __u64 real_size, int symlink)
 {
     int retval = 0;
     if (S_ISLNK (*mode) && !symlink) {
-	fsck_log ("file %K (%M) is too big to be symlink - try as regfile\n", key, *mode);
+	fsck_log ("The file %K (%M) is too big to be the symlink%s regfile\n", 
+	    key, *mode, fsck_mode(fs) == FSCK_CHECK ? ", should be the" : " - corrected "
+	    "to the");
 	*mode &= ~S_IFMT;
 	*mode |= S_IFREG;
 	retval = 1;
@@ -217,7 +231,12 @@ int wrong_mode (struct key * key, __u16 * mode, __u64 real_size, int symlink)
     }
     /* there are items, so change file mode to regular file. Otherwise
        - file bodies do not get deleted */
-    fsck_log ("file %K (%M) has body, try mode as %M\n", key, *mode, (S_IFREG | 0600));
+    if (fsck_mode(fs) == FSCK_CHECK) {
+	fsck_log ("The object %K has wrong mode (%M)\n", key, *mode);
+    } else {
+	fsck_log("The object %K has wrong mode (%M) - corrected to %M\n", 
+	    key, *mode, (S_IFREG | 0600));
+    }
     *mode = (S_IFREG | 0600);
     return 1;
 }
@@ -232,8 +251,15 @@ int wrong_first_direct_byte (struct key * key, int blocksize,
 	/* there is no direct item */
 	*first_direct_byte = NO_BYTES_IN_DIRECT_ITEM;
 	if (sd_first_direct_byte != NO_BYTES_IN_DIRECT_ITEM) {
-	    fsck_log ("%K has no direct items and first direct byte in SD == %d\n",
-		      key, sd_first_direct_byte);
+	    if (fsck_mode(fs) == FSCK_CHECK) {
+		fsck_log ("The file %K: The wrong info about the tail in the StatData, "
+		    "first_direct_byte (%d) - should be (%d)\n", key, 
+		    sd_first_direct_byte, *first_direct_byte);
+	    } else {
+		fsck_log ("The file %K: The wrong info about the tail in the StatData, "
+		    "first_direct_byte (%d) - corrected to (%d)\n", key, 
+		    sd_first_direct_byte, *first_direct_byte);
+	    }
 	    return 1;
 	}
 	return 0;
@@ -242,8 +268,16 @@ int wrong_first_direct_byte (struct key * key, int blocksize,
     /* there is direct item */
     *first_direct_byte = (get_offset (key) & ~(blocksize - 1)) + 1;
     if (*first_direct_byte != sd_first_direct_byte) {
-	fsck_log ("file %k has wrong first direct byte in SD (%d), has to be %d\n",
-		  key, sd_first_direct_byte, *first_direct_byte);
+	if (fsck_mode(fs) == FSCK_CHECK) {
+	    fsck_log ("The file %K: The wrong info about the tail in the StatData, "
+		"first_direct_byte (%d) - should be (%d)\n", key, sd_first_direct_byte, 
+		*first_direct_byte);
+	} else {
+	    fsck_log ("The file %K: The wrong info about the tail in the StatData, "
+		"first_direct_byte (%d) - corrected to (%d)\n", key, sd_first_direct_byte, 
+		*first_direct_byte);
+	}
+	    
 	return 1;
     }
     return 0;
@@ -261,7 +295,6 @@ void relocate_dir (struct item_head * ih, int change_ih)
     struct item_head * path_ih;
     struct si * si;
     __u32 new_objectid;
-
 
     /* starting with the leftmost one - look for all items of file,
        store them and delete */
@@ -312,7 +345,7 @@ void relocate_dir (struct item_head * ih, int change_ih)
 
 
     if (!si) {
-	fsck_progress ("relocate_dir: no directory %K items found\n", &key);
+	fsck_log ("relocate_dir: WARNING: No one item of the directory %K found\n", &key);
 	return;
     }
 
@@ -324,9 +357,9 @@ void relocate_dir (struct item_head * ih, int change_ih)
 
     /* put all items removed back into tree */
     while (si) {
-	fsck_log ("relocate_dir: move %H to ", &si->si_ih);
+	fsck_log ("relocate_dir: Moving %k to ", &si->si_ih.ih_key);	
 	set_key_objectid (&si->si_ih.ih_key, new_objectid);
-	fsck_log ("%H\n", &si->si_ih);
+	fsck_log ("%k\n", &si->si_ih.ih_key);
 	if (get_offset (&(si->si_ih.ih_key)) == DOT_OFFSET) {
 	    /* fix "." entry to point to a directtory properly */
 	    struct reiserfs_de_head * deh;
@@ -370,11 +403,12 @@ int rebuild_check_regular_file (struct path * path, void * sd,
 	/* this objectid is used already */
 	*new_ih = *ih;
 	pathrelse (path);
-	relocate_file (new_ih, 1);
+	rewrite_file (new_ih, 1, 1);
 	sem_pass_stat (fs)->oid_sharing_files_relocated ++;
 	retval = RELOCATED;
 	if (reiserfs_search_by_key_4 (fs, &(new_ih->ih_key), path) == ITEM_NOT_FOUND)
-	    reiserfs_panic ("rebuild_check_regular_file: could not find stat data of relocated file");
+	    reiserfs_panic ("%s: Could not find the StatData of the relocated file %k", 
+		__FUNCTION__, &(new_ih->ih_key));
 	/* stat data is marked unreachable again due to relocation, fix that */
 	ih = get_ih (path);
 	bh = get_bh (path);
@@ -440,7 +474,7 @@ int rebuild_check_regular_file (struct path * path, void * sd,
 	/* find stat data and correct it */
 	set_type_and_offset (KEY_FORMAT_1, &sd_ih.ih_key, SD_OFFSET, TYPE_STAT_DATA);
 	if (reiserfs_search_by_key_4 (fs, &sd_ih.ih_key, path) != ITEM_FOUND)
-	    die ("rebuild_check_regular_file: stat data not found");
+	    reiserfs_panic ("%s: The StatData of the file %k could not be found", __FUNCTION__, &sd_ih.ih_key);
 	
 	bh = get_bh (path);
 	ih = get_ih (path);
@@ -483,7 +517,7 @@ static char * get_next_directory_item (struct key * key, /* on return this will
 
 
     if ((retval = reiserfs_search_by_entry_key (fs, key, &path)) != POSITION_FOUND)
-	reiserfs_panic ("get_next_directory_item: %k is not found", key);
+	reiserfs_panic ("get_next_directory_item: The current directory %k cannot be found", key);
 
     /* leaf containing directory item */
     bh = PATH_PLAST_BUFFER (&path);
@@ -497,7 +531,7 @@ static char * get_next_directory_item (struct key * key, /* on return this will
 	    name_in_entry_length (ih, deh + 1, 1) != 2 ||
 	    strncmp (name_in_entry (deh + 1, 1), "..", 2))
 	{
-	    fsck_log ("get_next_directory_item: \"..\" not found in %H\n", ih);
+	    fsck_log ("get_next_directory_item: The entry \"..\" cannot be found in %k\n", &ih->ih_key);
 	    pathrelse (&path);
 	    return 0;
 	}
@@ -520,24 +554,24 @@ static char * get_next_directory_item (struct key * key, /* on return this will
 		/* "." must point to the directory it is in */
 		
 		//deh->deh_objectid != REISERFS_ROOT_PARENT_OBJECTID)/*????*/ {
-		fsck_log ("get_next_directory_item: %k: \".\" pointes to [%K], "
-			"should point to [%K]", key, (struct key *)(&(deh->deh2_dir_id)));
+		fsck_log ("get_next_directory_item: The entry \".\" of the directory %K pointes to %K, instead of %K", 
+		    key, (struct key *)(&(deh->deh2_dir_id)), key);
 		set_deh_dirid (deh, get_key_dirid (key));
 		set_deh_objectid (deh, get_key_objectid (key));
 		mark_buffer_dirty (bh);
-		fsck_log (" - fixed\n");
+		fsck_log (" - corrected\n");
 	    }
 	}
 
 	if (get_deh_offset (deh) == DOT_DOT_OFFSET) {
 	    /* set ".." so that it points to the correct parent directory */
 	    if (comp_short_keys (&(deh->deh2_dir_id), parent)) {
-		fsck_log ("get_next_directory_item: %k: \"..\" points to [%K], "
-			"should point to [%K]", key, (struct key *)(&(deh->deh2_dir_id)), parent);
+		fsck_log ("get_next_directory_item: The entry \"..\" of the directory %K pointes to %K, instead of %K", 
+		    key, (struct key *)(&(deh->deh2_dir_id)), parent);
 		set_deh_dirid (deh, get_key_dirid (parent));
 		set_deh_objectid (deh, get_key_objectid (parent));
 		mark_buffer_dirty (bh);
-		fsck_log (" - fixed\n");
+		fsck_log (" - corrected\n");
 	    }
 	}
     }
@@ -596,26 +630,32 @@ int fix_obviously_wrong_sd_mode (struct path * path) {
     if (not_a_directory (get_item (path)) && is_direntry_key (next_key)) {
         /* make SD mode SD of dir */
 	get_sd_mode (get_ih (path), get_item (path), &mode);
-	fsck_log ("directory %K had broken mode %M, ", &get_ih(path)->ih_key, mode);
+	fsck_log ("The directory %K had wrong mode %M", &get_ih(path)->ih_key, mode);
+
 	if (fsck_mode(fs) != FSCK_CHECK) {
 	    mode &= ~S_IFMT;
 	    mode |= S_IFDIR;
-	    fsck_log ("fixed to %M\n", mode);	
+	    fsck_log (" - corrected to %M\n", mode);	
 	    set_sd_mode (get_ih (path), get_item (path), &mode);
 	    mark_buffer_dirty (get_bh(path));
+	} else {
+	    fsck_log ("\n");
 	}
 	retval = 1;
     } else if (!not_a_directory (get_item (path)) && !is_direntry_key (next_key)) {
         /* make SD mode SD of regular file */
 	get_sd_mode (get_ih (path), get_item (path), &mode);
-	fsck_log ("file %K had broken mode %M, ", &get_ih(path)->ih_key, mode);
+	fsck_log ("The file %K had wrong mode %M", &get_ih(path)->ih_key, mode);
 	if (fsck_mode(fs) != FSCK_CHECK) {
 	    mode &= ~S_IFMT;
 	    mode |= S_IFREG;
-	    fsck_log ("fixed to %M\n", mode);
+	    fsck_log (" - corrected to %M\n", mode);
 	    set_sd_mode (get_ih (path), get_item (path), &mode);
 	    mark_buffer_dirty (get_bh(path));
+	} else {
+	    fsck_log ("\n");
 	}
+	    
 	retval = 1;
     }
 
@@ -655,15 +695,14 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
  start_again: /* when directory was relocated */
 
     if (!KEY_IS_STAT_DATA_KEY (key))
-	reiserfs_panic ("rebuild_semantic_pass: key %k must be key of a stat data",
-			key);
+	reiserfs_panic ("rebuild_semantic_pass: The key %k must be key of a StatData", key);
 
     /* look for stat data of an object */
     if (reiserfs_search_by_key_4 (fs, key, &path) == ITEM_NOT_FOUND) {
 	pathrelse (&path);
 	if (is_rootdir_key (key))
 	    /* root directory has to exist at this point */
-	    reiserfs_panic ("rebuild_semantic_pass: root directory not found");
+	    reiserfs_panic ("rebuild_semantic_pass: The root directory StatData was not found");
 
 	return STAT_DATA_NOT_FOUND;
     }
@@ -703,8 +742,7 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
 
     if (relocate) {
 	if (!new_ih)
-	    reiserfs_panic ("rebuild_semantic_pass: can not relocate %K",
-			    &ih->ih_key);
+	    reiserfs_panic ("rebuild_semantic_pass: Memory is not prepared for relocation of %K", &ih->ih_key);
 	*new_ih = *ih;
 	pathrelse (&path);
 	sem_pass_stat (fs)->oid_sharing_dirs_relocated ++;
@@ -821,8 +859,8 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
 	
 	    if ((dir_format == KEY_FORMAT_2) && (entry_len % 8 != 0)) {
 	    	/* not alighed directory of new format - delete it */
-		fsck_log ("name \"%.*s\" in directory %K of wrong format, %K - fixed\n",
-			  namelen, name, &tmp_ih.ih_key, (struct key *)&(deh->deh2_dir_id));
+		fsck_log ("Entry %K (\"%.*s\") in the directory %K is not formated properly - deleted\n",
+			  (struct key *)&(deh->deh2_dir_id), namelen, name, &tmp_ih.ih_key);
 		reiserfs_remove_entry (fs, &entry_key);
 		entry_len = name_length (name, dir_format);
 		reiserfs_add_entry (fs, key, name, entry_len,
@@ -831,8 +869,8 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
 /*	
 	    if ((dir_format == KEY_FORMAT_1) && (namelen != entry_len)) {
 	    	// aligned entry in directory of old format - remove and insert it back
-		fsck_log ("name \"%.*s\" in directory %K of wrong format, %K - fixed\n",
-			  namelen, name, &tmp_ih.ih_key, (struct key *)&(deh->deh2_dir_id));
+		fsck_log ("Entry %K (\"%.*s\") in the directory %K is not formated properly - deleted\n",
+		    (struct key *)&(deh->deh2_dir_id), namelen, name, &tmp_ih.ih_key);
 		reiserfs_remove_entry (fs, &entry_key);
 		entry_len = name_length (name, dir_format);
 		reiserfs_add_entry (fs, key, name, entry_len,
@@ -847,7 +885,8 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
 	    print_name (name, namelen);
 	    
 	    if (!is_properly_hashed (fs, name, namelen, get_deh_offset (deh)))
-		reiserfs_panic ("rebuild_semantic_pass: name has to be hashed properly");
+		reiserfs_panic ("rebuild_semantic_pass: Hash mismatch detected for (\"%.*s\") in directory %K\n", 
+		    namelen, name, &tmp_ih.ih_key);
 	    
 	
 	    retval1 = rebuild_semantic_pass (&object_key, key, is_dot_dot (name, namelen), &relocated_ih);
@@ -867,8 +906,8 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
 		    dir_size += DEH_SIZE + entry_len;
 		    continue;
 		}
-		fsck_log ("name \"%.*s\" in directory %K points to nowhere %K - removed\n",
-			  namelen, name, &tmp_ih.ih_key, (struct key *)&(deh->deh2_dir_id));
+		fsck_log ("%s: The entry %K (\"%.*s\") in directory %K points to nowhere - is removed\n",
+		    __FUNCTION__, &object_key, namelen, name, &tmp_ih.ih_key);
 		reiserfs_remove_entry (fs, &entry_key);
 		sem_pass_stat (fs)->deleted_entries ++;
 		break;
@@ -876,14 +915,15 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
 	    case RELOCATED:
 		/* file was relocated, update key in corresponding directory entry */
 		if (reiserfs_search_by_entry_key (fs, &entry_key, &path) != POSITION_FOUND) {
-		    fsck_progress ("could not find name of relocated file\n");
+		    fsck_log ("WARNING: Cannot find the name of the relocated file %K in the directory %K\n", 
+			&object_key, &tmp_ih.ih_key);
 		} else {
 		    /* update key dir entry points to */
 		    struct reiserfs_de_head * tmp_deh;
 		    
 		    tmp_deh = B_I_DEH (get_bh (&path), get_ih (&path)) + path.pos_in_item;
-		    fsck_log ("name \"%.*s\" of dir %K pointing to %K updated to point to ",
-			      namelen, name, &tmp_ih.ih_key, &tmp_deh->deh2_dir_id);
+		    fsck_log ("The entry %K (\"%.*s\") in directory %K updated to point to ",
+			&object_key, namelen, name, &tmp_ih.ih_key);
 		    set_deh_dirid (tmp_deh, get_key_dirid (&relocated_ih.ih_key));
 		    set_deh_objectid (tmp_deh, get_key_objectid (&relocated_ih.ih_key));
 
@@ -922,7 +962,7 @@ int rebuild_semantic_pass (struct key * key, struct key * parent, int dot_dot,
     if (fix_sd) {
 	/* we have to fix either sd_size or sd_blocks, so look for stat data again */
 	if (reiserfs_search_by_key_4 (fs, key, &path) != ITEM_FOUND)
-	    die ("rebuild_semantic_pass: stat data not found");
+	    reiserfs_panic ("rebuild_semantic_pass: The StatData of the file %K was not found", key);
 	    
 	bh = get_bh (&path);
 	ih = get_ih (&path);
@@ -975,13 +1015,13 @@ void zero_nlink (struct item_head * ih, void * sd)
     int zero = 0;
 
     if (get_ih_item_len (ih) == SD_V1_SIZE && get_ih_key_format (ih) != KEY_FORMAT_1) {
-	fsck_log ("zero_nlink: %H had wrong keys format %d, fixed to %d",
-		  ih, get_ih_key_format (ih), KEY_FORMAT_1);
+	fsck_log ("zero_nlink: The StatData %k of the wrong format version (%d) - corrected to (%d)\n",
+	    ih, get_ih_key_format (ih), KEY_FORMAT_1);
 	set_ih_key_format (ih, KEY_FORMAT_1);
     }
     if (get_ih_item_len (ih) == SD_SIZE && get_ih_key_format (ih) != KEY_FORMAT_2) {
-	fsck_log ("zero_nlink: %H had wrong keys format %d, fixed to %d",
-		  ih, get_ih_key_format (ih), KEY_FORMAT_2);
+	fsck_log ("zero_nlink: The StatData %k of the wrong format version (%d) - corrected to (%d)\n",
+	    ih, get_ih_key_format (ih), KEY_FORMAT_2);
 	set_ih_key_format (ih, KEY_FORMAT_2);
     }
 
@@ -1019,8 +1059,8 @@ static void make_sure_lost_found_exists (reiserfs_filsys_t * fs)
     if (!retval) {
 	objectid = get_unused_objectid (fs);
 	if (!objectid) {
-	    fsck_progress ("make_sure_lost_found_exists: could not get objectid"
-			   " for \"/lost+found\", will not link lost files\n");
+	    fsck_progress ("Could not allocate an objectid for \"/lost+found\", \
+		lost files will not be linked\n");
 	    return;
 	}
 	set_key_dirid (&lost_found_dir_key, REISERFS_ROOT_OBJECTID);
@@ -1041,8 +1081,8 @@ static void make_sure_lost_found_exists (reiserfs_filsys_t * fs)
 	fix_obviously_wrong_sd_mode (&path);
 	
 	if (not_a_directory (get_item (&path))) {
-	    fsck_progress ("make_sure_lost_found_exists: \"/lost+found\" is "
-			   "not a directory, will not link lost files\n");
+	    fsck_progress ("\"/lost+found\" exists, but it is not a directory, \
+		lost files will not be linked\n");
 	    set_key_objectid (&lost_found_dir_key, 0);
 	    pathrelse (&path);
 	    return;
@@ -1064,7 +1104,7 @@ static void make_sure_lost_found_exists (reiserfs_filsys_t * fs)
 
     if (item_len) {
 	if (reiserfs_search_by_key_4 (fs, &root_dir_key, &path) == ITEM_NOT_FOUND)
-	    reiserfs_panic ("make_sure_lost_found_exists: root sd must exists");
+	    reiserfs_panic ("%s: StatData of the root directory must exists", __FUNCTION__);
 	
 	bh = get_bh (&path);
 	ih = get_ih (&path);
@@ -1082,12 +1122,12 @@ static void make_sure_lost_found_exists (reiserfs_filsys_t * fs)
     return;
 }
 
+/* Result of the rebuild pass will be saved in the state file which is needed to start 
+ * fsck again from the next pass. */
 static void save_rebuild_semantic_result (reiserfs_filsys_t * fs) {
     FILE * file;
     int retval;
 
-    /* save bitmaps with which we will be able start reiserfs from
-       pass 1 */
     file = open_file ("temp_fsck_file.deleteme", "w+");
     if (!file)
 	return;
@@ -1099,8 +1139,8 @@ static void save_rebuild_semantic_result (reiserfs_filsys_t * fs) {
     retval = unlink (state_dump_file (fs));
     retval = rename ("temp_fsck_file.deleteme", state_dump_file (fs));
     if (retval != 0)
-	fsck_progress ("pass 0: could not rename temp file temp_fsck_file.deleteme to %s",
-		       state_dump_file (fs));
+	fsck_progress ("%s: Could not rename the temporary file temp_fsck_file.deleteme to %s",
+	    __FUNCTION__, state_dump_file (fs));
 }
 
 /* we have nothing to load from a state file, but we have to fetch
@@ -1140,7 +1180,7 @@ static void after_pass_3 (reiserfs_filsys_t * fs)
     fs->fs_dirt = 1;
     reiserfs_flush_to_ondisk_bitmap (fsck_new_bitmap(fs), fs);
     reiserfs_flush (fs);
-    fsck_progress ("done\n");
+    fsck_progress ("finished\n");
 
     stage_report (3, fs);
 
@@ -1157,7 +1197,7 @@ static void after_pass_3 (reiserfs_filsys_t * fs)
 
     fs->fs_dirt = 1;
     reiserfs_close (fs);
-    exit (4);
+    exit(0);
 }
 
 /* this is part of rebuild tree */

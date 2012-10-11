@@ -4,7 +4,7 @@
 
 #include "includes.h"
 
-/* this provides for everybody who wants to deal with journal */
+/* this is provided for anybody who wants to deal with journal */
 int replay_one_transaction (reiserfs_filsys_t *, reiserfs_trans_t *);
 void for_each_transaction (reiserfs_filsys_t *, action_on_trans_t);
 void for_each_block (reiserfs_filsys_t *, reiserfs_trans_t *, action_on_block_t);
@@ -38,7 +38,7 @@ unsigned long commit_expected (reiserfs_filsys_t * fs, struct buffer_head * d_bh
 }
 
 
-/* d_bh contains journal descriptor, return number of block where descriptor
+/* d_bh contains journal descriptor, returns number of block where descriptor
    block of next transaction should be */
 unsigned long next_desc_expected (reiserfs_filsys_t * fs, struct buffer_head * d_bh)
 {
@@ -77,8 +77,8 @@ int is_valid_transaction (reiserfs_filsys_t * fs, struct buffer_head * d_bh)
 }
 
 
-/* read the journal and find the oldest and newest transactions, return numbe
-   of transactions fond */
+/* read the journal and find the oldest and newest transactions, return number
+   of transactions found */
 int get_boundary_transactions (reiserfs_filsys_t * fs,
 			       reiserfs_trans_t * oldest,
 			       reiserfs_trans_t * newest)
@@ -90,7 +90,6 @@ int get_boundary_transactions (reiserfs_filsys_t * fs,
     struct buffer_head * d_bh;
     __u32 newest_trans_id, oldest_trans_id, trans_id;
     int trans_nr;
-
 
     sb = fs->fs_ondisk_sb;
     
@@ -119,7 +118,7 @@ int get_boundary_transactions (reiserfs_filsys_t * fs,
 	    oldest->desc_blocknr = d_bh->b_blocknr;
 	    oldest->trans_len = get_desc_trans_len (d_bh);
 	    oldest->commit_blocknr = commit_expected (fs, d_bh);
-	    newest->next_trans_offset = next_desc_expected (fs, d_bh) - j_start;
+	    oldest->next_trans_offset = next_desc_expected (fs, d_bh) - j_start;
 	}
 
 	if (trans_id > newest_trans_id) {
@@ -145,7 +144,7 @@ int get_boundary_transactions (reiserfs_filsys_t * fs,
 #define TRANS_NOT_FOUND 0
 
 /* trans is a valid transaction. Look for valid transaction with smallest
-   trans id which is bigger than the id of the current one */
+   trans id which is greater than the id of the current one */
 int next_transaction (reiserfs_filsys_t * fs, reiserfs_trans_t * trans, reiserfs_trans_t break_trans)
 {
     struct buffer_head * d_bh, * next_d_bh;
@@ -439,17 +438,27 @@ int reiserfs_open_journal (reiserfs_filsys_t * fs, char * j_filename, int flags)
     if (is_reiserfs_jr_magic_string (sb)) {
         if (get_jp_journal_1st_block (&j_head->jh_journal) != get_jp_journal_1st_block (sb_jp (sb)) || 
             get_jp_journal_dev (&j_head->jh_journal) != get_jp_journal_dev (sb_jp (sb)) || 
-            get_jp_journal_size (&j_head->jh_journal) != get_jp_journal_size (sb_jp (sb))) {
-	        reiserfs_warning (stderr, "reiserfs_open_journal: no journal found on %s\n", j_filename);
-                brelse (bh);
-                return 0;
+            get_jp_journal_size (&j_head->jh_journal) != get_jp_journal_size (sb_jp (sb))) 
+	{
+	    reiserfs_warning (stderr, "reiserfs_open_journal: no journal found on %s\n", j_filename);
+            brelse (bh);
+            return 0;
         }
+    } else {
+	if (get_jp_journal_dev (sb_jp(sb)) != 0 || 
+	    get_jp_journal_1st_block (sb_jp(sb)) != get_journal_start_must (fs) || 
+	    get_jp_journal_size (sb_jp(sb)) != journal_default_size(fs->fs_super_bh->b_blocknr, fs->fs_blocksize))
+	{
+	    reiserfs_warning (stderr, "reiserfs_open_journal: wrong journal parameters found in the super block.\n");
+            brelse (bh);
+            return 0;
+	}
+	    
     }
 
     fs->fs_jh_bh = bh;
     return 1;
 }
-
 
 /* initialize super block's journal related fields and journal header fields. If
    len is 0 - make journal of default size */
@@ -479,7 +488,7 @@ int reiserfs_create_journal (reiserfs_filsys_t * fs, char * j_filename,
 //	if (get_sb_block_count (sb) < min_block_amount (fs->fs_blocksize, len))	{
 		/* host device does not contain enough blocks */
 		reiserfs_warning (stderr, "reiserfs_create_journal: "
-					  "can not create filesystem on %d blocks\n",
+					  "cannot create filesystem on %d blocks\n",
 					  get_sb_block_count (sb));
 		return 0;
 	}
@@ -507,7 +516,7 @@ int reiserfs_create_journal (reiserfs_filsys_t * fs, char * j_filename,
 
 	if (len > journal_default_size (fs->fs_super_bh->b_blocknr, fs->fs_blocksize) + 1)
 		reiserfs_warning (stderr,
-			  "NOTE: journal new size %lu is bigger than default size %lu:\n"
+			  "NOTE: journal new size %lu is greater than default size %lu:\n"
 			  "this may slow down journal initializing and mounting. Hope it is ok.\n\n",
 			  len, journal_default_size (fs->fs_super_bh->b_blocknr, fs->fs_blocksize) + 1);
 

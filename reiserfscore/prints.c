@@ -1,5 +1,6 @@
 /*
- * Copyright 1996, 1997, 1998 Hans Reiser, see reiserfs/README for licensing and copyright details
+ * Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Hans Reiser, see
+ * reiserfs/README for licensing and copyright details
  */
 
 #include "includes.h"
@@ -7,25 +8,47 @@
 #include <limits.h>
 #include <printf.h>
 
+#define PA_KEY		(PA_LAST)
+#define PA_BUFFER_HEAD	(PA_LAST + 1)
+#define PA_ITEM_HEAD	(PA_LAST + 2)
+#define PA_DISK_CHILD	(PA_LAST + 3)
 
-static int _arginfo (const struct printf_info *info, size_t n,
-		     int *argtypes)
-{
+
+static int _arginfo_b (const struct printf_info *info, size_t n, int *argtypes) {
     if (n > 0)
-	argtypes[0] = PA_POINTER;
+	argtypes[0] = PA_BUFFER_HEAD | PA_FLAG_PTR;
     return 1;
 }
 
-#if 0
-static int _arginfo2 (const struct printf_info *info, size_t n,
-		     int *argtypes)
-{
+static int _arginfo_K (const struct printf_info *info, size_t n, int *argtypes) {
     if (n > 0)
-	argtypes[0] = PA_INT;
+	argtypes[0] = PA_KEY | PA_FLAG_PTR;
     return 1;
 }
-#endif
 
+static int _arginfo_H (const struct printf_info *info, size_t n, int *argtypes) {
+    if (n > 0)
+	argtypes[0] = PA_ITEM_HEAD | PA_FLAG_PTR;
+    return 1;
+}
+
+static int _arginfo_y (const struct printf_info *info, size_t n, int *argtypes) {
+    if (n > 0)
+	argtypes[0] = PA_DISK_CHILD | PA_FLAG_PTR;
+    return 1;
+}
+
+static int _arginfo_M (const struct printf_info *info, size_t n, int *argtypes) {
+    if (n > 0)
+	argtypes[0] = PA_INT | PA_FLAG_SHORT | PA_FLAG_PTR;
+    return 1;
+}
+
+static int _arginfo_U (const struct printf_info *info, size_t n, int *argtypes) {
+    if (n > 0)
+	argtypes[0] = (PA_CHAR|PA_FLAG_PTR);
+    return 1;
+}
 
 #define FPRINTF \
     if (len == -1) {\
@@ -63,7 +86,7 @@ static int print_short_key (FILE * stream,
     int len;
 
     key = *((const struct key **)(args[0]));
-    len = asprintf (&buffer, "%u %u", get_key_dirid (key),
+    len = asprintf (&buffer, "[%u %u]", get_key_dirid (key),
 		    get_key_objectid (key));
     FPRINTF;
 }
@@ -79,7 +102,7 @@ static int print_key (FILE * stream,
     int len;
 
     key = *((const struct key **)(args[0]));
-    len = asprintf (&buffer, "%u %u 0x%Lx %s (%d)",  
+    len = asprintf (&buffer, "[%u %u 0x%Lx %s (%d)]",  
 		    get_key_dirid (key), get_key_objectid (key),
 		    (unsigned long long)get_offset (key), key_of_what (key), get_type (key));
     FPRINTF;
@@ -186,7 +209,7 @@ static int print_sd_uuid (FILE * stream,
     return len;
 }
 
-void reiserfs_warning (FILE * fp, const char * fmt, ...)
+void reiserfs_warning (FILE * fp, const char * fmt, ...) 
 {
     static int registered = 0;
     va_list args;
@@ -194,13 +217,13 @@ void reiserfs_warning (FILE * fp, const char * fmt, ...)
     if (!registered) {
 	registered = 1;
 	
-	register_printf_function ('K', print_short_key, _arginfo);
-	register_printf_function ('k', print_key, _arginfo);
-	register_printf_function ('H', print_item_head, _arginfo);
-	register_printf_function ('b', print_block_head, _arginfo);
-	register_printf_function ('y', print_disk_child, _arginfo);
-	register_printf_function ('M', print_sd_mode, _arginfo);
-	register_printf_function ('U', print_sd_uuid, _arginfo);
+	register_printf_function ('K', print_short_key, _arginfo_K);
+	register_printf_function ('k', print_key, _arginfo_K);
+	register_printf_function ('H', print_item_head, _arginfo_H);
+	register_printf_function ('b', print_block_head, _arginfo_b);
+	register_printf_function ('y', print_disk_child, _arginfo_y);
+	register_printf_function ('M', print_sd_mode, _arginfo_M);
+	register_printf_function ('U', print_sd_uuid, _arginfo_U);
     }
 
     va_start (args, fmt);
@@ -389,7 +412,7 @@ static int print_stat_data (FILE * fp, struct buffer_head * bh, struct item_head
     int retval;
     
 
-    /* we can not figure out whether it is new stat data or old by key_format
+    /* we cannot figure out if it is new stat data or old by key_format
        macro. Stat data's key looks identical in both formats */
     if (get_ih_key_format (ih) == KEY_FORMAT_1) {
         struct stat_data_v1 * sd_v1 = (struct stat_data_v1 *)B_I_PITEM (bh, ih);
@@ -421,8 +444,8 @@ static int print_stat_data (FILE * fp, struct buffer_head * bh, struct item_head
 void reiserfs_print_item (FILE * fp, struct buffer_head * bh,
 			  struct item_head * ih)
 {
-    reiserfs_warning (stdout, "block %lu, item %d: %H\n",
-		      bh->b_blocknr, ih - B_N_PITEM_HEAD (bh, 0), ih);
+    reiserfs_warning (fp, "block %lu, item %d: %H\n",
+	bh->b_blocknr, (ih - B_N_PITEM_HEAD (bh, 0))/sizeof(struct item_head), ih);
     if (is_stat_data_ih (ih)) {
 	print_stat_data (fp, bh, ih, 0/*all times*/);
 	return;
@@ -585,7 +608,7 @@ int print_super_block (FILE * fp, reiserfs_filsys_t * fs, char * file_name,
     dev_t rdev;
     int format = 0;
 
-    if (!does_look_like_super_block (sb, fs->fs_blocksize))
+    if (!does_look_like_super_block (sb))
 	return 1;
 
     rdev = get_st_rdev (file_name);

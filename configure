@@ -1150,7 +1150,7 @@ fi
 
 PACKAGE=reiserfsprogs
 
-VERSION=3.6.2
+VERSION=3.6.4
 
 if test "`cd $srcdir && pwd`" != "`pwd`" && test -f $srcdir/config.status; then
   { { echo "$as_me:1156: error: source directory already configured; run \"make distclean\" there first" >&5

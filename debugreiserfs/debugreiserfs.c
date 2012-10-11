@@ -11,13 +11,14 @@ reiserfs_filsys_t * fs;
 #define print_usage_and_exit() {\
 fprintf (stderr, "Usage: %s [options] device\n\n\
 Options:\n\
-  -d\t\tprint blocks details\n\
+  -d\t\tprint blocks details of the internal tree\n\
+  -D\t\tprint blocks details of all used blocks\n\
   -m\t\tprint bitmap blocks\n\
   -o\t\tprint objectid map\n\n\
   -J\t\tprint journal header\n\
   -j journal_device\n\t\tprint journal\n\
   -p\t\tsend filesystem metadata to stdout\n\
-  -S\t\tgo through whole device when running -p\n\
+  -S\t\thandle all blocks, not only used\n\
   -1 block\tblock to print\n\
   -q\t\tno speed info (for -p, -s and -n)\n\n", argv[0]);\
   exit (16);\
@@ -28,13 +29,14 @@ Options:\n\
    -B file\textract list of badblocks\n\
 
  Undocumented options:
-  -a map_file\n\tstore to the file the map of file. Is used with -n, -N, -r\n
+  -a map_file\n\tstore to the file the map of file. Is used with -n, -N, -r, -f\n
+  -f creates a file map.\n
   -S\t\tgo through whole device when running -p, -s or -n\n\
   -U\t\tgo through unused blocks only when running -p, -s or -n\n\
   -D\t\tprint blocks details scanning the device, not the tree as -d does\n\
   -b bitmap_file\n\t\trunning -p, -s or -n read blocks marked in this bitmap only\n\
   -n\tscan device for specific name in reiserfs directories\n\
-  -N\tscan tree for specific name in reiserfs directories\n\
+  -N\tscan tree for specific key in reiserfs directories\n\
   -s\tscan device either for specific key or for any metadata\n\
   -C\tallow to change reiserfs metadata\n\
   -r\tprint map file content.\n\
@@ -100,7 +102,7 @@ static void print_disk_tree (reiserfs_filsys_t * fs, unsigned long block_nr)
 
 static void print_disk_blocks (reiserfs_filsys_t * fs)
 {
-    int j;
+    int j, type;
     unsigned long done = 0, total;
     struct buffer_head * bh;
 
@@ -118,13 +120,14 @@ static void print_disk_blocks (reiserfs_filsys_t * fs)
 	    continue;
 	}
 
-	if (who_is_this (bh->b_data, bh->b_size) != THE_UNKNOWN)
+	type = who_is_this (bh->b_data, bh->b_size);
+	if (type != THE_UNKNOWN)
 	    print_block (stdout, fs, bh, PRINT_TREE_DETAILS | PRINT_DIRECT_ITEMS, -1, -1);
-	if (is_internal_node (bh))
+	if (type == THE_INTERNAL)
 	    g_stat_info.nr_internals ++;
-	else if (is_leaf_node (bh))
+	else if (type == THE_LEAF)
 	    g_stat_info.nr_leaves ++;
-	
+	    
 	brelse (bh);
     }
     fprintf (stderr, "\n");
@@ -203,7 +206,7 @@ static char * parse_options (struct debugreiserfs_data * data, int argc, char * 
     data->scan_area = USED_BLOCKS;
     data->mode = DO_DUMP;
 
-    while ((c = getopt (argc, argv, "a:b:C:SU1:psn:NrdDomj:J:qt")) != EOF) {
+    while ((c = getopt (argc, argv, "a:b:C:SU1:psn:Nfr:dDomj:J:qt")) != EOF) {
 	switch (c) {
 	case 'a': /* -r will read this, -n and -N will write to it */
 	    asprintf (&data->map_file, "%s", optarg);
@@ -264,7 +267,12 @@ static char * parse_options (struct debugreiserfs_data * data, int argc, char * 
 	    data->mode = DO_LOOK_FOR_NAME;
 	    break;
 
+	case 'f':
+	    data->mode = DO_FILE_MAP;
+	    break;
+
 	case 'r':
+	    asprintf (&data->recovery_file, "%s", optarg);
 	    data->mode = DO_RECOVER;
 	    break;
 
@@ -557,6 +565,11 @@ int main (int argc, char * argv[])
 	init_bitmap (fs);
 	do_scan (fs);
 	break;
+
+    case DO_FILE_MAP:
+	print_map(fs);
+	break;
+
 
     case DO_RECOVER:
 	do_recover (fs);

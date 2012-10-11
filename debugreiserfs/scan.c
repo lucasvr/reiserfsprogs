@@ -27,15 +27,6 @@ void * name_index;
 
 regex_t pattern;
 
-
-struct saved_item {
-    struct item_head si_ih;
-    unsigned long si_block;
-    int si_item_num;
-    struct saved_item * si_next; /* list of items having the same key */
-};
-
-
 struct saved_name {
     unsigned int dirid; /* pointed object */
     unsigned int objectid;
@@ -330,7 +321,7 @@ static int have_to_append (struct item_head * ih)
 	
 	tail_start = (off & ~(fs->fs_blocksize - 1)) + 1;
 
-	/* find correct tail first */
+	// find correct tail first 
 	for (i = 0; i < map.tail_nr; i ++) {
 	    if (map.tails[i].offset == tail_start) {
 		if (map.tails[i].offset + map.tails[i].len <= off)
@@ -338,7 +329,7 @@ static int have_to_append (struct item_head * ih)
 		return 0;
 	    }
 	}
-	/* there was no this tail yet */
+	// there was no this tail yet 
 	return 1;
     }
     return 0;
@@ -366,7 +357,7 @@ static void do_append (struct item_head * ih, void * data)
 	int tail_start;
 	int skip;
 	
-	/* find correct tail first */
+	// find correct tail first 
 	tail_start = (off & ~(fs->fs_blocksize - 1)) + 1;
 	skip = (off - 1) & (fs->fs_blocksize - 1);
 	for (i = 0; i < map.tail_nr; i ++) {
@@ -382,7 +373,7 @@ static void do_append (struct item_head * ih, void * data)
 		return;
 	    }
 	}
-	/* allocate memory for new tail */
+	// allocate memory for new tail 
 	map.tails = realloc (map.tails, (map.tail_nr + 1) * sizeof (struct tail));
 	if (!map.tails)
 	    reiserfs_panic ("realloc failed");
@@ -397,10 +388,10 @@ static void do_append (struct item_head * ih, void * data)
 }
 
 
-/* map contains */
+// map contains 
 static void do_overwrite (struct item_head * ih, void * data)
 {
-    int skip; /* now may bytes/pointers to skip */
+    int skip; // now may bytes/pointers to skip 
     int to_compare;
     int to_append;
     loff_t off = get_offset (&ih->ih_key);
@@ -430,11 +421,11 @@ static void do_overwrite (struct item_head * ih, void * data)
 	int tail_start;
 	int i;
 
-	/* find correct tail first */
+	// find correct tail first 
 	tail_start = (off & ~(fs->fs_blocksize - 1)) + 1;
 	for (i = 0; i < map.tail_nr; i ++) {
 	    if (map.tails[i].offset == tail_start) {
-		/* ih is a part of this tail */
+		// ih is a part of this tail 
 		skip = (off - 1) & (fs->fs_blocksize - 1);
 		to_compare = (map.tails[i].len - skip > get_ih_item_len (ih) ? get_ih_item_len (ih) :
 		    map.tails[i].len - skip);
@@ -465,7 +456,7 @@ static void map_one_item (struct saved_item * item)
     struct item_head * ih;
     void * data;
 
-    /* read the block containing the item */
+    // read the block containing the item 
     bh = bread (fs->fs_dev, item->si_block, fs->fs_blocksize);
     if (!bh) {
 	reiserfs_warning (stderr, "bread failed\n");
@@ -485,42 +476,7 @@ static void map_one_item (struct saved_item * item)
     brelse (bh);
 }
 
-
-static void map_item_list (const void *nodep, VISIT value, int level)
-{
-    struct saved_item * item, * longest;
-    int bytes, max_bytes;
-
-    if (value != leaf && value != postorder)
-	return;
-
-    item = *(struct saved_item **)nodep;
-
-    /* 1. find the longest item */
-    max_bytes = get_bytes_number (&item->si_ih, fs->fs_blocksize);
-    longest = item;
-    while (item->si_next) {
-	item = item->si_next;
-	bytes = get_bytes_number (&item->si_ih, fs->fs_blocksize);
-	if (bytes > max_bytes) {
-	    longest = item;
-	    max_bytes = bytes;
-	}
-    }
-
-    map_one_item (longest);
-
-    /* map other items */
-    item = *(struct saved_item **)nodep;
-    while (item) {
-	if (item != longest)
-	    map_one_item (item);
-	item = item->si_next;
-    }
-}
-
-
-/* flush map which is in variable map */
+// flush map which is in variable map 
 static void flush_map (reiserfs_filsys_t * fs,
 		       struct key * dir,
 		       char * name,
@@ -534,7 +490,7 @@ static void flush_map (reiserfs_filsys_t * fs,
     if (!map_file (fs))
 	asprintf (&map_file (fs), "%s", ".map");
 	
-    /*reiserfs_warning (stderr, "Saving maps into %s\n", map_file (fs));*/
+    //reiserfs_warning (stderr, "Saving maps into %s\n", map_file (fs));
     fp = fopen (map_file (fs), "a");
     if (fp == 0) {
 	reiserfs_warning (stderr, "flush_map: fopen failed: %m");
@@ -544,38 +500,38 @@ static void flush_map (reiserfs_filsys_t * fs,
     v32 = MAP_MAGIC;
     fwrite (&v32, sizeof (v32), 1, fp);
 
-    /* device name */
+    // device name 
     v32 = strlen (device_name (fs)) + 1;
     fwrite (&v32, sizeof (v32), 1, fp);
     fwrite (device_name (fs), v32, 1, fp);
 
-    /* name length and the name itself */
+    // name length and the name itself 
     v32 = strlen (name) + 1;
     fwrite (&v32, sizeof (v32), 1, fp);
     fwrite (name, v32, 1, fp);
     
-    /* short key of a directory */
+    // short key of a directory 
     fwrite (dir, SHORT_KEY_SIZE, 1, fp);
 
-    /* short key of file */
+    // short key of file 
     fwrite (key, SHORT_KEY_SIZE, 1, fp);
 
-    /* list of data block pointers */
+    // list of data block pointers 
     fwrite (&map.head_len, sizeof (map.head_len), 1, fp);
     fwrite (map.head, map.head_len * 4, 1, fp);
 
 
-    /* find correct tail first */
+    // find correct tail first 
     for (i = 0; i < map.tail_nr; i ++) {
 	if (map.tails [i].offset == map.head_len * fs->fs_blocksize) {
-	    /* tail length and the tail itself */
+	    // tail length and the tail itself 
 	    fwrite (&map.tails [i].len, sizeof (map.tails [i].len), 1, fp);
 	    fwrite (map.tails [i].data, map.tails [i].len, 1, fp);
 	    break;
 	}
     }
     if (i == map.tail_nr) {
-	/* no tail */
+	// no tail 
 	v32 = 0;
 	fwrite (&v32, sizeof (v32), 1, fp);
     }
@@ -587,7 +543,42 @@ static void flush_map (reiserfs_filsys_t * fs,
 }
 
 
-/* write map of file to a map file */
+// write map of file to a map file 
+/*
+
+static void map_item_list (const void *nodep, VISIT value, int level)
+{
+    struct saved_item * item, * longest;
+    int bytes, max_bytes;
+
+    if (value != leaf && value != postorder)
+	return;
+
+    item = *(struct saved_item **)nodep;
+
+    // 1. find the longest item 
+    max_bytes = get_bytes_number (&item->si_ih, fs->fs_blocksize);
+    longest = item;
+    while (item->si_next) {
+	item = item->si_next;
+	bytes = get_bytes_number (&item->si_ih, fs->fs_blocksize);
+	if (bytes > max_bytes) {
+	    longest = item;
+	    max_bytes = bytes;
+	}
+    }
+
+    map_one_item (longest);
+
+    // map other items 
+    item = *(struct saved_item **)nodep;
+    while (item) {
+	if (item != longest)
+	    map_one_item (item);
+	item = item->si_next;
+    }
+}
+
 static void make_file_map (const void *nodep, VISIT value, int level)
 {
     struct saved_name * name;
@@ -601,13 +592,13 @@ static void make_file_map (const void *nodep, VISIT value, int level)
 			      &name->parent_dirid, name->name);
 	    
 	    if (name->items) {
-		/* initialize the map */
+		// initialize the map 
 		memset (&map, 0, sizeof (struct file_map));
 		
-		/* make a map of file */
+		// make a map of file 
 		twalk (name->items, map_item_list);
 		
-		/* write map to a file */
+		// write map to a file 
 		flush_map (fs, (struct key *)&name->parent_dirid, name->name,
 			   (struct key *)&name->dirid);
 		
@@ -624,33 +615,92 @@ static void make_file_map (const void *nodep, VISIT value, int level)
 	}
     }
 }
+*/
 
-/* file.list will contain list of names such that it can be used as
-   input for -N */
-static void print_name (const void *nodep, VISIT value, int level)
-{
-    struct saved_name * name;
-    static FILE * fp = 0;
+static void print_items(FILE *fp, reiserfs_filsys_t * fs) {
+    struct buffer_head *bh;
+    struct item_head *ih;
+    struct saved_item item;
+    int size = sizeof(struct saved_item) - sizeof(struct saved_item *);
 
-    if (fp == 0) {
-	fp = fopen ("file.list", "w+");
-	if (!fp)
-	    reiserfs_panic ("could open file.list: %m");
-    }
-    name = *(struct saved_name **)nodep;
-    if (value == leaf || value == postorder) {
-	while (name) {
-	    if (name->items)
-		/* we have found items of this file */
-		reiserfs_warning (fp, "%u %u %s\n",
-				  name->parent_dirid, name->parent_objectid,
-				  name->name);
-	    name = name->name_next;
+    while (fread(&item, size, 1, fp) == 1) {
+	bh = bread (fs->fs_dev, item.si_block, fs->fs_blocksize);
+	if (!bh) {
+	    reiserfs_warning (fp, "bread failed\n");
+	    continue;
 	}
+	ih = B_N_PITEM_HEAD (bh, item.si_item_num);
+	reiserfs_print_item(stdout, bh, ih);
+	brelse(bh);
     }
 }
 
+void print_map(reiserfs_filsys_t * fs) {
+    FILE * fp;
 
+    if (map_file (fs)) {
+	fp = fopen (map_file (fs), "r");
+	if (fp == 0) {
+	    reiserfs_warning (stderr, "fopen failed: %m\n");
+	    return;
+	}
+    } else {
+	reiserfs_warning (stderr, "Reading file map from stdin..\n");
+	fflush (stderr);
+	fp = stdin;
+    }
+
+    print_items(fp, fs);
+    
+    if (fp != stdin)
+	fclose (fp); 
+}
+
+
+static FILE *fp = 0;
+static void save_items(const void *nodep, VISIT value, int level) {
+    struct saved_item *item;
+    
+    
+    if (value != leaf && value != postorder)
+	return;
+
+    item = *(struct saved_item **)nodep;
+
+    while (item) {
+	fwrite(item, sizeof(struct saved_item) - sizeof(struct saved_item *), 1, fp);
+	item = item->si_next;
+    }
+}
+
+static void make_map(const void *nodep, VISIT value, int level) {
+    struct saved_name * name;
+    char *file_name = 0;
+    static int nr = 0;
+
+    name = *(struct saved_name **)nodep;
+    
+    if (value == leaf || value == postorder) {
+	while (name) {
+	    asprintf(&file_name, "%s.%d", map_file(fs), ++nr);
+	    reiserfs_warning (stdout, "%d - (%d): [%K]:\"%s\": stored in the %s\n", 
+		nr, name->count, &name->parent_dirid, name->name, file_name);
+	    
+	    if (fp == 0) {
+		fp = fopen (file_name, "w+");
+		if (!fp)
+		    reiserfs_panic ("could open %s: %m", file_name);
+	    }
+	    
+	    if (name->items) 
+		twalk (name->items, save_items);
+
+	    name = name->name_next;
+	    fclose(fp);
+	    free(file_name);
+	}
+    }
+}
 
 /* store map if it is a regular file */
 static void locate_file (reiserfs_filsys_t * fs, struct key * key)
@@ -932,10 +982,10 @@ void do_scan (reiserfs_filsys_t * fs)
     /*twalk (name_index, print_file);*/
 
     /* create map for every file in */
-    twalk (name_index, make_file_map);
+    twalk (name_index, make_map);
 
     /* print names of files we have map of in a file 'file.list' */
-    twalk (name_index, print_name);
+    /*twalk (name_index, print_name);*/
 }
 
 

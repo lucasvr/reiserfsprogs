@@ -130,6 +130,7 @@ void do_recover (reiserfs_filsys_t fs)
 
 /* read a file containing map of one or more files and either recover
    them or just print info */
+/*
 static void read_map (FILE * fp)
 {
     int i;
@@ -146,7 +147,7 @@ static void read_map (FILE * fp)
 	if (v32 != MAP_MAGIC)
 	    reiserfs_panic ("read_map: no magic found");
 
-	/* device name length and name itself */
+	// device name length and name itself 
 	fread (&v32, sizeof (v32), 1, fp);
 	buf = realloc (buf, v32);
 	if (!buf)
@@ -154,32 +155,32 @@ static void read_map (FILE * fp)
 	fread (buf, v32, 1, fp);
 	reiserfs_warning (stdout, "\"%s\": ", buf);
 
-	/* file name length and name itself*/
+	// file name length and name itself
 	fread (&v32, sizeof (v32), 1, fp);
 	buf = realloc (buf, v32);
 	if (!buf)
 	    reiserfs_panic ("realloc failed");
 	fread (buf, v32, 1, fp);
 
-	/* read directory key and poined object key */
+	// read directory key and poined object key 
 	fread (ids, sizeof (ids), 1, fp);
 	reiserfs_warning (stdout, "[%K]:\"%s\"-->[%K]\n",
 			  &ids[0], buf, &ids[2]);
 
-	/*
-	do_recover = user_confirmed (stdout, "recover? (Y):", "Y\n");
-	if (do_recover)
-	    reiserfs_warning (stderr, "recovering not ready\n");
-	*/
+	
+	//do_recover = user_confirmed (stdout, "recover? (Y):", "Y\n");
+	//if (do_recover)
+	//    reiserfs_warning (stderr, "recovering not ready\n");
+	
 
-	/* how many data blocks are there */
+	// how many data blocks are there 
 	fread (&v32, sizeof (v32), 1, fp);
 	if (v32) {
 	    buf = realloc (buf, v32 * 4);
 	    if (!buf)
 		reiserfs_panic ("realloc failed (%u)", v32);
 	    
-	    /* read list of data block numbers */
+	    // read list of data block numbers 
 	    fread (buf, 4, v32, fp);
 	    
 	    if (!do_recover) {
@@ -189,10 +190,10 @@ static void read_map (FILE * fp)
 	    }
 	}
 	
-	/* main tail length */
+	// main tail length 
 	fread (&v32, sizeof (v32), 1, fp);
 	if (v32) {
-	    /* there is tail */
+	    // there is tail 
 	    buf = realloc (buf, v32);
 	    if (!buf)
 		reiserfs_panic ("realloc failed");
@@ -235,4 +236,152 @@ void do_recover (reiserfs_filsys_t * fs)
     if (fp != stdin)
 	fclose (fp);
     
+}
+*/
+
+#include <limits.h>
+
+static long int get_answer(long int max) {
+    char *answer, *tmp;    
+    size_t n = 0;    
+    long int result = 0;
+
+    do {
+	printf("Which should be left?: ");
+	getline (&answer, &n, stdin);
+	result = strtol (answer, &tmp, 0);
+	if ((errno != ERANGE) && (result < max) && (result >= 0) &&
+	    (answer != tmp))
+	    break;
+    } while (1);
+    return result;
+}
+
+static void recover_items(FILE *fp, reiserfs_filsys_t * fs, FILE *target_file) {
+    struct buffer_head *bh, *bh_pointed;
+    struct item_head *ih;
+    struct saved_item item, *cur;
+    int size = sizeof(struct saved_item) - sizeof(struct saved_item *);
+    struct saved_item *map = NULL;
+    __u32 map_size = 0;
+    int i, start = 0, j;
+    __u64 offset = 0, length;
+    long int result = 0;
+    unsigned long unfm_ptr;
+
+    while (fread(&item, size, 1, fp) == 1) {
+	map_size += sizeof(struct saved_item);
+	map = realloc(map, map_size);
+	memcpy((void *)map + map_size - sizeof(struct saved_item), &item, size);
+    }
+    
+    for (i = 1, cur = map + 1; i <= map_size / sizeof(struct saved_item); i++, cur++) {
+	bh = bread (fs->fs_dev, (cur - 1)->si_block, fs->fs_blocksize);
+	if (!bh) {
+	    reiserfs_warning (fp, "bread failed\n");
+	    continue;
+	}
+
+	if (i == map_size / sizeof(struct saved_item)) {
+	    if (start != -1) {
+		reiserfs_print_item(stdout, bh, B_N_PITEM_HEAD (bh, (cur - 1)->si_item_num));
+		result = get_answer((long int)i - start) + start;
+	    } else {
+		result = i - 1;
+	    }
+	    
+	    start = -1;
+	} else if (is_direntry_ih(&(cur - 1)->si_ih)) {
+	    brelse(bh);
+	    continue;
+	} else { 
+	    length = get_bytes_number(&(cur - 1)->si_ih, fs->fs_blocksize);
+	    if (offset < get_offset(&(cur - 1)->si_ih.ih_key) + 
+		get_bytes_number(&(cur - 1)->si_ih, fs->fs_blocksize))
+		offset = get_offset(&(cur - 1)->si_ih.ih_key) + (length ? length - 1 : 0);
+	
+	    if (offset >= get_offset(&cur->si_ih.ih_key)) {
+		/* Problem interval */
+		if (start == -1)
+		    start = i - 1;
+	    
+		printf("Problem item %d:\n", i - start - 1);
+		reiserfs_print_item(stdout, bh, B_N_PITEM_HEAD (bh, (cur - 1)->si_item_num));
+	    } else if (start != -1) {
+		/* problem interval finished */
+		printf("Problem item %d:\n", i - start - 1);
+		reiserfs_print_item(stdout, bh, B_N_PITEM_HEAD (bh, (cur - 1)->si_item_num));
+	    
+		result = get_answer((long int)i - start) + start;
+		start = -1;
+	    } else {
+		result = i - 1;
+	    }
+	}
+	brelse(bh);
+	
+	if (start != -1)
+	    continue;
+
+	printf("write %ld\n", result);
+
+	bh = bread (fs->fs_dev, (map + result)->si_block, fs->fs_blocksize);
+	if (!bh) {
+	    reiserfs_warning (fp, "bread failed\n");
+	    continue;
+	}
+
+	fseek(target_file, get_offset(&(map + result)->si_ih.ih_key) - 1, SEEK_SET);
+	ih = B_N_PITEM_HEAD (bh, (map + result)->si_item_num);
+	if (is_direct_ih(ih)) {
+	    fwrite(B_I_PITEM(bh, ih), (map + result)->si_ih.ih2_item_len, 1, target_file);
+	} else if (is_indirect_ih(ih)) {
+	    for (j = 0; j < I_UNFM_NUM (ih); j ++) {
+		unfm_ptr = le32_to_cpu (((__u32 *)B_I_PITEM(bh, ih))[j]);
+		if (!unfm_ptr) {
+		    fseek(target_file, fs->fs_blocksize, SEEK_CUR);
+		    continue;
+		}
+		bh_pointed = bread (fs->fs_dev, unfm_ptr, fs->fs_blocksize);
+		if (!bh_pointed) {
+		    reiserfs_warning (fp, "bread failed\n");
+		    continue;
+		}
+		fwrite(bh_pointed->b_data, fs->fs_blocksize, 1, target_file);
+		brelse(bh_pointed);
+	    }
+	}
+	brelse(bh);
+    }
+
+    free(map);
+}
+
+void do_recover(reiserfs_filsys_t * fs) {
+    FILE *fp, *recovery;
+
+    if (map_file (fs)) {
+	fp = fopen (map_file (fs), "r");
+	if (fp == 0) {
+	    reiserfs_warning (stderr, "fopen failed: %m\n");
+	    return;
+	}
+    } else {
+	reiserfs_warning (stderr, "Reading file map from stdin..\n");
+	fflush (stderr);
+	fp = stdin;
+    }
+
+    if (!(recovery = fopen(recovery_file(fs), "w+"))) {
+	reiserfs_warning (stderr, "fopen failed: %m\n");
+	return;
+    }
+
+    
+    recover_items(fp, fs, recovery);
+    
+    if (fp != stdin)
+	fclose (fp);
+    
+    fclose(recovery);
 }

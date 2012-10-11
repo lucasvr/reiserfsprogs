@@ -1,5 +1,6 @@
 /*
- * Copyright 1996, 1997, 1998 Hans Reiser, see reiserfs/README for licensing and copyright details
+ * Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Hans Reiser, see
+ * reiserfs/README for licensing and copyright details
  */
 
 #include "includes.h"

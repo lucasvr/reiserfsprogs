@@ -1,5 +1,5 @@
 /*
- *  Copyright 1996, 1997, 1998 Hans Reiser, see reiserfs/README for licensing and copyright details
+ *  Copyright 1996-2002 Hans Reiser, see reiserfs/README for licensing and copyright details
  */
 
 /*
@@ -9,7 +9,7 @@
  */
 
 /*
- *  This file contains functions dealing with S+tree
+ *  This file contains functions dealing with internal tree
  *
  * comp_keys
  * comp_short_keys
@@ -280,7 +280,7 @@ void  pathrelse (struct path * p_s_search_path)
 
 /**************************************************************************
  * Algorithm   SearchByKey                                                *
- *             look for item in the Disk S+Tree by its key                *
+ *             look for item in internal tree on the disk by its key      *
  * Input:  p_s_sb   -  super block                                        *
  *         p_s_key  - pointer to the key to search                        *
  * Output: true value -  1 - found,  0 - not found                        *

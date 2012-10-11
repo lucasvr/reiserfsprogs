@@ -45,7 +45,7 @@ fsck_progress ("Usage: %s [mode] [options] "\
 "  \t\t\tdo not open nor replay journal\n"\
 "  -S | --scan-whole-partition\n"\
 "  \t\t\tbuild tree of all blocks of the device\n", argv[0]);\
-  exit (16);\
+  exit(16);\
 }
 
 /*
@@ -98,10 +98,6 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 	    {"rebuild-tree", no_argument, &mode, FSCK_REBUILD},
 	    {"rollback-fsck-changes", no_argument, &mode, FSCK_ROLLBACK_CHANGES},
 	    {"clean-attributes", no_argument, &mode, FSCK_CLEAN_ATTRIBUTES},
-/*
-  {"fast-rebuild", no_argument, &opt_fsck_mode, FSCK_FAST_REBUILD},
-*/
-
 	    /* options */
 	    {"logfile", required_argument, 0, 'l'},
 	    {"interactive", no_argument, 0, 'i'},
@@ -163,7 +159,7 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 	    /*asprintf (&data->log_file_name, "%s", optarg);*/
 	    data->log = fopen (optarg, "w");
 	    if (!data->log)
-		fprintf (stderr, "reiserfsck: could not open \'%s\': %m", optarg);
+		fprintf (stderr, "reiserfsck: Cannot not open \'%s\': %m", optarg);
 	    break;
 
 	case 'n': /* --nolog */
@@ -202,7 +198,7 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 	case 'h': /* --hash: suppose that this hash was used on a filesystem */
 	    asprintf (&data->rebuild.defined_hash, "%s", optarg);
 	    if (name2func (data->rebuild.defined_hash) == 0)
-		reiserfs_panic ("reiserfsck: unknown hash is defined: %s",
+		reiserfs_panic ("reiserfsck: Unknown hash is defined: %s",
 				data->rebuild.defined_hash);
 	    data->options |= OPT_HASH_DEFINED;
 	    break;
@@ -254,7 +250,6 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 	/* only one non-option argument is permitted */
 	print_usage_and_exit();
 
-	
     if (mode != FSCK_REBUILD && 
                (data->rebuild.scan_area == EXTERN_BITMAP ||
                 data->rebuild.scan_area == ALL_BLOCKS || 
@@ -284,34 +279,55 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 
     data->mode = mode;
     if (!data->log)
-	data->log = stdout;
+	data->log = stdout;   
+
+    if (data->journal_dev_name == NULL)
+	data->journal_dev_name = argv[optind];
     
     return argv[optind];
 }
 
 
 #define REBUILD_WARNING \
-"  **********************************************************\n\
-  ** This  is  an  experimental  version  of  reiserfsck, **\n\
-  **              !! MAKE A BACKUP FIRST !!               **\n\
-  ** Don't run this program unless something  is  broken. **\n\
-  ** Some types of random FS damage can be recovered from **\n\
-  ** by  this  program,   which  basically   throws  away **\n\
-  ** the internal nodes of the tree and then reconstructs **\n\
-  ** them. This program is for use only by the desperate, **\n\
-  ** and is  of only beta quality.  If you are using  the **\n\
-  ** latest  reiserfsprogs  and  it  fails  please  email **\n\
-  ** bug reports to reiserfs-list@namesys.com.            **\n\
-  **********************************************************\n\
+"  *************************************************************\n\
+  ** Do not run rebuild-tree unless something is broken  and **\n\
+  ** MAKE A BACKUP before using it.  If you have bad sectors **\n\
+  ** on a drive  it is usually a bad idea  to continue using **\n\
+  ** it.  Then you probably should get a working hard drive, **\n\
+  ** copy the file system from the bad drive to the good one **\n\
+  ** -- dd_rescue is  a good tool for  that -- and only then **\n\
+  ** run this program.                                       **\n\
+  ** If you are using the latest reiserfsprogs and  it fails **\n\
+  ** please  email bug reports to reiserfs-list@namesys.com, **\n\
+  ** providing  as  much  information  as  possible --  your **\n\
+  ** hardware,  kernel,  patches,  settings,  all reiserfsck **\n\
+  ** messages  (including version),  the reiserfsck logfile, **\n\
+  ** check  the  syslog file  for  any  related information. **\n\
+  ** If you would like advice on using this program, support **\n\
+  ** is available  for $25 at  www.namesys.com/support.html. **\n\
+  *************************************************************\n\
 \nWill rebuild the filesystem (%s) tree\n"
+
+#define START_WARNING \
+"  *************************************************************\n\
+  ** If you are using the latest reiserfsprogs and  it fails **\n\
+  ** please  email bug reports to reiserfs-list@namesys.com, **\n\
+  ** providing  as  much  information  as  possible --  your **\n\
+  ** hardware,  kernel,  patches,  settings,  all  reiserfsk **\n\
+  ** messages  (including version),  the reiserfsck logfile, **\n\
+  ** check  the  syslog file  for  any  related information. **\n\
+  ** If you would like advice on using this program, support **\n\
+  ** is available  for $25 at  www.namesys.com/support.html. **\n\
+  *************************************************************\n\
+\n"
 
 #define AUTO_WARNING \
 "  **********************************************************\n\
   ** WARNING:  You seem to be running this automatically. **\n\
   ** You are almost certainly  doing  it  by  mistake  as **\n\
   ** a result of some script  that  doesn't  know what it **\n\
-  ** does. Doing nothing, rerun without -a and -p if  you **\n\
-  ** really intend to do this.                            **\n\
+  ** does. Nothing will be done. If  you really intend to **\n\
+  ** run reiserfsck, rerun it without -a and -p options.  **\n\
   **********************************************************\n\n"
 
 void warn_what_will_be_done (char * file_name, struct fsck_data * data)
@@ -320,34 +336,35 @@ void warn_what_will_be_done (char * file_name, struct fsck_data * data)
 
     warn_to = (data->progress ?: stderr);
 
-//    reiserfs_warning (warn_to, START_WARNING);
-
+    if (data->mode == FSCK_REBUILD)
+	reiserfs_warning (warn_to, REBUILD_WARNING, file_name);
+    else
+	reiserfs_warning (warn_to, START_WARNING);
+    
     /* warn about fsck mode */
     switch (data->mode) {
     case FSCK_CHECK:
 	reiserfs_warning (warn_to,
-			  "Will read-only check consistency of the filesystem on %s\n",
-			  file_name);
+	    "Will read-only check consistency of the filesystem on %s\n", file_name);
 	break;
 
     case FSCK_FIX_FIXABLE:
         
 	reiserfs_warning (warn_to, 
-	        "Will check consistency of the filesystem on %s\n", file_name);
-        reiserfs_warning (fsck_progress_file(fs), 
-                "Will fix what can be fixed w/o --rebuild-tree\n");
+	    "Will check consistency of the filesystem on %s\n", file_name);
+        reiserfs_warning (warn_to, 
+	    "and will fix what can be fixed w/o --rebuild-tree\n");
 	break;
 
     case FSCK_SB:
 	reiserfs_warning (warn_to,
-                "Will check superblock and rebuild it if needed\n");
+            "Will check superblock and rebuild it if needed\n");
 	break;
 
     case FSCK_REBUILD:
-	reiserfs_warning (warn_to, REBUILD_WARNING, file_name);
 	if (data->options & OPT_SAVE_PASSES_DUMP) {
 	    reiserfs_warning (warn_to,
-                "Will run only 1 step of rebuilding, write state file '%s' and exit\n",
+		"Will run only 1 step of the rebuilding, write state file '%s' and exit\n",
 			      data->rebuild.passes_dump_file_name);
 	} else if (data->options & OPT_INTERACTIVE)
 	    reiserfs_warning (warn_to,
@@ -356,15 +373,12 @@ void warn_what_will_be_done (char * file_name, struct fsck_data * data)
 
 	if (data->rebuild.bitmap_file_name)
 	    reiserfs_warning (warn_to,
-                "Will try to load bitmap of leaves from file '%s'\n",
-			      data->rebuild.bitmap_file_name);
+                "Will try to load a bitmap--of all ReiserFS leaves in the partition--from the file \n'%s'\n",
+		data->rebuild.bitmap_file_name);
 
 	if (data->options & OPT_ADJUST_FILE_SIZE)
 	    reiserfs_warning (warn_to,
-                "\tWill fix following non-critical things:\n"
-                "\t\tunknown file modes will be set to regular files\n"
-                "\t\tfile sizes will be set to real file size\n"
-                "\t\tfiles sharing busy inode number will be relocated\n");
+		"\tWill set file sizes in their metadata to real file sizes actually found by fsck.\n");
 
 	if (data->options & OPT_HASH_DEFINED)
 	    reiserfs_warning (warn_to,
@@ -401,10 +415,76 @@ void warn_what_will_be_done (char * file_name, struct fsck_data * data)
                         (data->log == stdout) ? "stdout" : (data->log_file_name ?: "fsck.run"));
 
     if (!user_confirmed (warn_to, 
-                "\nDo you want to run this program?[N/Yes] (note need to type Yes):", "Yes\n"))
+                "\nDo you want to run this program?[N/Yes] (note need to type Yes if you do):", "Yes\n"))
 	exit (0);
 }
 
+static dma_info_t dma_info;
+static dma_info_t old_dma_info;
+
+void check_dma() {
+    old_dma_info = dma_info;
+    if (get_dma_info(&dma_info) == -1) {
+	fsck_log("get_dma_info failed %s\n", strerror (errno));
+	return;
+    }
+    
+    if (dma_info.dma != old_dma_info.dma) {
+	if (dma_info.dma == 0) {
+	    printf("\n********************************************************************\n");
+	    printf("* Warning: It was just detected that dma mode was turned off while *\n");
+	    printf("* operating -- probably  due  to some  problem with your hardware. *\n");
+	    printf("* Please check your hardware and have a look into the syslog file. *\n");
+	    printf("* Note:  run of  rebuild-tree on faulty  hardware may destroy your *\n");
+	    printf("* data.                                                            *\n");
+	    printf("********************************************************************\n");
+	    if (fsck_log_file (fs) != stdout)
+		fsck_log("WARNING: dma mode has been turned off.\n");
+	}
+    }
+    if (dma_info.speed != old_dma_info.speed) {
+	if (dma_info.speed < old_dma_info.speed) {
+	    printf("\n********************************************************************\n");
+	    printf("* Warning:It was just detected that dma speed was descreased while *\n");
+	    printf("* operating -- probably  due  to some  problem with your hardware. *\n");
+	    printf("* Please check your hardware and have a look into the syslog file. *\n");
+	    printf("* Note:  run of  rebuild-tree on faulty  hardware may destroy your *\n");
+	    printf("* data.                                                            *\n");
+	    printf("********************************************************************\n");
+	    if (fsck_log_file (fs) != stdout)
+		fsck_log("WARNING: dma speed has been descreased.\n");	    
+	}
+    }
+    
+    alarm(1);
+}
+
+void register_timer() {
+    memset(&dma_info, 0, sizeof(dma_info));
+    memset(&old_dma_info, 0, sizeof(old_dma_info));
+    
+    dma_info.fd = fs->fs_dev;
+
+    if (prepare_dma_check(&dma_info) != 0)
+	return;
+
+    if (get_dma_info(&dma_info) == -1) {
+	fsck_log("get_dma_info failed %s\n", strerror (errno));
+	return;
+    }
+
+    if (dma_info.dma == 0) {
+	printf("\n******************************************************\n");
+	printf("* Warning: The dma on your hard drive is turned off. *\n");
+	printf("* This may really slow down the fsck process.        *\n");
+	printf("******************************************************\n");
+	if (fsck_log_file (fs) != stdout)
+	    fsck_log("WARNING: DMA is turned off\n");
+    } 
+    
+    signal(SIGALRM, check_dma);
+    alarm(1);
+}
 
 static void reset_super_block (reiserfs_filsys_t * fs)
 {
@@ -416,7 +496,7 @@ static void reset_super_block (reiserfs_filsys_t * fs)
     set_sb_root_block (sb, ~0);
     set_sb_tree_height (sb, ~0);
 
-    /* make file system invalid unless fsck done () */
+    /* make file system invalid unless fsck finished () */
     set_sb_fs_state (sb, get_sb_fs_state (sb) || REISERFS_CORRUPTED);
 
 /*
@@ -452,6 +532,8 @@ static void reset_super_block (reiserfs_filsys_t * fs)
             set_jp_journal_dev (sb_jp(sb), 0);
             set_jp_journal_magic (sb_jp(sb) ,0);
             set_sb_reserved_for_journal (sb, 0);
+	    set_jp_journal_1st_block (sb_jp(sb), get_journal_start_must (fs));
+	    set_jp_journal_size (sb_jp(sb), journal_default_size (fs->fs_super_bh->b_blocknr, fs->fs_blocksize));	    
  	    set_jp_journal_max_trans_len (sb_jp(sb),
  	    	advise_journal_max_trans_len(	get_jp_journal_max_trans_len (sb_jp(sb)),
  	    					get_jp_journal_size (sb_jp(sb)),
@@ -489,8 +571,8 @@ static int where_to_start_from (reiserfs_filsys_t * fs)
 	/**/
 	return START_FROM_THE_BEGINNING;
     
-    /* ok, we asked to restart - we can only do that if there is file saved
-       during previous runs */
+    /* We are able to perform the next step only if there is a file with the previous 
+     * step results. */
     fp = open_file (state_dump_file (fs), "r");
     if (fp == 0) {
 	set_sb_fs_state (fs->fs_ondisk_sb, 0);
@@ -507,7 +589,7 @@ static int where_to_start_from (reiserfs_filsys_t * fs)
     switch (last_run_state) {
     case PASS_0_DONE:
 	/* skip pass 0 */
-	if (!fsck_user_confirmed (fs, "Pass 0 seems done. Start from pass 1?(Yes)",
+	if (!fsck_user_confirmed (fs, "Pass 0 seems finished. Start from pass 1?(Yes)",
 				  "Yes\n", 1))
 	    fsck_exit ("Run without -d then\n");
 	
@@ -517,7 +599,7 @@ static int where_to_start_from (reiserfs_filsys_t * fs)
 	
     case PASS_1_DONE:
 	/* skip pass 1 */
-	if (!fsck_user_confirmed (fs, "Passes 0 and 1 seems done. Start from pass 2?(Yes)",
+	if (!fsck_user_confirmed (fs, "Passes 0 and 1 seems finished. Start from pass 2?(Yes)",
 				  "Yes\n", 1))
 	    fsck_exit ("Run without -d then\n");
 	
@@ -526,7 +608,7 @@ static int where_to_start_from (reiserfs_filsys_t * fs)
 	return START_FROM_PASS_2;
 	
     case TREE_IS_BUILT:
-	if (!fsck_user_confirmed (fs, "S+ tree of filesystem looks built. Skip rebuilding?(Yes)",
+	if (!fsck_user_confirmed (fs, "Internal tree of filesystem looks built. Skip rebuilding?(Yes)",
 				  "Yes\n", 1))
 	    fsck_exit ("Run without -d then\n");
 	
@@ -534,14 +616,14 @@ static int where_to_start_from (reiserfs_filsys_t * fs)
 	fclose (fp);
 	return START_FROM_SEMANTIC;
     case SEMANTIC_DONE:
-	if (!fsck_user_confirmed (fs, "Passes 0 and 1 seems done. Start from pass 2?(Yes)",
+	if (!fsck_user_confirmed (fs, "Passes 0 and 1 seems finished. Start from pass 2?(Yes)",
 				  "Yes\n", 1))
 	    fsck_exit ("Run without -d then\n");
 	load_semantic_result (fp, fs);
 	fclose (fp);
 	return START_FROM_LOST_FOUND;
     case LOST_FOUND_DONE:
-	if (!fsck_user_confirmed (fs, "Passes 0 and 1 seems done. Start from pass 2?(Yes)",
+	if (!fsck_user_confirmed (fs, "Passes 0 and 1 seems finished. Start from pass 2?(Yes)",
 				  "Yes\n", 1))
 	    fsck_exit ("Run without -d then\n");
 	load_lost_found_result (fs);
@@ -559,12 +641,13 @@ static void mark_filesystem_consistent (reiserfs_filsys_t * fs)
         return;
 
     if (!reiserfs_journal_opened (fs)) {
-	    /* make sure journal is not standard */
+	/* make sure journal is not standard */
 	if (!is_reiserfs_jr_magic_string (fs->fs_ondisk_sb))
-	    die ("File system with standard journal that has to be open");
-	/* mark filesystem such that it is not mountable until new journal
-	   device is defined */
-	fsck_progress ("WARNING: You must use reiserfstune to specify new journal\n");
+	    die ("Filesystem with standard journal must be opened.");
+	
+	fsck_progress ("WARNING: You must use reiserfstune to specify a new journal before mounting it.\n");
+	/* mark filesystem such that it is not mountable until 
+	 * new journaldevice is defined */	
 	set_jp_journal_magic (sb_jp (fs->fs_ondisk_sb), NEED_TUNE);
     }
 
@@ -577,11 +660,12 @@ static void mark_filesystem_consistent (reiserfs_filsys_t * fs)
 static void reiserfsck_replay_journal () {
     /* keep the super_block in the separate memory to avoid problems with replayed broken parameters */
     fs->fs_ondisk_sb = getmem (fs->fs_blocksize);
-    memcpy (fs->fs_ondisk_sb, fs->fs_super_bh->b_data, sizeof (fs->fs_blocksize));
+    memcpy (fs->fs_ondisk_sb, fs->fs_super_bh->b_data, fs->fs_blocksize);
 
     replay_journal (fs);
 
     /* get rid of SB copy */
+    memcpy (fs->fs_super_bh->b_data, fs->fs_ondisk_sb, fs->fs_blocksize);
     freemem (fs->fs_ondisk_sb);
     fs->fs_ondisk_sb = (struct reiserfs_super_block *)fs->fs_super_bh->b_data;
 
@@ -611,9 +695,9 @@ static void the_end (reiserfs_filsys_t * fs)
     /* write all dirty blocks */
     fsck_progress ("Syncing..");
     fs->fs_dirt = 1;
+    clean_after_dma_check(fs->fs_dev, &dma_info);
     reiserfs_close (fs);
-//    sync ();
-    fsck_progress ("done\n");
+    fsck_progress ("finished\n");
 }
 
 
@@ -623,8 +707,8 @@ static void rebuild_tree (reiserfs_filsys_t * fs)
 
 
     if (is_mounted (fs->fs_file_name)) {
-	fsck_progress ("rebuild_tree: can not rebuild tree of mounted filesystem\n");
-	return;
+	fsck_progress ("rebuild_tree: Cannot rebuild tree of mounted filesystem\n");
+	exit(16);
     }
 
     init_rollback_file (state_rollback_file(fs), &fs->fs_blocksize, fsck_data(fs)->log);
@@ -633,9 +717,9 @@ static void rebuild_tree (reiserfs_filsys_t * fs)
     /* FIXME: for regular file take care of of file size */
 
     if (!reiserfs_open_ondisk_bitmap (fs)) {
-        fsck_progress ("reiserfsck: could not open bitmap\n");
+        fsck_progress ("reiserfsck: Could not open bitmap\n");
 	reiserfs_close (fs);
-	exit(0);
+	exit(8);
     }
 
     /* rebuild starts with journal replaying */
@@ -690,23 +774,23 @@ static void prepare_fs_for_pass_through_tree (reiserfs_filsys_t * fs)
     if (is_mounted (fs->fs_file_name)) {
 	/* filesystem seems mounted. */
         if (fsck_mode (fs) == FSCK_CLEAN_ATTRIBUTES) {
-	    fsck_progress ("Device %s is mounted, cannot clean attributes on mounted device\n",
+	    fsck_progress ("Partition %s is mounted, cannot clean attributes on mounted device\n",
 			   fs->fs_file_name);
 	    reiserfs_close (fs);
-	    exit (0);
+	    exit(16);
         }
 
 	if (!is_mounted_read_only (fs->fs_file_name)) {
-	    fsck_progress ("Device %s is mounted w/ write permissions, can not check it\n",
+	    fsck_progress ("Partition %s is mounted w/ write permissions, cannot check it\n",
 			   fs->fs_file_name);
 	    reiserfs_close (fs);
-	    exit (0);
+	    exit(16);
 	}
 	if (!reiserfs_journal_opened (fs))
 	    /* just to make sure */
 	    reiserfs_panic ("Journal is not opened");
 
-	fsck_progress ("Filesystem seems mounted read-only. Skipping journal replay..\n");
+	fsck_progress ("Filesystem seems mounted read-only. Skipping journal replay.\n");
 
 	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 	    fsck_progress ("--fix-fixable ignored\n");
@@ -726,19 +810,19 @@ static void clean_attributes (reiserfs_filsys_t * fs) {
     time (&t);
 
     if (get_sb_umount_state (fs->fs_ondisk_sb) != REISERFS_CLEANLY_UMOUNTED) {
-        fsck_progress ("Filesystem does not look like cleanly umounted\n"
-				  "Check consistency of the partition first.\n");
-        exit(0);
+        fsck_progress ("Filesystem does not look cleanly umounted\n"
+	    "Check consistency of the partition first.\n");
+        exit(16);
     }
     if (get_sb_fs_state (fs->fs_ondisk_sb) != REISERFS_CONSISTENT) {
         fsck_progress ("Filesystem seems to be in unconsistent state.\n"
 				  "Check consistency of the partition first.\n");
-        exit(0);
+        exit(16);
     }
 
     if (get_reiserfs_format (fs->fs_ondisk_sb) != REISERFS_FORMAT_3_6) {
         fsck_progress ("Filesystems of 3_5 format do not support extended attributes.\n");
-        exit(0);
+        exit(16);
     }
     fsck_progress ("###########\n"
 	           "reiserfsck --clean-attributes started at %s"
@@ -750,6 +834,7 @@ static void clean_attributes (reiserfs_filsys_t * fs) {
 
     do_clean_attributes (fs);
 
+    clean_after_dma_check(fs->fs_dev, &dma_info);
     reiserfs_close (fs);
     close_rollback_file ();
 
@@ -782,9 +867,9 @@ static void check_fs (reiserfs_filsys_t * fs)
     init_rollback_file (state_rollback_file(fs), &fs->fs_blocksize, fsck_data(fs)->log);
     
     if (!reiserfs_open_ondisk_bitmap (fs)) {
-        fsck_progress ("reiserfsck: could not open bitmap\n");
+        fsck_progress ("reiserfsck: Could not open bitmap\n");
 	reiserfs_close (fs);
-	exit(0);
+	exit(8);
     }
 
     prepare_fs_for_pass_through_tree (fs);
@@ -794,7 +879,7 @@ static void check_fs (reiserfs_filsys_t * fs)
     semantic_check ();
 
     if (fsck_data (fs)->check.fatal_corruptions) {
-	fsck_progress ("There were found %d corruptions which can be fixed only during --rebuild-tree\n",
+	fsck_progress ("%d found corruptions can be fixed only during --rebuild-tree\n",
 		       fsck_data (fs)->check.fatal_corruptions);
         set_sb_fs_state (fs->fs_ondisk_sb, REISERFS_CORRUPTED);
         mark_buffer_dirty (fs->fs_super_bh);
@@ -803,11 +888,11 @@ static void check_fs (reiserfs_filsys_t * fs)
         /* fixable corruptions found */
 	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
             /* fixable corruptions found and fix-fixable has not fixed them, do rebuild-tree */
-            fsck_log ("Fatal error occured: %d fixable corruptions found after fix-fixable.\n",
+            fsck_log ("Fatal error: %d fixable corruptions found after fix-fixable.\n",
                                 fsck_data (fs)->check.fixable_corruptions);
 	    retval = 2;
         } else {
-           fsck_progress ("There were found %d corruptions which can be fixed with --fix-fixable\n",
+	    fsck_progress ("%d found corruptions can be fixed with --fix-fixable\n",
                           fsck_data (fs)->check.fixable_corruptions);
 	    retval = 1;
         }
@@ -828,16 +913,16 @@ static void check_fs (reiserfs_filsys_t * fs)
     }
         
     free_id_map (proper_id_map (fs));
+    clean_after_dma_check(fs->fs_dev, &dma_info);
     reiserfs_close (fs);
     close_rollback_file ();
-//    sync();
     
     time (&t);
     fsck_progress ("###########\n"
 		   "reiserfsck finished at %s"
 		   "###########\n", ctime (&t));
 
-    exit (retval);
+    exit(retval);
 }
 
 static int open_devices_for_rollback (char * file_name, struct fsck_data * data) {
@@ -846,7 +931,7 @@ static int open_devices_for_rollback (char * file_name, struct fsck_data * data)
     fd = open (file_name, O_RDWR | O_LARGEFILE);
 
     if (fd == -1) {
-        reiserfs_warning (stderr, "reiserfsck: could not open device %s\"", file_name);
+        reiserfs_warning (stderr, "reiserfsck: Cannot not open the fs partition %s\"", file_name);
         return -1;
     }
 
@@ -858,7 +943,7 @@ static int open_devices_for_rollback (char * file_name, struct fsck_data * data)
     if (data->journal_dev_name && strcmp (data->journal_dev_name, file_name)) {
 	fs->fs_journal_dev = open (data->journal_dev_name, O_RDWR | O_LARGEFILE);
 	if (fs->fs_journal_dev == -1) {
-	    reiserfs_warning (stderr, "cannot open journal device\n");
+	    reiserfs_warning (stderr, "Cannot open journal partition\n");
      	    return -1;
 	}
     }
@@ -891,51 +976,8 @@ static void fsck_rollback (reiserfs_filsys_t * fs) {
 		   "reiserfsck finished at %s"
 		   "###########\n", ctime (&t));
 
-    exit (0);
+    exit(0);
 }
-
-static void fast_rebuild (reiserfs_filsys_t * fs)
-{
-#ifdef FAST_REBUILD_READY /* and tested */
-    if (opt_fsck_mode == FSCK_FAST_REBUILD) {
-	__u32 root_block = SB_ROOT_BLOCK(fs);
-	reopen_read_write (file_name);
-	printf ("Replaying log..");
- 	if (fsck_skip_journal (fs))
-            reiserfsck_replay_journal ();
-	printf ("done\n");
-	if (opt_fsck == 1)
-	    printf ("ReiserFS : checking %s\n",file_name);
-	else
-	    printf ("Rebuilding..\n");
-
-	
-	reset_super_block (fs);
-	SB_DISK_SUPER_BLOCK(fs)->s_root_block = cpu_to_le32 (root_block);
-	init_bitmaps (fs);
-
-	/* 1,2. building of the tree */
-	recover_internal_tree(fs);
-
-	/* 3. semantic pass */
-	pass3_semantic ();
-
-	/* if --lost+found is set - link unaccessed directories to
-           lost+found directory */
-	look_for_lost (fs);
-
-	/* 4. look for unaccessed items in the leaves */
-	pass4_check_unaccessed_items ();
-	
-	end_fsck ();
-    }
-#endif /* FAST REBUILD READY */
-
-    reiserfs_panic ("Fast rebuild is not ready");
-
-}
-
-
 
 int main (int argc, char * argv [])
 {
@@ -956,19 +998,11 @@ int main (int argc, char * argv [])
     screen_savebuffer=getmem(screen_width+1);
     memset(screen_savebuffer,0,screen_savebuffer_len+1);
     
-    /* initially assigned in semantic.c, but non-constant initializers are
-    * illegal - jdm */
-/*
-    root_dir_key.k2_dir_id = cpu_to_le32(root_dir_key.k2_dir_id);
-    root_dir_key.k2_objectid = cpu_to_le32(root_dir_key.k2_objectid);
-    parent_root_dir_key.k2_dir_id = cpu_to_le32(parent_root_dir_key.k2_dir_id);
-    parent_root_dir_key.k2_objectid = cpu_to_le32(parent_root_dir_key.k2_objectid);
-*/
     lost_found_dir_key.k2_dir_id = cpu_to_le32(lost_found_dir_key.k2_dir_id);
     lost_found_dir_key.k2_objectid = cpu_to_le32(lost_found_dir_key.k2_objectid);
-    /* this is only needed (and works) when running under 2.4 on regural files */
+    /* this is only needed (and works) when running under 2.4 on regular files */
     if (setrlimit (RLIMIT_FSIZE, &rlim) == -1) {
-	reiserfs_warning (stderr, "could not setrlimit: %m\n");
+	reiserfs_warning (stderr, "Cannot change the system limit for file size with setrlimit: %m\n");
     }
 
     data = getmem (sizeof (struct fsck_data));
@@ -989,7 +1023,7 @@ int main (int argc, char * argv [])
 	data->options |= OPT_QUIET;
 	data->progress = fopen ("fsck.run", "a+");
 	if (!data->progress)
-	    reiserfs_panic ("reiserfsck: could not open \"fsck.run\"");
+	    reiserfs_panic ("reiserfsck: Cannot not open \"fsck.run\"");
 
 	if (data->log == stdout)
 	    /* no log file specifed - redirect log into 'fsck.run' */
@@ -997,13 +1031,13 @@ int main (int argc, char * argv [])
 
 	retval = fork ();
 	if (retval == -1)
-	    reiserfs_panic ("reiserfsck: fork failed: %m");
+	    reiserfs_panic ("reiserfsck: Fork failed: %m");
 	if (retval != 0) {
-	    return 0;
+	    return 8;
 	}
-	reiserfs_warning (stderr, "\nreiserfsck is running in background as [%d],\n"
-			  "make sure that it get enough confirmation from stdin\n\n",
-			  getpid ());
+	reiserfs_warning (stderr, "\nReiserfsck is running in background as [%d],\n"
+	    "make sure that it gets all the confirmations from stdin that it requests.\n\n",
+	    getpid ());
     }
 
 
@@ -1012,34 +1046,34 @@ int main (int argc, char * argv [])
 
     if (data->mode == FSCK_ROLLBACK_CHANGES) {
     	if (open_devices_for_rollback (file_name, data) == -1)
-    	    exit (1);
+    	    exit(8);
     } else {
 	fs = reiserfs_open (file_name, O_RDONLY, 0, data);
 
 	if (data->mode != FSCK_SB) {
 	    if (no_reiserfs_found (fs))
-    	    	die ("reiserfsck: could not open filesystem on \"%s\"", file_name);
+    	    	die ("reiserfsck: Cannot not open filesystem on \"%s\"", file_name);
 
 	    if (data->mode == AUTO) {
 		print_super_block (stdout, fs, fs->fs_file_name, fs->fs_super_bh, 1);
 		reiserfs_close(fs);
 	
-		exit (0);
+		exit(0);
 	    }
 	
 	    if (fsck_skip_journal (fs) && !is_reiserfs_jr_magic_string (fs->fs_ondisk_sb)) {
 		reiserfs_warning (stderr, "Filesystem with standard journal found, "
-			"--no-journal-availabel is ignored\n");
+			"--no-journal-available is ignored\n");
 		fsck_data(fs)->options &= ~OPT_SKIP_JOURNAL;
 	    }
 	
 	    if (!fsck_skip_journal (fs)) {
 		if (!reiserfs_open_journal (fs, data->journal_dev_name, O_RDONLY)) {	
-	            fsck_progress ("reiserfsck: either make journal device available or use --no-journal-available\n");
-		    fsck_progress ("            if you have the standard journal or if your device is available\n");
-        	    fsck_progress ("            and you specified it correctly, you have to run rebuild-sb\n");
+	            fsck_progress ("\nEither make journal partition available or use --no-journal-available\n");
+		    fsck_progress ("If you have the standard journal or if your partition is available\n");
+        	    fsck_progress ("and you specified it correctly, you must run rebuild-sb\n");
 		    reiserfs_close (fs);
-      		    return 0;
+      		    return 8;
 	        }
 	    }
 	
@@ -1049,6 +1083,7 @@ int main (int argc, char * argv [])
 		    data->options &= ~BADBLOCKS_FILE;
 		}
 	    }
+	    register_timer();
     	}
     }
 
@@ -1067,15 +1102,13 @@ int main (int argc, char * argv [])
 	rebuild_tree (fs);
 	break;
 
-    case FSCK_FAST_REBUILD:
-	fast_rebuild (fs);
-	break;
     case FSCK_ROLLBACK_CHANGES:
 	fsck_rollback (fs);
  	break;
     case FSCK_CLEAN_ATTRIBUTES:
 	clean_attributes (fs);
     }
-    return 16;
+    
+    return 8;
 }
 

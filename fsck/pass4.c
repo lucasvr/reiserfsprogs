@@ -3,30 +3,6 @@
  */
 #include "fsck.h"
 
-/*
-void get_next_key (struct path * path, int i, struct key * key)
-{
-    struct buffer_head * bh = PATH_PLAST_BUFFER (path);
-    struct key * rkey;
-
-
-    if (i < B_NR_ITEMS (bh) - 1) {
-	// next item is in this block
-	copy_key (key, B_N_PKEY (bh, i + 1));
-	return;
-    }
-
-    rkey = uget_rkey (path);
-    if (rkey) {
-	// got next item key from right delimiting key
-	copy_key (key, rkey);
-    } else {
-	// there is no next item
-	memset (key, 0xff, KEY_SIZE);
-    }
-}
-*/
-
 void pass_4_check_unaccessed_items (void)
 {
     struct key key;
@@ -51,8 +27,6 @@ void pass_4_check_unaccessed_items (void)
 	    print_how_fast (items++, 0, 50, 0);
 
 	for (i = get_item_pos (&path), ih = get_ih (&path); i < B_NR_ITEMS (bh); i ++, ih ++) {
-
-
 	    if (!is_item_reachable (ih)) {
 		PATH_LAST_POSITION (&path) = i;
 		rdkey = get_next_key_2 (&path);
@@ -67,6 +41,12 @@ void pass_4_check_unaccessed_items (void)
 
 		goto cont;
 	    }
+	
+	    if (get_ih_flags(ih) != 0) {
+		clean_ih_flags(ih);
+		mark_buffer_dirty(bh);
+	    }
+	    
 	}
 	PATH_LAST_POSITION(&path) = i - 1;
 	rdkey = reiserfs_next_key (&path);
@@ -82,7 +62,7 @@ void pass_4_check_unaccessed_items (void)
 
     pathrelse (&path);
 
-    fsck_progress ("done\n");
+    fsck_progress ("finished\n");
     stage_report (4, fs);
 
     /* after pass 4 */
@@ -100,6 +80,8 @@ void pass_4_check_unaccessed_items (void)
     flush_objectid_map (proper_id_map (fs), fs);
     reiserfs_flush_to_ondisk_bitmap (fs->fs_bitmap2, fs);
     reiserfs_flush (fs);
-    fsck_progress ("done\n");
+    fsck_progress ("finished\n");
+
+    
     return;
 }

@@ -536,7 +536,7 @@ static void send_block (reiserfs_filsys_t * fs, struct buffer_head * bh, int sen
 
     case HAS_IH_ARRAY:
 	having_ih_array ++;
-	fprintf (stderr, "BROKEN BLOCK HEAD %lu\n", bh->b_blocknr);
+//	fprintf (stderr, "BROKEN BLOCK HEAD %lu\n", bh->b_blocknr);
 	pack_full_block (fs, bh);
 	break;
 	

@@ -48,20 +48,13 @@ int is_block_used (unsigned long block)
     return reiserfs_bitmap_test_bit (fsck_new_bitmap (fs), block);
 }
 
-
-void check_hardware_msg (void) {
-    fprintf(stderr, "\nThe problem has occured looks like a hardware problem.\n"\
-    "Send us the bug report only if the second run dies at the same place \n"\
-    "with the same block number.\n");
-}
-
 void mark_block_used (unsigned long block, int check_hardware)
 {
     if (!block)
 	return;
     if (is_block_used (block)) {
 	if (check_hardware)
-	    check_hardware_msg();
+	    check_memory_msg();
 	die ("mark_block_used: (%lu) used already", block);
     }
 

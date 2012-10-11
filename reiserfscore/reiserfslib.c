@@ -1,9 +1,8 @@
 /*
- *  Copyright 2000 by Hans Reiser, licensing governed by reiserfs/README
+ *  Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README
  */
 
 #include "includes.h"
-#include <linux/major.h>
 #include <linux/kdev_t.h>
 
 struct key root_dir_key = {0, 0, {{0, 0},}};
@@ -81,9 +80,7 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
 	} else {
 	    sb = (struct reiserfs_super_block *)bh->b_data;
 	    
-	    if (is_any_reiserfs_magic_string (sb))
-		/* fixme: we could make some check to make sure that super
-		   block looks correctly */
+	    if (does_look_like_super_block (sb))
 		goto found;
 
 	    /* reiserfs signature is not found at the i-th 4k block */
@@ -93,6 +90,7 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
 
     reiserfs_warning (stderr, "reiserfs_open: neither new nor old reiserfs format "
 		      "found on %s\n", filename);
+
     if (error)
 	*error = 0;
     freemem (fs);
@@ -101,9 +99,9 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
     return fs;
 
  found:
-    
+   
     fs->fs_blocksize = get_sb_block_size (sb);
-
+    
     /* check block size on the filesystem */
     if (fs->fs_blocksize != 4096) {
 	i = bh->b_blocknr * 4096 / fs->fs_blocksize;
@@ -115,13 +113,7 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
 	    freemem (fs);
 	    return 0;
 	}
-	sb = (struct reiserfs_super_block *)bh->b_data;	
-	if (!does_look_like_super_block (sb, fs->fs_blocksize)) {
-	    reiserfs_warning (stderr, "reiserfs_open: no reiserfs in %d, size %d\n",
-			      i, fs->fs_blocksize);
-	    freemem (fs);
-	    return 0;
-	}
+	sb = (struct reiserfs_super_block *)bh->b_data;
     }
 
     fs->fs_hash_function = code2func (get_sb_hash_code (sb));
@@ -1185,34 +1177,8 @@ int can_we_format_it (char * device_name, int force)
 	reiserfs_warning (stderr, "%s is not a block special device", device_name);
 	check_forcing_ask_confirmation (force);
     } else {
-	/* from e2progs-1.18/misc/mke2fs.c */
-
-	
-/*FIXME: it should be probably rewritten for 2.5 later*/
-#ifndef MAJOR
-#define MAJOR(dev)	((dev)>>8)
-#define MINOR(dev)	((dev) & 0xff)
-#endif
-#ifndef SCSI_BLK_MAJOR
-#define SCSI_BLK_MAJOR(M)  ((M) == SCSI_DISK_MAJOR || (M) == SCSI_CDROM_MAJOR)
-#endif
-
-#ifndef IDE_DISK_MAJOR
-#ifdef IDE9_MAJOR
-#define IDE_DISK_MAJOR(M) (MAJOR(rdev) == IDE0_MAJOR || MAJOR(rdev) == IDE1_MAJOR || \
-			   MAJOR(rdev) == IDE2_MAJOR || MAJOR(rdev) == IDE3_MAJOR || \
-			   MAJOR(rdev) == IDE4_MAJOR || MAJOR(rdev) == IDE5_MAJOR || \
-			   MAJOR(rdev) == IDE6_MAJOR || MAJOR(rdev) == IDE7_MAJOR || \
-			   MAJOR(rdev) == IDE8_MAJOR || MAJOR(rdev) == IDE9_MAJOR)
-#else
-#define IDE_DISK_MAJOR(M) (MAJOR(rdev) == IDE0_MAJOR || MAJOR(rdev) == IDE1_MAJOR || \
-			   MAJOR(rdev) == IDE2_MAJOR || MAJOR(rdev) == IDE3_MAJOR || \
-			   MAJOR(rdev) == IDE4_MAJOR || MAJOR(rdev) == IDE5_MAJOR)
-#endif
-#endif
-
-	if ((IDE_DISK_MAJOR (MAJOR(rdev)) && MINOR (rdev) % 64 == 0) ||
-	    (SCSI_BLK_MAJOR (MAJOR(rdev)) && MINOR (rdev) % 16 == 0)) {
+	if ((IDE_DISK_MAJOR (MAJOR(rdev)) && MINOR(rdev) % 64 == 0) ||
+	    (SCSI_BLK_MAJOR (MAJOR(rdev)) && MINOR(rdev) % 16 == 0)) {
 	    /* /dev/hda or similar */
 	    reiserfs_warning (stderr, "%s is entire device, not just one partition!",
 		    device_name);
@@ -1222,107 +1188,6 @@ int can_we_format_it (char * device_name, int force)
 
     return 1;
 }
-
-	
-#if 0	
-/*tune*/
-#define check_forcing_ask_confirmation() \
-	if (!Force) {\
-	    /* avoid formatting it without being forced */\
-	    reiserfs_warning (stderr, "Use -f to force over\n");\
-	    return 0;\
-	}\
-	if (Force == 1) {\
-	    if (!user_confirmed (stderr, "Continue (y/n):", "y\n"))\
-		return 0;\
-	}\
-
-
-/* we only can use a file for filesystem or journal if it is either not
-   mounted block device or regular file and we are forced to use it */
-static int can_we_format_it (char * device_name)
-{
-    mode_t mode;
-    dev_t rdev;
-
-
-    if (is_mounted (device_name)) {
-	/* device looks mounted */
-	message("'%s' looks mounted.\n", device_name);
-	check_forcing_ask_confirmation ();
-    }
-
-    mode = get_st_mode (device_name);
-    rdev = get_st_rdev (device_name);
-
-    if (!S_ISBLK (mode)) {
-	/* file is not a block device */
-	message("Can not create a journal on not a block device file %s\n", device_name);
-	exit (1);
-    } else {
-	/* from e2progs-1.18/misc/mke2fs.c */
-	if ((MAJOR (rdev) == HD_MAJOR && MINOR (rdev) % 64 == 0) ||
-	    (SCSI_BLK_MAJOR (rdev) && MINOR (rdev) % 16 == 0)) {
-	    /* /dev/hda or similar */
-	    message("%s is entire device, not just one partition!\n",
-		    device_name);
-	    check_forcing_ask_confirmation ();
-	}
-    }
-
-    return 1;
-}
-
-
-/*mkreiserfs*/
-/* we only can use a file for filesystem or journal if it is either not
-   mounted block device or regular file and we are forced to use it */
-static int can_we_format_it (char * device_name, int force)
-{
-    mode_t mode;
-    dev_t rdev;
-
-    if (is_mounted (device_name)) {
-		/* device looks mounted */
-	    message("'%s' looks mounted.", device_name);
-		check_forcing_ask_confirmation ();
-    }
-
-    mode = get_st_mode (device_name);
-    rdev = get_st_rdev (device_name);
-
-    if (!S_ISBLK (mode)) {
-		/* file is not a block device */
-	    message("%s is not a block special device", device_name);
-		check_forcing_ask_confirmation ();
-    } else {
-		if (((MAJOR (rdev) == IDE0_MAJOR ||
-			  MAJOR (rdev) == IDE1_MAJOR ||
-			  MAJOR (rdev) == IDE2_MAJOR ||
-			  MAJOR (rdev) == IDE3_MAJOR ||
-			  MAJOR (rdev) == IDE4_MAJOR ||
-			  MAJOR (rdev) == IDE5_MAJOR ||
-			  MAJOR (rdev) == IDE6_MAJOR ||
-			  MAJOR (rdev) == IDE7_MAJOR ||
-			  MAJOR (rdev) == IDE8_MAJOR ||
-			  MAJOR (rdev) == IDE9_MAJOR) &&
-			 MINOR (rdev) % 64 == 0) ||
-			(SCSI_BLK_MAJOR (MAJOR (rdev)) &&
-			 MINOR (rdev) % 16 == 0)) {
-			/* /dev/hda or similar */
-			message("%s is entire device, not just one partition!",
-					device_name);
-			check_forcing_ask_confirmation ();
-		}
-    }
-
-    return 1;
-}
-	
-#endif
-	
-	
-
 
 int create_badblock_bitmap (reiserfs_filsys_t * fs, char * badblocks_file) {
     FILE * fd;
@@ -1368,7 +1233,7 @@ void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet) {
     struct item_head * tmp_ih;
     struct item_head badblock_ih;
 //    char item[UNFM_P_SIZE];
-    struct unfm_nodeinfo ni;
+    __u32 ni;
 
     __u64 offset;
     __u32 i, j;
@@ -1416,7 +1281,6 @@ void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet) {
     set_type (KEY_FORMAT_2, &badblock_ih.ih_key, TYPE_INDIRECT);
 
     j = 0;
-    ni.unfm_freespace = 0;
 
     /* insert all badblock pointers */
     for (i = 0; i < fs->fs_badblocks_bm->bm_bit_size; i++) {
@@ -1427,7 +1291,7 @@ void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet) {
 	
 	offset = j * fs->fs_blocksize + 1;
 	set_offset (KEY_FORMAT_2, &badblock_ih.ih_key, offset);
-	ni.unfm_nodenum = cpu_to_le32 (i);
+	ni = cpu_to_le32 (i);
 	
 	retval = usearch_by_position (fs, &badblock_ih.ih_key, key_format (&badblock_ih.ih_key), &badblock_path);
 
@@ -1436,7 +1300,7 @@ void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet) {
 		init_tb_struct (&tb, fs, &badblock_path, IH_SIZE + get_ih_item_len(&badblock_ih));
 		if (fix_nodes (/*tb.transaction_handle,*/ M_INSERT, &tb, &badblock_ih/*, body*/) != CARRY_ON)
 		    die ("reiserfsck_insert_item: fix_nodes failed");
-		do_balance (/*tb.transaction_handle,*/ &tb, &badblock_ih, (void *)&ni.unfm_nodenum , M_INSERT, 0/*zero num*/);
+		do_balance (/*tb.transaction_handle,*/ &tb, &badblock_ih, (void *)&ni , M_INSERT, 0/*zero num*/);
 
 //		reiserfsck_insert_item (&badblock_path, &badblock_ih, item);
 		

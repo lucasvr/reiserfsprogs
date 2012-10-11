@@ -1,5 +1,5 @@
 /*
- * Copyright 1996, 1997 Hans Reiser, see reiserfs/README for licensing and copyright details
+ * Copyright 1996-2002 Hans Reiser, see reiserfs/README for licensing and copyright details
  */
 #define _GNU_SOURCE
 
@@ -18,6 +18,18 @@
 #include "misc.h"
 #include "config.h"
 
+void check_memory_msg (void) {
+    fprintf(stderr, 
+	"\nThe problem has occurred looks like a hardware problem. Send us the bug\n"
+	"report only if the second run dies at the same place with the same block\n"
+	"number.\n");
+}
+
+void check_hd_msg (void) {
+    fprintf(stderr, 
+	"\nThe problem has occurred looks like a hardware problem.\n"
+	"Check your hard drive for badblocks.\n");
+}
 
 static int is_bad_block (unsigned long block)
 {
@@ -492,8 +504,8 @@ struct buffer_head * bread (int dev, unsigned long block, size_t size)
     if (f_read(bh) == 0 || is_bad_block (block)) {
 /*      BAD BLOCK LIST SUPPORT
     	die ("%s: Cannot read a block # %lu. Specify list of badblocks\n",*/
-    	die ("%s: Cannot read a block # %lu.\n",
-    		__FUNCTION__, bh->b_blocknr);
+	check_hd_msg();
+    	die ("%s: Cannot read the block (%lu).\n", __FUNCTION__, bh->b_blocknr);
     }
 
     mark_buffer_uptodate (bh, 0);
@@ -776,7 +788,7 @@ int bwrite (struct buffer_head * bh)
     if (is_bad_block (bh->b_blocknr)) {
 	fprintf (stderr, "bwrite: bad block is going to be written: %lu\n",
 		 bh->b_blocknr);
-	exit (4);
+	exit(8);
     }
 
     if (!buffer_dirty (bh) || !buffer_uptodate (bh))
@@ -793,7 +805,7 @@ int bwrite (struct buffer_head * bh)
     if (lseek64 (bh->b_dev, offset, SEEK_SET) == (loff_t)-1){
 	fprintf (stderr, "bwrite: lseek to position %Ld (block=%lu, dev=%d): %s\n",
 		 (long long)offset, bh->b_blocknr, bh->b_dev, strerror (errno));
-	exit (4); /* File system errors left uncorrected */
+	exit(8); /* File system errors left uncorrected */
     }
 
     if (s_rollback_file != NULL && bh->b_size == rollback_blocksize) {
@@ -801,7 +813,7 @@ int bwrite (struct buffer_head * bh)
         __u32 position;
 	struct block_handler block_h;
         
-        /*log previous content into log*/
+        /*log previous content into the log*/
         if (!fstat64 (bh->b_dev, &buf)) {
 	    block_h.blocknr = bh->b_blocknr;
 	    block_h.device = buf.st_rdev;
@@ -813,8 +825,8 @@ int bwrite (struct buffer_head * bh)
                     fwrite (&offset, sizeof (offset), 1, s_rollback_file);
                     fwrite (rollback_data, rollback_blocksize, 1, s_rollback_file);
                     fflush(s_rollback_file);
-                    blocklist__insert_in_position ((void **)&rollback_blocks_array, &rollback_blocks_number, &block_h,
-                                                sizeof(block_h), &position);
+                    blocklist__insert_in_position(&block_h, (void **)&rollback_blocks_array, 
+			&rollback_blocks_number, sizeof(block_h), &position);
                     /*if you want to know what gets saved, uncomment it*/
 /*                    if (log_file != 0 && log_file != stdout) {
                         fprintf (log_file, "rollback: block %lu of device %Lu was backed up\n", 
@@ -825,27 +837,28 @@ int bwrite (struct buffer_head * bh)
                 } else {
                     fprintf (stderr, "bwrite: read (block=%lu, dev=%d): %s\n", bh->b_blocknr,
                     		bh->b_dev, strerror (errno));
-                    exit (4);
+                    exit(8);
                 }
                 if (lseek64 (bh->b_dev, offset, SEEK_SET) == (loff_t)-1) {
                     fprintf (stderr, "bwrite: lseek to position %Ld (block=%lu, dev=%d): %s\n",
         		 (long long)offset, bh->b_blocknr, bh->b_dev, strerror (errno));
-                    exit (4);
+                    exit(8);
                 }
             }
         } else {
-            fprintf (stderr, "bwrite: fstat of (%d) returned -1: %s\n", bh->b_dev, strerror (errno));
+            fprintf (stderr, "bwrite: fstat of (%d) returned -1: %s\n", bh->b_dev, 
+		strerror(errno));
         }
     } else if (s_rollback_file != NULL) {
-	fprintf (stderr, "rollback: block (%lu) has the size different from the fs uses, block skipped\n",
-		bh->b_blocknr);
+	fprintf (stderr, "rollback: block (%lu) has the size different from the fs uses, "
+	    "block skipped\n",	bh->b_blocknr);
     }
     
     bytes = write (bh->b_dev, bh->b_data, size);
     if (bytes != (ssize_t)size) {
 	fprintf (stderr, "bwrite: write %ld bytes returned %ld (block=%ld, dev=%d): %s\n",
 		(long)size, (long)bytes, bh->b_blocknr, bh->b_dev, strerror (errno));
-	exit (4);
+	exit(8);
     }
 
     mark_buffer_clean (bh);
@@ -887,7 +900,8 @@ void check_and_free_buffer_mem (void)
     int count = 0;
     struct buffer_head * next ;
 
-//    printf("check and free buffer mem, hits %d misses %d reads %d writes %d\n", buffer_hits, buffer_misses, buffer_reads, buffer_writes) ;
+//    printf("check and free buffer mem, hits %d misses %d reads %d writes %d\n", 
+//	    buffer_hits, buffer_misses, buffer_reads, buffer_writes) ;
     /*sync_buffers (0, 0);*/
 
     count = _check_and_free_buffer_list(Buffer_list_head);

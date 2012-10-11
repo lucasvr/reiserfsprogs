@@ -426,6 +426,8 @@ struct reiserfs_journal_header {
     __u32 jh_mount_id ;
 
     struct journal_params jh_journal;
+
+    __u32 jh_last_check_mount_id;	/* the mount id of the fs during the last reiserfsck --check. */
 };
 
 
@@ -492,11 +494,9 @@ struct offset_v2 {
 } __attribute__ ((__packed__));
 
 
-/* Key of the object drop determines its location in the S+tree, and is
-   composed of 4 components */
+/* Key of the object determines object's location in the tree, composed of 4 components */
 struct key {
-    __u32 k2_dir_id;    /* packing locality: by default parent directory object
-                          id */
+    __u32 k2_dir_id;    /* packing locality: by default parent directory object id */
     __u32 k2_objectid;  /* object identifier */
     union {
 	struct offset_v1 k2_offset_v1;
@@ -640,9 +640,11 @@ void set_ih_key_format (struct item_head * ih, __u16 val);
     ( ! not_of_one_file(p_s_ih, p_s_key) && \
           I_OFF_BYTE_IN_ITEM(p_s_ih, get_offset (p_s_key), n_blocksize) )
 
-#define IH_Bad 0
-#define IH_Unreachable 1
-#define IH_WAS_TAIL 2
+#define IH_Unreachable 0
+#define IH_Was_Tail    1
+#define IH_Checked     2
+#define IH_Writable    3
+
 
 /* Bad item flag is set temporary by recover_leaf */
 /*
@@ -670,16 +672,23 @@ extern_inline __u16 unmark_item_bad( struct item_head *ih )
 /* Unreachable bit is set on tree rebuilding and is cleared in semantic pass */
 #define clean_ih_flags(ih) set_ih_flags (ih, 0)
 
-#define ih_reachable(ih) (!(get_ih_flags (ih) & (1 << IH_Unreachable)))
+#define ih_reachable(ih)        (!(get_ih_flags (ih) & (1 << IH_Unreachable)))
 #define mark_ih_reachable(ih)   set_ih_flags (ih, get_ih_flags (ih) & ~(1 << IH_Unreachable))
 #define mark_ih_unreachable(ih) set_ih_flags (ih, get_ih_flags (ih) | (1 << IH_Unreachable))
 
-#define ih_was_tail(ih) (get_ih_flags (ih) & (1 << IH_WAS_TAIL))
-#define mark_ih_was_tail(ih) set_ih_flags (ih, get_ih_flags (ih) | (1 << IH_WAS_TAIL))
-#define mark_ih_become_tail(ih) set_ih_flags (ih, get_ih_flags (ih) & ~(1 << IH_WAS_TAIL))
+#define ih_was_tail(ih)         (get_ih_flags (ih) & (1 << IH_Was_Tail))
+#define mark_ih_was_tail(ih)    set_ih_flags (ih, get_ih_flags (ih) | (1 << IH_Was_Tail))
+#define mark_ih_become_tail(ih) set_ih_flags (ih, get_ih_flags (ih) & ~(1 << IH_Was_Tail))
 
+#define ih_checked(ih)          (get_ih_flags (ih) & (1 << IH_Checked))
+#define mark_ih_checked(ih)     set_ih_flags (ih, get_ih_flags (ih) | (1 << IH_Checked))
+#define clear_ih_checked(ih)    set_ih_flags (ih, get_ih_flags (ih) & ~(1 << IH_Checked))
 
-/* maximal length of item */ 
+#define ih_writable(ih)         (get_ih_flags (ih) & (1 << IH_Writable))
+#define mark_ih_writable(ih)    set_ih_flags (ih, get_ih_flags (ih) | (1 << IH_Writable))
+#define clear_ih_writable(ih)   set_ih_flags (ih, get_ih_flags (ih) & ~(1 << IH_Writable))
+
+/* maximal length of item */
 #define MAX_ITEM_LEN(block_size) (block_size - BLKH_SIZE - IH_SIZE)
 #define MIN_ITEM_LEN 1
 
@@ -690,7 +699,7 @@ extern_inline __u16 unmark_item_bad( struct item_head *ih )
 
 
 /* 
- * Picture represents a leaf of the S+tree
+ * Picture represents a leaf of internal tree
  *  ______________________________________________________
  * |      |  Array of     |                   |           |
  * |Block |  Object-Item  |      F r e e      |  Objects- |
@@ -837,7 +846,7 @@ struct stat_data {
 //
 #define SD_SIZE (sizeof(struct stat_data))
 
-// there are two ways: to check length of item or ih_version field
+// there are two ways: to check length of item or ih_format field
 // (for old stat data it is set to 0 (KEY_FORMAT_1))
 #define stat_data_v1(ih) (get_ih_key_format (ih) == KEY_FORMAT_1)
 
@@ -1424,7 +1433,8 @@ struct buffer_info {
 /* get stat-data */
 #define B_I_STAT_DATA(bh, ih) ( (struct stat_data * )B_I_PITEM(bh,ih) )
 
-#define MAX_DIRECT_ITEM_LEN(size) ((size) - BLKH_SIZE - 2*IH_SIZE - SD_V1_SIZE - UNFM_P_SIZE)
+#define MAX_DIRECT_ITEM_LEN(size) ((size) - BLKH_SIZE - 2*IH_SIZE - SD_SIZE - UNFM_P_SIZE)
+#define MAX_INDIRECT_ITEM_LEN(size) ((size) - BLKH_SIZE - IH_SIZE)
 
 /* indirect items consist of entries which contain blocknrs, pos
    indicates which entry, and B_I_POS_UNFM_POINTER resolves to the

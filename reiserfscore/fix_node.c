@@ -1,5 +1,6 @@
 /*
- * Copyright 1996, 1997, 1998 Hans Reiser, see reiserfs/README for licensing and copyright details
+ * Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Hans Reiser, see
+ * reiserfs/README for licensing and copyright details
  */
 
 /**
@@ -365,7 +366,7 @@ static  int check_left (struct tree_balance * tb, int h, int cur_free)
     }
   
 
-    reiserfs_panic (0, "vs: 8065: check_left: all items fit in the left neighbor");
+    reiserfs_panic (0, "vs-8065: check_left: all items fit in the left neighbor");
     return 0;
 }
 
@@ -1474,12 +1475,12 @@ static int ip_check_balance (/*struct reiserfs_transaction_handle *th,*/ struct 
     
     int lfree, sfree, rfree /* free space in L, S and R */;
 
-    /* nver is short for number of vertixes, and lnver is the number if we
+    /* nver is short for number of vertices, and lnver is the number if we
        shift to the left, rnver is the number if we shift to the right, and
        lrnver is the number if we shift in both directions.  The goal is to
-       minimize first the number of vertixes, and second, the number of
-       vertixes whose contents are changed by shifting, and third the number
-       of uncached vertixes whose contents are changed by shifting and must be
+       minimize first the number of vertices, and second, the number of
+       vertices whose contents are changed by shifting, and third the number
+       of uncached vertices whose contents are changed by shifting and must be
        read from disk.  */
     int nver, lnver, rnver, lrnver;
 
@@ -1642,7 +1643,7 @@ static int ip_check_balance (/*struct reiserfs_transaction_handle *th,*/ struct 
 	/* calculate number of blocks S[h] must be split into when l_shift_num
 	   first items and l_shift_bytes of the right most liquid item to be
 	   shifted are shifted to the left neighbor, as well as number of
-	   items in each part of the splitted node (s012 numbers), and number
+	   items in each part of the split node (s012 numbers), and number
 	   of bytes (s1bytes) of the shared drop which flow to S1 if any */
 	lset = LEFT_SHIFT_NO_FLOW;
 	lnver = get_num_ver (vn->vn_mode, tb, h, 
@@ -1754,7 +1755,7 @@ static int ip_check_balance (/*struct reiserfs_transaction_handle *th,*/ struct 
 
 
 /* Check whether current node S[h] is balanced when Decreasing its size by
- * Deleting or Cutting for INTERNAL node of S+tree.
+ * Deleting or Cutting for INTERNAL node of internal tree.
  * Calculate parameters for balancing for current level h.
  * Parameters:
  *	tb	tree_balance structure;
@@ -1767,7 +1768,7 @@ static int ip_check_balance (/*struct reiserfs_transaction_handle *th,*/ struct 
  *	       -2 - no disk space.
  *
  * Note: Items of internal nodes have fixed size, so the balance condition for
- * the internal part of S+tree is as for the B-trees.
+ * the internal part of internal tree is as for the B-trees.
  */
 static int dc_check_balance_internal (struct tree_balance * tb, int h)
 {
@@ -1911,7 +1912,7 @@ static int dc_check_balance_internal (struct tree_balance * tb, int h)
 
 
 /* Check whether current node S[h] is balanced when Decreasing its size by
- * Deleting or Truncating for LEAF node of S+tree.
+ * Deleting or Truncating for LEAF node of internal tree.
  * Calculate parameters for balancing for current level h.
  * Parameters:
  *	tb	tree_balance structure;
@@ -2279,7 +2280,7 @@ int fix_nodes (int n_op_mode, struct tree_balance * p_s_tb,
 		p_s_tb->insert_size[n_h + 1] = (DC_SIZE + KEY_SIZE) * (p_s_tb->blknum[n_h] - 1);
     }
 
-    return CARRY_ON; /* go ahead and balsnce */
+    return CARRY_ON; /* go ahead and balance */
 }
 
 

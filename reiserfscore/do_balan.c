@@ -1,5 +1,6 @@
 /*
- * Copyright 1996, 1997, 1998 Hans Reiser, see reiserfs/README for licensing and copyright details
+ * Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Hans Reiser, see
+ * reiserfs/README for licensing and copyright details
  */
 
 /* Now we have all buffers that must be used in balancing of the tree 	*/
@@ -181,7 +182,7 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 			const char * body,		/* body  of inserted item or bytes to paste */
 			int flag,			/* i - insert, d - delete, c - cut, p - paste
 							   (see comment to do_balance) */
-			int zeros_number,		/* will be commented later */
+			int zeros_number,		/* it is always 0 */
 				
 			struct item_head * insert_key,  /* in our processing of one level we sometimes determine what
 							   must be inserted into the next higher level.  This insertion
@@ -247,7 +248,8 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 
 		    /* Calculate key component, item length and body to insert into S[0] */
 		    //ih->ih_key.k_offset += tb->lbytes;
-		    set_offset (key_format (&ih->ih_key), &ih->ih_key, get_offset (&ih->ih_key) + tb->lbytes);
+		    set_offset (key_format (&ih->ih_key), &ih->ih_key, get_offset (&ih->ih_key) +
+		    	tb->lbytes * (is_indirect_ih(ih) ? tb->tb_fs->fs_blocksize / UNFM_P_SIZE : 1) );
 		    set_ih_item_len (ih, new_item_len);
 		    if ( tb->lbytes >  zeros_number ) {
 			body += (tb->lbytes - zeros_number);
@@ -318,8 +320,8 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 			/* regular object */
 			if ( tb->lbytes >= pos_in_item ) {
 			    /* appended item will be in L[0] in whole */
-			    int l_n;
-			    struct key * key;
+			    int l_n, temp_n;
+                            struct key * key;
 
 			    /* this bytes number must be appended to the last item of L[h] */
 			    l_n = tb->lbytes - pos_in_item;
@@ -338,14 +340,18 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 						 get_ih_item_len (B_N_PITEM_HEAD(tb->L[0],n+item_pos-ret_val)),
 						 l_n,body, zeros_number > l_n ? l_n : zeros_number);
 
+
 			    /* 0-th item in S0 can be only of DIRECT type when l_n != 0*/
 			    //B_N_PKEY (tbS0, 0)->k_offset += l_n;z
 			    key = B_N_PKEY (tbS0, 0);
-			    set_offset (key_format (key), key, get_offset (key) + l_n);
+                            temp_n = (is_indirect_ih(B_N_PITEM_HEAD (tb->L[0], n + item_pos - ret_val))) ?
+                                 (l_n  / UNFM_P_SIZE) * tb->tb_fs->fs_blocksize : l_n;
+
+			    set_offset (key_format (key), key, get_offset (key) + temp_n);
 
 			    //B_N_PDELIM_KEY(tb->CFL[0],tb->lkey[0])->k_offset += l_n;
 			    key = B_N_PDELIM_KEY(tb->CFL[0],tb->lkey[0]);
-			    set_offset (key_format (key), key, get_offset (key) + l_n);
+			    set_offset (key_format (key), key, get_offset (key) + temp_n);
 
 			    /* Calculate new body, position in item and insert_size[0] */
 			    if ( l_n > zeros_number ) {
@@ -397,8 +403,7 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 
 		    /* if appended item is indirect item, put unformatted node into un list */
 		    if (I_IS_INDIRECT_ITEM (pasted))
-			set_ih_free_space (pasted, ((struct unfm_nodeinfo*)body)->unfm_freespace);
-		    //pasted->u.ih_free_space = ((struct unfm_nodeinfo*)body)->unfm_freespace;
+			set_ih_free_space (pasted, 0);
 
 		    tb->insert_size[0] = 0;
 		    zeros_number = 0;
@@ -427,8 +432,9 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 		/* new item or its part falls to R[0] */
 		if ( item_pos == n - tb->rnum[0] + 1 && tb->rbytes != -1 ) {
 		    /* part of new item falls into R[0] */
-		    int old_key_comp, old_len, r_zeros_number;
+		    loff_t old_key_comp, old_len, r_zeros_number;
 		    const char * r_body;
+		    loff_t multiplyer;
 
 		    leaf_shift_right(tb, tb->rnum[0] - 1, -1);
 
@@ -436,22 +442,24 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 		    old_key_comp = get_offset (&ih->ih_key);
 		    old_len = get_ih_item_len (ih);
 
+		    multiplyer = is_indirect_ih(ih) ? tb->tb_fs->fs_blocksize / UNFM_P_SIZE : 1;
 		    /* Calculate key component and item length to insert into R[0] */
 		    //ih->ih_key.k_offset += (old_len - tb->rbytes);
-		    set_offset (key_format (&ih->ih_key), &ih->ih_key, old_key_comp + old_len - tb->rbytes);
+		    set_offset (key_format (&ih->ih_key), &ih->ih_key, old_key_comp +
+		    	(old_len - tb->rbytes) * multiplyer );
 
 		    set_ih_item_len (ih, tb->rbytes);
 		    /* Insert part of the item into R[0] */
 		    bi.bi_bh = tb->R[0];
 		    bi.bi_parent = tb->FR[0];
 		    bi.bi_position = get_right_neighbor_position (tb, 0);
-		    if ( get_offset (&ih->ih_key) - old_key_comp > zeros_number ) {
+		    if (old_len - tb->rbytes > zeros_number ) {
 			r_zeros_number = 0;
-			r_body = body + get_offset (&ih->ih_key) - old_key_comp - zeros_number;
+			r_body = body + old_len - tb->rbytes - zeros_number;
 		    }
-		    else {
+		    else { /* zeros_number is always 0 */
 			r_body = body;
-			r_zeros_number = zeros_number - (get_offset (&ih->ih_key) - old_key_comp);
+			r_zeros_number = zeros_number - old_len - tb->rbytes;
 			zeros_number -= r_zeros_number;
 		    }
 
@@ -552,13 +560,20 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 			if ( (n_rem = tb->insert_size[0] - tb->rbytes) < 0 )
 			    n_rem = 0;
 
-			//B_N_PKEY(tb->R[0],0)->k_offset += n_rem;
-			key = B_N_PKEY(tb->R[0],0);
-			set_offset (key_format (key), key, get_offset (key) + n_rem);
+			{
+			    unsigned long temp_rem = n_rem;
+			
+			    if (is_indirect_key(B_N_PKEY(tb->R[0],0)))
+				temp_rem = (n_rem / UNFM_P_SIZE) * tb->tb_fs->fs_blocksize;
 
-			//B_N_PDELIM_KEY(tb->CFR[0],tb->rkey[0])->k_offset += n_rem;
-			key = B_N_PDELIM_KEY(tb->CFR[0],tb->rkey[0]);
-			set_offset (key_format (key), key, get_offset (key) + n_rem);
+			    //B_N_PKEY(tb->R[0],0)->k_offset += n_rem;
+			    key = B_N_PKEY(tb->R[0],0);
+			    set_offset (key_format (key), key, get_offset (key) + temp_rem);
+
+			    //B_N_PDELIM_KEY(tb->CFR[0],tb->rkey[0])->k_offset += n_rem;
+			    key = B_N_PDELIM_KEY(tb->CFR[0],tb->rkey[0]);
+			    set_offset (key_format (key), key, get_offset (key) + temp_rem);
+                        }
 
 			mark_buffer_dirty (tb->CFR[0]);
 
@@ -579,8 +594,7 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 			leaf_paste_in_buffer(tb->tb_fs, &bi, 0, n_shift, tb->insert_size[0] - n_rem, r_body, r_zeros_number);
 
 			if (I_IS_INDIRECT_ITEM(B_N_PITEM_HEAD(tb->R[0],0))) {
-			    set_ih_free_space (B_N_PITEM_HEAD(tb->R[0],0), ((struct unfm_nodeinfo*)body)->unfm_freespace);
-			    //B_N_PITEM_HEAD(tb->R[0],0)->u.ih_free_space = ((struct unfm_nodeinfo*)body)->unfm_freespace;
+			    set_ih_free_space (B_N_PITEM_HEAD(tb->R[0],0), 0);
 			}
 
 			tb->insert_size[0] = n_rem;
@@ -616,8 +630,7 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 		    }
 
 		    if (I_IS_INDIRECT_ITEM (pasted))
-			//pasted->u.ih_free_space = ((struct unfm_nodeinfo*)body)->unfm_freespace;
-			set_ih_free_space (pasted, ((struct unfm_nodeinfo*)body)->unfm_freespace);
+			set_ih_free_space (pasted, 0);
 		    zeros_number = tb->insert_size[0] = 0;
 		}
 	    }
@@ -679,6 +692,7 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 		    /* part of new item falls into S_new[i] */
 		    int old_key_comp, old_len, r_zeros_number;
 		    const char * r_body;
+		    loff_t multiplyer;
 
 		    /* Move snum[i]-1 items from S[0] to S_new[i] */
 		    leaf_move_items (LEAF_FROM_S_TO_SNEW, tb, snum[i] - 1, -1, S_new[i]);
@@ -686,10 +700,12 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 		    /* Remember key component and item length */
 		    old_key_comp = get_offset (&ih->ih_key);
 		    old_len = get_ih_item_len (ih);
+		    multiplyer = is_indirect_ih(ih) ? tb->tb_fs->fs_blocksize / UNFM_P_SIZE : 1;
 
 		    /* Calculate key component and item length to insert into S_new[i] */
 		    //ih->ih_key.k_offset += (old_len - sbytes[i]);
-		    set_offset (key_format (&ih->ih_key), &ih->ih_key, old_key_comp + old_len - sbytes[i]);
+		    set_offset (key_format (&ih->ih_key), &ih->ih_key, old_key_comp +
+		    	(old_len - sbytes[i]) * multiplyer);
 
 		    set_ih_item_len (ih, sbytes[i]);
 
@@ -698,13 +714,13 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 		    bi.bi_parent = 0;
 		    bi.bi_position = 0;
 
-		    if ( get_offset (&ih->ih_key) - old_key_comp > zeros_number ) {
+		    if ( old_len - sbytes[i] > zeros_number ) {
 			r_zeros_number = 0;
-			r_body = body + (get_offset (&ih->ih_key) - old_key_comp) - zeros_number;
+			r_body = body + (old_len - sbytes[i]) - zeros_number;
 		    }
 		    else {
 			r_body = body;
-			r_zeros_number = zeros_number - (get_offset (&ih->ih_key) - old_key_comp);
+			r_zeros_number = zeros_number - (old_len - sbytes[i]);
 			zeros_number -= r_zeros_number;
 		    }
 
@@ -809,15 +825,20 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 			leaf_paste_in_buffer(tb->tb_fs, &bi, 0, n_shift, tb->insert_size[0]-n_rem, r_body,r_zeros_number);
 			tmp = B_N_PITEM_HEAD (S_new[i], 0);
 			if (I_IS_INDIRECT_ITEM(tmp)) {
+/*			
 			    if (n_rem)
 				reiserfs_panic ("PAP-12230: balance_leaf: "
 						"invalid action with indirect item");
-			    //tmp->u.ih_free_space = ((struct unfm_nodeinfo*)body)->unfm_freespace;
-			    set_ih_free_space (tmp, ((struct unfm_nodeinfo*)body)->unfm_freespace);
-			}
+			    set_ih_free_space (tmp, 0);
+*/
+			    set_ih_free_space (tmp, 0);
+			    set_offset( key_format (&tmp->ih_key), &tmp->ih_key, get_offset(&tmp->ih_key) +
+				(n_rem / UNFM_P_SIZE) * tb->tb_fs->fs_blocksize);
+			} else
+				set_offset (key_format (&tmp->ih_key), &tmp->ih_key, get_offset (&tmp->ih_key) + n_rem);
 
 			//B_N_PKEY(S_new[i],0)->k_offset += n_rem;
-			set_offset (key_format (&tmp->ih_key), &tmp->ih_key, get_offset (&tmp->ih_key) + n_rem);
+//			
 
 			tb->insert_size[0] = n_rem;
 			if ( ! n_rem )
@@ -845,8 +866,7 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 
 		    /* if we paste to indirect item update ih_free_space */
 		    if (I_IS_INDIRECT_ITEM (pasted))
-			//pasted->u.ih_free_space = ((struct unfm_nodeinfo*)body)->unfm_freespace;
-			set_ih_free_space (pasted, ((struct unfm_nodeinfo*)body)->unfm_freespace);
+			set_ih_free_space (pasted, 0);
 		    zeros_number = tb->insert_size[0] = 0;
 		}
 	    } else {
@@ -914,8 +934,7 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 		    leaf_paste_in_buffer (tb->tb_fs, &bi, item_pos, pos_in_item, tb->insert_size[0], body, zeros_number);
 
 		    if (I_IS_INDIRECT_ITEM (pasted)) {
-			//pasted->u.ih_free_space = ((struct unfm_nodeinfo*)body)->unfm_freespace;
-			set_ih_free_space (pasted, ((struct unfm_nodeinfo*)body)->unfm_freespace);
+			set_ih_free_space (pasted, 0);
 		    }
 		    tb->insert_size[0] = 0;
 		}

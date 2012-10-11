@@ -1,4 +1,9 @@
 /*
+ * Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002 Hans Reiser, see
+ * reiserfs/README for licensing and copyright details
+ */
+
+/*
  * Keyed 32-bit hash function using TEA in a Davis-Meyer function
  *   H0 = Key
  *   Hi = E Mi(Hi-1) + Hi-1

@@ -1,5 +1,6 @@
 /*
- *  Copyright 2000 by Hans Reiser, licensing governed by reiserfs/README
+ *  Copyright 2000, 2001, 2002 by Hans Reiser, licensing governed by
+ *  reiserfs/README
  */
 
 
@@ -235,11 +236,14 @@ int is_prejournaled_reiserfs (struct reiserfs_super_block * rs)
 		     strlen(REISERFS_3_5_SUPER_MAGIC_STRING)));
 }
 
-int does_look_like_super_block (struct reiserfs_super_block * sb, int blocksize) {
-    if (is_any_reiserfs_magic_string (sb) && blocksize == get_sb_block_size (sb))
-    	return 1;
-    	
-    return 0;
+int does_look_like_super_block (struct reiserfs_super_block * sb) {
+    if (!is_any_reiserfs_magic_string (sb))
+    	return 0;
+    
+    if (!is_blocksize_correct(get_sb_block_size (sb)))
+	return 0;
+	
+    return 1;
 }
 
 
@@ -248,7 +252,7 @@ int does_look_like_super_block (struct reiserfs_super_block * sb, int blocksize)
 int who_is_this (char * buf, int blocksize)
 {
     /* super block? */
-    if (does_look_like_super_block ((void *)buf, blocksize))
+    if (does_look_like_super_block ((void *)buf))
 	return THE_SUPER;
 
     if (does_node_look_like_a_leaf (buf, blocksize))
@@ -1350,6 +1354,6 @@ void mark_objectid_used (reiserfs_filsys_t * fs, __u32 objectid)
 
 int is_blocksize_correct (int blocksize)
 {
-    return ((blocksize % 1024) ? 0 : 1);
+    return ((blocksize == 0) || (blocksize % 1024) ? 0 : 1);
 }
 

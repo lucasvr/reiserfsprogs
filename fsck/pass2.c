@@ -36,9 +36,7 @@ struct relocated {
 struct relocated * relocated_list;
 
 
-/* return objectid the object has to be remapped with */
-__u32 objectid_for_relocation (struct key * key)
-{
+__u32 get_relocated_objectid_from_list (struct key * key) {
     struct relocated * cur;
 
     cur = relocated_list;
@@ -50,6 +48,17 @@ __u32 objectid_for_relocation (struct key * key)
 	    return cur->new_objectid;
 	cur = cur->next;
     }
+    return 0;
+}
+
+/* return objectid the object has to be remapped with */
+__u32 objectid_for_relocation (struct key * key)
+{
+    struct relocated * cur;
+    __u32 cur_id;
+
+    if ((cur_id = get_relocated_objectid_from_list (key)) != 0)
+    	return cur_id;
 
     cur = getmem (sizeof (struct relocated));
     cur->old_dir_id = get_key_dirid (key);
@@ -57,16 +66,15 @@ __u32 objectid_for_relocation (struct key * key)
     cur->new_objectid = get_unused_objectid (fs);
     cur->next = relocated_list;
     relocated_list = cur;
-    fsck_log ("relocation: (%K) is relocated to (%lu, %lu)\n",
-	      key, get_key_dirid (key), cur->new_objectid);
+/*    fsck_log ("relocation: (%K) is relocated to (%lu, %lu)\n",
+	      key, get_key_dirid (key), cur->new_objectid);*/
     return cur->new_objectid;
 }
 
 
 /* this item is in tree. All unformatted pointer are correct. Do not
    check them */
-static void save_item_2 (struct si ** head, struct item_head * ih, 
-			 char * item, __u32 blocknr)
+void save_item (struct si ** head, struct item_head * ih, char * item, __u32 blocknr)
 {
     struct si * si, * cur;
 
@@ -93,7 +101,7 @@ struct si * save_and_delete_file_item (struct si * si, struct path * path)
     struct buffer_head * bh = PATH_PLAST_BUFFER (path);
     struct item_head * ih = PATH_PITEM_HEAD (path);
 
-    save_item_2 (&si, ih, B_I_PITEM (bh, ih), bh->b_blocknr);
+    save_item (&si, ih, B_I_PITEM (bh, ih), bh->b_blocknr);
 
     /* delete item temporary - do not free unformatted nodes */
     reiserfsck_delete_item (path, 1/*temporary*/);
@@ -130,9 +138,6 @@ int should_relocate (struct item_head * ih)
 	    break;
 	}
 
-	if (is_stat_data_ih (get_ih(&path)))
-	    fix_obviously_wrong_sd_mode (&path);
-	
 	path_ih = get_ih (&path);
 	if (not_of_one_file (&key, &(path_ih->ih_key))) {
 	    /* there are no more item with this key */
@@ -140,6 +145,21 @@ int should_relocate (struct item_head * ih)
 	    break;
 	}
 
+	if (is_stat_data_ih (path_ih)) {
+	    fix_obviously_wrong_sd_mode (&path);
+	    if (ih_checked (path_ih)) {
+		/* we have checked it already */
+		pathrelse (&path);
+
+		if (get_relocated_objectid_from_list (&path_ih->ih_key))
+		    return 1; /* it was relocated */
+		break;
+	    } else {
+		mark_ih_checked (path_ih);
+		mark_buffer_dirty (get_bh(&path));
+	    }
+	}
+	
 	/* ok, item found, but make sure that it is not a directory one */
 	if ((is_stat_data_ih (path_ih) && !not_a_directory (get_item (&path))) ||
 	    (is_direntry_ih (path_ih))) {
@@ -152,95 +172,6 @@ int should_relocate (struct item_head * ih)
 	pathrelse (&path);
     }
     return 0;
-}
-
-
-/* delete all items (but directory ones) with the same key 'ih' has
-   (including stat data of not a directory) and put them back at the
-   other place */
-void relocate_file (struct item_head * ih, int change_ih)
-{
-    struct key key;
-    struct key * rkey;
-    struct path path;
-    struct item_head * path_ih;
-    struct si * si;
-    __u32 new_objectid;
-
-
-    /* starting with the leftmost one - look for all items of file,
-       store them and delete */
-    key = ih->ih_key;
-    set_type_and_offset (KEY_FORMAT_1, &key, SD_OFFSET, TYPE_STAT_DATA);
-
-    si = 0;
-    while (1) {
-	reiserfs_search_by_key_4 (fs, &key, &path);
-	
-	if (get_item_pos (&path) == B_NR_ITEMS (get_bh (&path))) {
-	    rkey = uget_rkey (&path);
-	    if (rkey && !not_of_one_file (&key, rkey)) {
-		/* file continues in the right neighbor */
-		key = *rkey;
-		pathrelse (&path);
-		continue;
-	    }
-	    /* there is no more items with this key */
-	    pathrelse (&path);
-	    break;
-	}
-
-	if (is_stat_data_ih (get_ih(&path)))
-	    fix_obviously_wrong_sd_mode (&path);	
-	
-	path_ih = get_ih (&path);
-	if (not_of_one_file (&key, &(path_ih->ih_key))) {
-	    /* there are no more item with this key */
-	    pathrelse (&path);
-	    break;
-	}
-
-	/* ok, item found, but make sure that it is not a directory one */
-	if ((is_stat_data_ih (path_ih) && !not_a_directory (get_item (&path))) ||
-	    (is_direntry_ih (path_ih))) {
-	    /* item of directory found. Leave it in the tree */
-	    key = path_ih->ih_key;
-	    set_offset (KEY_FORMAT_1, &key, get_offset (&key) + 1);
-	    pathrelse (&path);
-	    continue;
-	}
-
-	si = save_and_delete_file_item (si, &path);
-    }
-
-
-    if (si || change_ih) {
-	int moved_items;
-	struct key old, new;
-
-	/* get new objectid for relocation or get objectid with which file
-	   was relocated already */
-	new_objectid = objectid_for_relocation (&ih->ih_key);
-	if (change_ih)
-	    set_key_objectid (&ih->ih_key, new_objectid);
-
-	moved_items = 0;
-		
-	/* put all items removed back into tree */
-	while (si) {
-	    /*fsck_log ("relocate_file: move %H to ", &si->si_ih);*/
-	    old = si->si_ih.ih_key;
-	    set_key_objectid (&(si->si_ih.ih_key), new_objectid);
-	    new = si->si_ih.ih_key;
-	    /*fsck_log ("%H\n", &si->si_ih);*/
-	    insert_item_separately (&(si->si_ih), si->si_dnm_data, 1/*was in tree*/);
-	    si = remove_saved_item (si);
-	    moved_items ++;
-	}
-	if (moved_items)
-	    fsck_log ("relocate_file: %d items of file %K moved to %K\n",
-		      moved_items, &old, &new);
-    }
 }
 
 
@@ -300,12 +231,12 @@ static void put_sd_into_tree (struct item_head * new_ih, char * new_item)
 	/* new item is a stat data of a directory. So we have to
            relocate all items which have the same short key and are of
            not a directory */
-	relocate_file (new_ih, 0/*do not change new_ih*/);
+	rewrite_file (new_ih, 1, 0/*do not change new_ih*/);
     } else {
 	/* new item is a stat data of something else but directory. If
            there are items of directory - we have to relocate the file */
 	if (should_relocate (new_ih))
-	    relocate_file (new_ih, 1/*change new_ih*/);
+	    rewrite_file (new_ih, 1, 1/*change new_ih*/);
     }
     
     /* if we will have to insert item into tree - it is ready */
@@ -322,17 +253,17 @@ static void put_sd_into_tree (struct item_head * new_ih, char * new_item)
         if (get_ih_key_format (get_ih(&path)) != get_ih_key_format (new_ih)) {
 	    /* in tree stat data and a new one are of different
                formats */
-	    fsck_log ("put_sd_into_tree: inserting stat data %K (%M)..",
+	    fsck_log ("put_sd_into_tree: Inserting the StatData %K, mode (%M)...",
 		      &(new_ih->ih_key), st_mode (new_item));
 	    if (stat_data_v1 (new_ih)) {
 		/* sd to be inserted is of V1, where as sd in the tree
                    is of V2 */
-		fsck_log ("found newer in the tree (%M), skip inserting\n",
+		fsck_log ("found newer in the tree, mode (%M), insersion was skipped.\n",
 			  st_mode (get_item (&path)));
 	    	pathrelse (&path);
 	    } else {
 		/* the stat data in the tree is sd_v1 */
-		fsck_log ("older sd (%M) is replaced with it\n",
+		fsck_log ("older sd, mode (%M), is replaced with it.\n",
 			  st_mode (get_item (&path)));
 		reiserfsck_delete_item (&path, 0/*not temporary*/);
 		
@@ -364,7 +295,7 @@ static void put_directory_item_into_tree (struct item_head * comingih, char * it
 
     /* if there are anything with this key but a directory - move it
        somewhere else */
-    relocate_file (comingih, 0/* do not change ih */);
+    rewrite_file (comingih, 1, 0/* do not change ih */);
 
     deh = (struct reiserfs_de_head *)item;
 
@@ -373,7 +304,8 @@ static void put_directory_item_into_tree (struct item_head * comingih, char * it
 	namelen = name_in_entry_length (comingih, deh, i);
 
 	if (!is_properly_hashed (fs, name, namelen, get_deh_offset (deh)))
-	    reiserfs_panic ("put_directory_item_into_tree: should be hashed properly (%k)", &comingih->ih_key);
+	    reiserfs_panic ("put_directory_item_into_tree: The entry (%d) \"%.*s\" of the directory %k has"
+		" badly hashed entry", i, namelen, name, &comingih->ih_key);
 
 	asprintf (&buf, "%.*s", namelen, name);
 	/* 1 for fsck is important: if there is no any items of this
@@ -427,16 +359,13 @@ void insert_item_separately (struct item_head * ih,
 			     char * item, int was_in_tree)
 {
     if (get_key_dirid (&ih->ih_key) == get_key_objectid (&ih->ih_key))
-	reiserfs_panic ("insert_item_separately: can not insert bad item %H", ih);
+	reiserfs_panic ("insert_item_separately: The item being inserted has the bad key %H", ih);
     
     if (is_stat_data_ih (ih)) {
 	put_sd_into_tree (ih, item);
     } else if (is_direntry_ih (ih)) {
 	put_directory_item_into_tree (ih, item);
     } else {
-	if (!was_in_tree && should_relocate (ih))
-	    relocate_file (ih, 1/*change new_ih*/);
-	
 	reiserfsck_file_write (ih, item, was_in_tree);
     }
 }
@@ -498,8 +427,8 @@ static void save_pass_2_result (reiserfs_filsys_t * fs)
     retval = unlink (state_dump_file (fs));
     retval = rename ("temp_fsck_file.deleteme", state_dump_file (fs));
     if (retval != 0)
-	fsck_progress ("pass 2: could not rename temp file temp_fsck_file.deleteme to %s",
-		       state_dump_file (fs));
+	fsck_progress ("%s: Could not rename the temporary file temp_fsck_file.deleteme to %s",
+	    __FUNCTION__, state_dump_file (fs));
 }
 
 
@@ -537,36 +466,36 @@ static void do_pass_2 (reiserfs_filsys_t * fs) {
     if (!total)
 	return;
 
-    fsck_progress ("\nPass2:\n");
+    fsck_progress ("\nPass 2:\n");
 
     for (i = 0; i < 2; i++) {
         j = 0;
         while (reiserfs_bitmap_find_zero_bit (fsck_uninsertables (fs), &j) == 0) {
 	    bh = bread (fs->fs_dev, j, fs->fs_blocksize);
 	    if (bh == 0) {
-	        fsck_log ("pass_2_take_bad_blocks_put_into_tree: "
-		      "unable to read %lu block on device 0x%x\n",
+	        fsck_log ("pass_2: Reading of the block (%lu) failed on the device 0x%x\n",
 		      j, fs->fs_dev);
                 goto next;
             }
 	
             if (is_block_used (bh->b_blocknr) && !(block_of_journal (fs, bh->b_blocknr) &&
 					       fsck_data(fs)->rebuild.use_journal_area)) {
-	        fsck_log ("pass_2_take_bad_blocks_put_into_tree: "
-		     "block %d can not be in tree\n", bh->b_blocknr);
+	        fsck_log ("%s: The block (%lu) is in the tree already. Should not happen.\n", 
+		    __FUNCTION__, bh->b_blocknr);
 	        goto next;
             }
             /* this must be leaf */
             what_node = who_is_this (bh->b_data, bh->b_size);
 	    if (what_node != THE_LEAF) { // || B_IS_KEYS_LEVEL(bh)) {
-	        fsck_log ("take_bad_blocks_put_into_tree: buffer (%b %z) must contain leaf\n", bh, bh);
+	        fsck_log ("%s: The block (%b), marked as a leaf on the first two passes, is not a leaf! Will be skipped.\n", 
+		    __FUNCTION__, bh);
 	        goto next;
 	    }
-
-	    	
-//	    fsck_log ("block %lu is being inserted\n", bh->b_blocknr);
-//	    fflush(fsck_log_file (fs));
-	
+/*	
+	    fsck_log ("block %lu is being inserted\n", bh->b_blocknr);
+	    check_buffers_mem(fsck_log_file (fs));
+	    fflush(fsck_log_file (fs));
+*/	
 	    if (i) {
                 /* insert all not SD items */
                 put_not_stat_data_items (bh);
@@ -606,10 +535,11 @@ static void after_pass_2 (reiserfs_filsys_t * fs)
 
 
     /* DEBUG only */
-    if (reiserfs_bitmap_compare (fsck_allocable_bitmap (fs), fsck_new_bitmap(fs))) {
-        reiserfs_warning (fsck_log_file (fs), "allocable bitmap differs from new bitmap after pass2\n");
+/*    if (reiserfs_bitmap_compare (fsck_allocable_bitmap (fs), fsck_new_bitmap(fs))) {
+        fsck_log ("Allocable bitmap differs from the new bitmap after pass2\n");
 	reiserfs_bitmap_copy (fsck_allocable_bitmap(fs), fsck_new_bitmap (fs));
     }
+*/
 
     /* update super block: objectid map, fsck state */
     set_sb_fs_state (fs->fs_ondisk_sb, TREE_IS_BUILT);
@@ -621,12 +551,12 @@ static void after_pass_2 (reiserfs_filsys_t * fs)
     fs->fs_dirt = 1;
     reiserfs_flush_to_ondisk_bitmap (fs->fs_bitmap2, fs);
     reiserfs_flush (fs);
-    fsck_progress ("done\n");
+    fsck_progress ("finished\n");
     
     /* fixme: should be optional */
 /*    fsck_progress ("Tree is built. Checking it - ");
     reiserfsck_check_pass1 ();
-    fsck_progress ("done\n");*/
+    fsck_progress ("finished\n");*/
 
     stage_report (2, fs);
 
@@ -653,7 +583,7 @@ static void after_pass_2 (reiserfs_filsys_t * fs)
 		   "###########\n", ctime (&t));
     fs->fs_dirt = 1;
     reiserfs_close (fs);
-    exit (4);
+    exit(0);
 }
 
 
@@ -670,7 +600,7 @@ void pass_2 (reiserfs_filsys_t * fs)
     do_pass_2 (fs);
     
     after_pass_2 (fs);
-    
+
     if (get_sb_root_block (fs->fs_ondisk_sb) == -1)
 	die ("\n\nNo reiserfs metadata found");
 }

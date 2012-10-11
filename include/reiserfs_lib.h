@@ -170,6 +170,7 @@ void reiserfs_delete_bitmap (reiserfs_bitmap_t * bm);
 void reiserfs_bitmap_copy (reiserfs_bitmap_t * to, reiserfs_bitmap_t * from);
 int reiserfs_bitmap_compare (reiserfs_bitmap_t * bm1, reiserfs_bitmap_t * bm2);
 void reiserfs_bitmap_disjunction (reiserfs_bitmap_t * disk, reiserfs_bitmap_t * cont);
+void reiserfs_bitmap_delta (reiserfs_bitmap_t * base, reiserfs_bitmap_t * exclude);
 void reiserfs_bitmap_set_bit (reiserfs_bitmap_t * bm, unsigned int bit_number);
 void reiserfs_bitmap_clear_bit (reiserfs_bitmap_t * bm, unsigned int bit_number);
 
@@ -214,7 +215,7 @@ int is_blocksize_correct (int blocksize);
 int is_reiserfs_3_5_magic_string (struct reiserfs_super_block * rs);
 int is_reiserfs_3_6_magic_string (struct reiserfs_super_block * rs);
 int is_reiserfs_jr_magic_string (struct reiserfs_super_block * rs);
-int does_look_like_super_block (struct reiserfs_super_block * rs, int blocksize);
+int does_look_like_super_block (struct reiserfs_super_block * rs);
 int is_any_reiserfs_magic_string (struct reiserfs_super_block * rs);
 int get_reiserfs_format (struct reiserfs_super_block * sb);
 int reiserfs_super_block_size (struct reiserfs_super_block * rs);
@@ -367,6 +368,7 @@ void print_one_transaction (reiserfs_filsys_t * fs, reiserfs_trans_t * trans);
 void print_journal_params (FILE * fp, struct journal_params * jp);
 char * get_reiserfs_version (__u16 version);
 int can_we_format_it (char * device_name, int force);
+
 
 #define reiserfs_panic(fmt, list...) \
 {\

@@ -13,13 +13,6 @@ static int are_items_in_the_same_node (struct path * path)
   return (PATH_LAST_POSITION (path) < B_NR_ITEMS (PATH_PLAST_BUFFER (path)) - 1) ? 1 : 0;
 }
 
-
-int do_make_tails ()
-{
-    return 1;/*SB_MAKE_TAIL_FLAG (&g_sb) == MAKE_TAILS ? YES : NO;*/
-}
-
-
 static void cut_last_unfm_pointer (struct path * path, struct item_head * ih)
 {
     set_ih_free_space(ih, 0);
@@ -62,16 +55,18 @@ static unsigned long indirect_to_direct (struct path * path, __u64 len, int syml
     if (unfm_ptr && (unfm_bh = bread (bh->b_dev, unfm_ptr, bh->b_size))) {
         /* we can read the block */
 	buf = unfm_bh->b_data;
+	
     } else {
-	/* we cannot read the block */
+        /* we cannot read the block */
  	if (unfm_ptr)
-	    fsck_log ("indirect_to_direct: could not read block %lu (%K)\n", unfm_ptr, &ih->ih_key);
+	    fsck_log ("indirect_to_direct: Reading of the block (%lu), pointed to by the file %K, failed\n", 
+		unfm_ptr, &ih->ih_key);
 	memset (bad_drct, 0, fs->fs_blocksize);
 	buf = bad_drct;
     }
 /*
     if (len > MAX_DIRECT_ITEM_LEN (fs->fs_blocksize)) {
-	fsck_log ("indirect_to_direct: caanot create such a long item %d (%K), "
+	fsck_log ("indirect_to_direct: canot create such a long item %d (%K), "
 	    "Cutting it down to %d byte\n", len,  &ih->ih_key, MAX_DIRECT_ITEM_LEN (fs->fs_blocksize) - 8);
 	len = MAX_DIRECT_ITEM_LEN (fs->fs_blocksize) - 8;
     }
@@ -84,14 +79,15 @@ static unsigned long indirect_to_direct (struct path * path, __u64 len, int syml
     set_ih_item_len (&ins_ih, (get_ih_key_format (ih) == KEY_FORMAT_2) ? ROUND_UP(len) : len);
     set_ih_free_space (&ins_ih, MAX_US_INT);
 
-
+    mark_ih_become_tail(ih);
+    mark_buffer_dirty(bh);
     // last last unformatted node pointer
     path->pos_in_item = I_UNFM_NUM (ih) - 1;
     cut_last_unfm_pointer (path, ih);
 
     /* insert direct item */
     if (reiserfs_search_by_key_4 (fs, &(ins_ih.ih_key), path) == ITEM_FOUND)
-	die ("indirect_to_direct: key must be not found");
+	reiserfs_panic ("indirect_to_direct: The direct item %k should not exist yet.", &(ins_ih.ih_key));
     reiserfsck_insert_item (path, &ins_ih, (const char *)(buf));
 
     brelse (unfm_bh);
@@ -100,8 +96,8 @@ static unsigned long indirect_to_direct (struct path * path, __u64 len, int syml
     return get_offset (&ins_ih.ih_key); //offset;
 }
 
-
-__u64 get_min_bytes_number (struct item_head * ih, int blocksize)
+/*
+static __u64 get_min_bytes_number (struct item_head * ih, int blocksize)
 {
     switch (get_type (&ih->ih_key)) {
     case TYPE_DIRECT:
@@ -116,53 +112,75 @@ __u64 get_min_bytes_number (struct item_head * ih, int blocksize)
     fsck_log ("get_min_bytes_number: called for wrong type of item %H\n", ih);
     return 0;
 }
+*/
 
-/*  start_key is the key after which all items need to be deleted
+/*  start_key is the key after which N items need to be deleted
     save_here is a pointer where deleted items need to be saved if save is set.
+    start_key is the first undeleted item.
+    return whether we are sure there is nothing else of this file
  */
-static void delete_file_items_after_key(struct key * start_key, struct si ** save_here) {
+int delete_N_items_after_key(struct key * start_key, struct si ** save_here, int skip_dir_items, int n_to_delete) {
     struct path path;
-    struct key key = *start_key;
+//    struct key key = *start_key;
     struct key * rkey;
+    int count = 0;
 
     while (1) {
-	reiserfs_search_by_key_4 (fs, &key, &path);
+	reiserfs_search_by_key_4 (fs, start_key, &path);
 	
 	if (get_item_pos (&path) == B_NR_ITEMS (get_bh (&path))) {
 	    rkey = uget_rkey (&path);
-	    if (rkey && !not_of_one_file (&key, rkey)) {
+	    if (rkey && !not_of_one_file (start_key, rkey)) {
 		/* file continues in the right neighbor */
-		copy_key (&key, rkey);
+		copy_key (start_key, rkey);
 		pathrelse (&path);
 		continue;
 	    }
 	    /* there is no more items with this key */
 	    pathrelse (&path);
-	    break;
+	    return 1;
 	}
 
 	if (is_stat_data_ih (get_ih(&path)))
 	    fix_obviously_wrong_sd_mode (&path);
 	    	
 	rkey = &(get_ih (&path))->ih_key;
-	if (not_of_one_file (&key, rkey)) {
+	if (not_of_one_file (start_key, rkey)) {
 	    /* there are no more item with this key */
 	    pathrelse (&path);
-	    break;
+	    return 1;
 	}
 
+	copy_key (start_key, rkey);
 	/* ok, item found, but make sure that it is not a directory one */
 	if ((is_stat_data_key (rkey) && !not_a_directory (get_item (&path))) ||
 	    (is_direntry_key (rkey)))
-	    reiserfs_panic ("rewrite_file: no directory items of %K are expected", &key);
-
+	{
+	    if (skip_dir_items) {
+	    	/* item of directory found. Leave it in the tree */
+	    	set_offset (KEY_FORMAT_1, start_key, get_offset (start_key) + 1);
+	    	pathrelse (&path);
+	    	continue;
+	    } else {
+	    	reiserfs_panic ("delete_N_items_after_key: No directory item of %K are "
+		    "expected", start_key);
+	    }
+	}
 	if (save_here != NULL)
 	    *save_here = save_and_delete_file_item (*save_here, &path);
 	else
 	    reiserfsck_delete_item (&path, 0);
-    }
-}
 
+     	count++;
+
+    	if (count == n_to_delete)
+	    break;
+
+	pathrelse (&path);
+    }
+
+    return 0;
+}
 
 /* returns 1 when file looks correct, -1 if directory items appeared
    there, 0 - only holes in the file found */
@@ -203,7 +221,7 @@ int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, _
     do {
 	retval = usearch_by_position (fs, key, key_version, &path);
 	if (retval == POSITION_FOUND && path.pos_in_item != 0)
-	    die ("are_file_items_correct: all bytes we look for must be found at position 0");
+	    die ("are_file_items_correct: All bytes we look for must be first items byte (position 0).");
 
 	switch (retval) {
 	case POSITION_FOUND:/**/
@@ -248,17 +266,17 @@ int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, _
 	    
 		if (!(*symlink) && key_version != get_ih_key_format (ih)) {
 		    if (fsck_mode(fs) == FSCK_CHECK) {
-			fsck_log("are_file_items_correct: vpf-10250: block %lu, item (%d), item format (%H)"\
+			fsck_log("are_file_items_correct: vpf-10250: block %lu, item (%d): The item format (%H)"\
 			    " is not equal to SD format (%d)\n",
 			    get_bh(&path)->b_blocknr, PATH_LAST_POSITION(&path), ih, key_version);
 			one_more_corruption (fs, fixable);
 		    } else {
-			fsck_log("are_file_items_correct: vpf-10280: block %lu, item (%d), item format (%H)"\
-			    " is not equal to SD format (%d)  - delete\n",
+			fsck_log("are_file_items_correct: vpf-10280: block %lu, item (%d): The item format (%H)"\
+			    " is not equal to SD format (%d) - item was deleted\n",
 			    get_bh(&path)->b_blocknr, PATH_LAST_POSITION(&path), ih, key_version);
 		
 			pathrelse (&path);
-			delete_file_items_after_key (key, NULL);
+			delete_N_items_after_key (key, NULL, 0 /* do not skip dir items */, 0);
 			return 1;
 		    }
 		}
@@ -296,12 +314,15 @@ int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, _
 		if (will_convert) {
 		    if (fsck_mode (fs) == FSCK_CHECK) {
 			/* here it can be symlink only */
-			fsck_log ("are_file_items_correct: the indirect item should be converted back to direct %K\n", &ih->ih_key);
+			fsck_log ("are_file_items_correct: The indirect item should be converted back"
+			    " to direct %K\n", &ih->ih_key);
 			one_more_corruption (fs, fixable);
 			pathrelse (&path);
 		    } else {
 			__u32 * ind = (__u32 *)get_item(&path);
-			fsck_log ("are_file_items_correct: convert the indirect item back to direct %K\n", &ih->ih_key);
+			/*   DEBUG message.
+			fsck_log ("are_file_items_correct: The indirect item is converted back to direct %K\n", &ih->ih_key);
+			*/
 			if (ind [I_UNFM_NUM (ih) - 1] == 0)
 			    *blocks += (fs->fs_blocksize >> 9);
 			sd_first_direct_byte = indirect_to_direct (&path, sd_size - last_unfm_offset + 1, *symlink);
@@ -316,11 +337,8 @@ int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, _
 	    }
 
 	    /* next item is item of this file */
-	    if ((is_indirect_ih (ih) &&
-                 (get_offset (&ih->ih_key) + fs->fs_blocksize * I_UNFM_NUM (ih) != get_offset (next_key))) ||
-		(is_direct_ih (ih) &&
-		 (get_offset (&ih->ih_key) + get_ih_item_len (ih) != get_offset (next_key))))
-	    {
+	    if (get_offset (&ih->ih_key) + get_bytes_number(ih, fs->fs_blocksize) != get_offset (next_key))
+	    {		
 		/* next item has incorrect offset (hole or overlapping) */
 		pathrelse (&path);
 		return 0;
@@ -333,9 +351,10 @@ int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, _
 	    }
 
 	    /* items are of different types or are in different nodes */
+/*
 	    if (get_offset (&ih->ih_key) + get_bytes_number (ih, fs->fs_blocksize) != get_offset (next_key))
             {
-		/* indirect item free space is not set properly */
+		// indirect item free space is not set properly 
 		if (!is_indirect_ih (ih) ) //|| get_ih_free_space(ih) == 0)
 		    fsck_log ("are_file_items_correct: "
 			      "item must be indirect and must have invalid free space (%H)", ih);
@@ -346,27 +365,27 @@ int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, _
                     mark_buffer_dirty (PATH_PLAST_BUFFER (&path));
         	}
 	    }
-
+*/
 	    /* next item exists */
 	    set_type_and_offset(key_version, key, get_offset (next_key), get_type(next_key));
 	
 	    if (comp_keys (key, next_key))
-		reiserfs_panic ("are_file_items_correct: keys do not match %k and %k", key, next_key);
+		reiserfs_panic ("are_file_items_correct: Internal tree is in inconsistent state, "
+		    "the current item key %K and the next key %K must match", key, next_key);
 	    pathrelse (&path);
 	    break;
 
 	case POSITION_NOT_FOUND:
-	    // we always must have next key found. Exception is first
-	    // byte. It does not have to exist
-	
+	    /* We always must have next key found. Exception is first byte. It does not have to exist */
 	    if (get_offset (key) != 1)
-		die ("are_file_items_correct: key not found byte can be not found only when it is first byte of file");
+		reiserfs_panic ("are_file_items_correct: Position (offset == %llu) in the middle of"
+		    "the file %K was not found.", get_offset(key), key);
 	    pathrelse (&path);
 	    return 0;
       
 	case FILE_NOT_FOUND:
 	    if (get_offset (key) != 1)
-		die ("are_file_items_correct: there is no items of this file, byte 0 found though");
+		reiserfs_panic ("are_file_items_correct: File %K must be found as we found its StatData.", key);
 	    pathrelse (&path);
 	    return 1;
 
@@ -376,18 +395,23 @@ int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, _
 	}
     } while (1);
 
-    die ("are_file_items_correct: code can not reach here");
+    die ("are_file_items_correct: Cannot reach here");
     return 0;
 }
 
 
 /* delete all items and put them back (after that file should have
-   correct sequence of items.It is very similar to
-   pass2.c:relocate_file () and should_relocate () */
-static void rewrite_file (struct item_head * ih)
+   correct sequence of items.
+   if should_relocate is specified then it relocates items to a new id.
+   if should_change_ih is specified then the key in ih is changed also. */
+void rewrite_file (struct item_head * ih, int should_relocate, int should_change_ih)
 {
     struct key key;
     struct si * si;
+    __u32 new_objectid = 0;
+    int moved_items;
+    struct key old, new;
+    int nothing_else = 0;
 
     /* starting with the leftmost one - look for all items of file,
        store and delete and  */
@@ -395,41 +419,79 @@ static void rewrite_file (struct item_head * ih)
     set_type_and_offset (KEY_FORMAT_1, &key, SD_OFFSET, TYPE_STAT_DATA);
 
     si = 0;
-    delete_file_items_after_key (&key, &si);
+    nothing_else = 0;
 
-    if (si && should_relocate (&(si->si_ih)))
-	relocate_file (&(si->si_ih), 1);
+    nothing_else = delete_N_items_after_key (&key, &si, should_relocate /* do not skip dir items */, 10);
 
-    /* put all items back into tree */
-    while (si) {
-	insert_item_separately (&(si->si_ih), si->si_dnm_data, 1/*was in tree*/);
-	si = remove_saved_item (si);
+    if (should_relocate && (si || should_change_ih)) {
+	/* get new objectid for relocation or get objectid with which file
+	   was relocated already */
+	new_objectid = objectid_for_relocation (&ih->ih_key);
+	if (should_change_ih)
+	    set_key_objectid (&ih->ih_key, new_objectid);
+	
+	if (si) {
+	   old = si->si_ih.ih_key;
+	   set_key_objectid (&(si->si_ih.ih_key), new_objectid);
+	   new = si->si_ih.ih_key;
+	}
     }
+
+    moved_items = 0;
+
+    while (si) {
+        while (si && (nothing_else || si->si_next)) {
+            if (should_relocate) {
+	    	set_key_objectid (&(si->si_ih.ih_key), new_objectid);
+	    	moved_items ++;
+	    }
+
+	    insert_item_separately (&(si->si_ih), si->si_dnm_data, 1/*was in tree*/);
+	    si = remove_saved_item (si);
+	}
+	if (!nothing_else)
+	    nothing_else = delete_N_items_after_key (&key, &si, should_relocate /* do not skip dir items */, 10);
+    }
+
+    if (moved_items)
+	fsck_log ("rewrite_file: %d items of file %K moved to %K\n",
+	      moved_items, &old, &new);
+
 }
 
-
 /* file must have correct sequence of items and tail must be stored in
-   unformatted pointer */
-static int make_file_writeable (struct item_head * sd_ih, void * sd)
+   unformatted pointer;
+   pos in bh is a position of SD */
+static int make_file_writeable (struct buffer_head * bh, int pos)
+/* struct item_head * sd_ih, void * sd */
 {
-    struct item_head sd_ih_copy;
-    struct stat_data sd_copy;
+    struct item_head *sd_ih = B_N_PITEM_HEAD (bh, pos);
+    struct item_head  sd_ih_copy;
+    struct stat_data *sd = (struct stat_data *)B_N_PITEM (bh, pos);
+    struct stat_data  sd_copy;
     __u64 size;
     __u32 blocks;
-    int retval, symlink;
     __u16 mode;
+    int   retval, symlink;
 
     sd_ih_copy = *sd_ih;
     memcpy (&sd_copy, sd, get_ih_item_len (sd_ih));
     get_sd_mode (sd_ih, sd, &mode);
     symlink = S_ISLNK(mode);
 
+    if (ih_writable(sd_ih))
+	return 1;
+    else {
+    	mark_ih_writable(sd_ih);
+	mark_buffer_dirty (bh);
+    }
+
     retval = are_file_items_correct (&sd_ih_copy, &sd_copy, &size, &blocks, 0/*do not mark accessed*/, &symlink);
     if (retval == 1)
 	/* file looks correct */
 	return 1;
 
-    rewrite_file (sd_ih);
+    rewrite_file (sd_ih, 0, 0);
     /*fsck_data (fs)->rebuild.rewritten ++;*/
 
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
@@ -437,7 +499,8 @@ static int make_file_writeable (struct item_head * sd_ih, void * sd)
     size = 0;
 
     if (are_file_items_correct (&sd_ih_copy, &sd_copy, &size, &blocks, 0/*do not mark accessed*/, &symlink) == 0) {
-	fsck_progress ("file still incorrect %K\n", &sd_ih->ih_key);
+	fsck_log("WARNING: file was rewritten but still is not correct %K\n", &sd_ih->ih_key);
+	return -1;
     }
 
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
@@ -448,17 +511,18 @@ static int make_file_writeable (struct item_head * sd_ih, void * sd)
 
 /* this inserts __first__ indirect item (having k_offset == 1 and only
    one unfm pointer) into tree */
-int create_first_item_of_file (struct item_head * ih, char * item, struct path * path,
-				      int *pos_in_coming_item, int was_in_tree)
+int create_first_item_of_file (struct item_head * ih, char * item, struct path * path, int was_in_tree)
 {
     __u32 unfm_ptr;
+    __u32 * ni = 0;
     struct buffer_head * unbh;
     struct item_head indih;
-    int retval;
+    int retval, i;
     __u32 free_sp = 0;
 
     mark_item_unreachable (&indih);
     copy_key (&(indih.ih_key), &(ih->ih_key));
+    set_ih_item_len (&indih, UNFM_P_SIZE);
 
     if (get_offset (&ih->ih_key) > fs->fs_blocksize) {
 	/* insert indirect item containing 0 unfm pointer */
@@ -493,21 +557,27 @@ int create_first_item_of_file (struct item_head * ih, char * item, struct path *
 	    retval = len;
 	} else {
 	    /* take first unformatted pointer from an indirect item */
-	    unfm_ptr = *(__u32 *)item;/*B_I_POS_UNFM_POINTER (bh, ih, 0);*/
-	    if (!was_in_tree) {
-		if (still_bad_unfm_ptr_2 (le32_to_cpu (unfm_ptr)))
-		    die ("create_first_item_of_file: bad unfm pointer %d", le32_to_cpu (unfm_ptr));
-		mark_block_used (le32_to_cpu (unfm_ptr), 0);
-	    }
-
 	    //free_sp = ih_get_free_space(0, ih, item);
 /*	    free_sp = 0;//get_ih_free_space (ih);
 	    set_ih_free_space (&indih, ((get_ih_item_len(ih) == UNFM_P_SIZE) ? free_sp : 0));
 	    if (get_ih_item_len (ih) != UNFM_P_SIZE)
 		free_sp = 0;
 */
-	    retval = fs->fs_blocksize - free_sp;
-	    (*pos_in_coming_item) ++;
+
+	    set_ih_item_len (&indih, get_ih_item_len (ih));
+	    ni = getmem (get_ih_item_len (ih));
+	    memcpy (ni, (item), get_ih_item_len (ih));
+
+	    if (!was_in_tree) {
+		for (i = 0; i < I_UNFM_NUM (ih); i++) {
+		    if (still_bad_unfm_ptr_2 (le32_to_cpu (ni[i])))
+			reiserfs_panic ("create_first_item_of_file: The file %K has a pointer to the bad block (%u)", 
+			    &ih->ih_key, le32_to_cpu (unfm_ptr));
+		    mark_block_used (le32_to_cpu (ni[i]), 0);
+		}
+	    }
+
+	    retval = fs->fs_blocksize * get_ih_item_len (ih) / UNFM_P_SIZE;
 	}
     }
 
@@ -516,9 +586,12 @@ int create_first_item_of_file (struct item_head * ih, char * item, struct path *
     set_offset (key_format (&(ih->ih_key)), &indih.ih_key, 1);
     set_type (key_format (&(ih->ih_key)), &indih.ih_key, TYPE_INDIRECT);
 
-    set_ih_item_len (&indih, UNFM_P_SIZE);
-
-    reiserfsck_insert_item (path, &indih, (const char *)&unfm_ptr);
+    if (ni) {
+	reiserfsck_insert_item (path, &indih, (const char *)ni);
+	freemem (ni);
+    } else {
+	reiserfsck_insert_item (path, &indih, (const char *)&unfm_ptr);
+    }
 
     /* update sd_first_direct_byte */
     /*
@@ -582,7 +655,7 @@ static void direct2indirect2 (unsigned long unfm, struct path * path, int keep_f
     struct item_head * ih;
     struct key key;
     struct buffer_head * unbh;
-    struct unfm_nodeinfo ni;
+    __u32 ni;
     int copied = 0;
     int file_format;
 
@@ -627,8 +700,7 @@ static void direct2indirect2 (unsigned long unfm, struct path * path, int keep_f
     set_offset (file_format, &key, get_offset (&key) - copied);
 //    set_offset (ih_key_format (ih), &key, get_offset (&key) - copied);
 //  key.k_offset -= copied;
-    ni.unfm_nodenum = cpu_to_le32 (unbh->b_blocknr);
-    ni.unfm_freespace = (keep_free_space == 1) ? cpu_to_le16 (fs->fs_blocksize - copied) : 0;
+    ni = cpu_to_le32 (unbh->b_blocknr);
 
 
     if (usearch_by_position (fs, &key, file_format, path) == FILE_NOT_FOUND) {
@@ -637,18 +709,21 @@ static void direct2indirect2 (unsigned long unfm, struct path * path, int keep_f
 	copy_key (&(insih.ih_key), &key);
 	set_ih_key_format (&insih, file_format);
 	set_type (get_ih_key_format (&insih), &insih.ih_key, TYPE_INDIRECT);
-	set_ih_free_space (&insih, le16_to_cpu (ni.unfm_freespace));
-//    insih.u.ih_free_space = ni.unfm_freespace;
+	set_ih_free_space (&insih, 0);
 	mark_item_unreachable (&insih);
 	set_ih_item_len (&insih, UNFM_P_SIZE);
 	mark_ih_was_tail (&insih);
-	reiserfsck_insert_item (path, &insih, (const char *)&(ni.unfm_nodenum));
+	reiserfsck_insert_item (path, &insih, (const char *)&(ni));
     } else {
 	ih = PATH_PITEM_HEAD (path);
 
-	if (!is_indirect_ih (ih) || get_offset (&key) != get_bytes_number (ih, fs->fs_blocksize) + get_offset (&ih->ih_key))
-	    die ("direct2indirect: incorrect item found in %lu block", PATH_PLAST_BUFFER(path)->b_blocknr);
-
+	if (!is_indirect_ih(ih))
+	    reiserfs_panic ("%s: The item, which is supposed to be deleted, found in the tree - %k", 
+		__FUNCTION__, &ih->ih_key);
+	if (get_bytes_number (ih, fs->fs_blocksize) + get_offset (&ih->ih_key) != get_offset (&key))	
+	    reiserfs_panic ("%s: The item %k with the wrong offset found in the block %lu block", 
+		__FUNCTION__, &ih->ih_key, PATH_PLAST_BUFFER(path)->b_blocknr);
+	
 	mark_ih_was_tail (ih);
 	mark_buffer_dirty (get_bh(path));
 	reiserfsck_paste_into_item (path, (const char *)&ni, UNFM_P_SIZE);
@@ -697,7 +772,7 @@ static void direct2indirect2 (unsigned long unfm, struct path * path, int keep_f
 
     if (usearch_by_position (fs, &key, file_format, path) != POSITION_FOUND ||
 	!is_indirect_ih (PATH_PITEM_HEAD (path)))
-	die ("direct2indirect: position not found");
+	reiserfs_panic ("direct2indirect: The data %k, which are supposed to be converted, are not found", &key);
     return;
 }
 
@@ -713,28 +788,28 @@ static int append_to_unformatted_node (struct item_head * comingih, struct item_
     int zero_number;
     __u32 unfm_ptr;
     
+    bh = PATH_PLAST_BUFFER (path);
+    unfm_ptr = le32_to_cpu (B_I_POS_UNFM_POINTER (bh, ih, I_UNFM_NUM (ih) - 1));
+
     /* append to free space of the last unformatted node of indirect item ih */
     if (*free_sp /*ih->u.ih_free_space*/ < coming_len)
     {
-
 	*free_sp = get_offset (&ih->ih_key) + fs->fs_blocksize * I_UNFM_NUM (ih) - get_offset (&comingih->ih_key);
 	if (*free_sp < coming_len)
-	        die ("reiserfsck_append_file: there is no enough free space in unformatted node");
+	    reiserfs_panic ("%s: block %lu: The unformatted node %u, pointed by the file %k, has not enough free space"
+		"for appending %llu bytes", __FUNCTION__, bh->b_blocknr, unfm_ptr, &ih->ih_key, coming_len);
     }
-
     end_of_data = fs->fs_blocksize - *free_sp;
     zero_number = offset - end_of_data;
 
-    bh = PATH_PLAST_BUFFER (path);
-    
-    unfm_ptr = le32_to_cpu (B_I_POS_UNFM_POINTER (bh, ih, I_UNFM_NUM (ih) - 1));
-
-    /*if (unfm_ptr != 0 && unfm_ptr < SB_BLOCK_COUNT (fs))*/
+   /*if (unfm_ptr != 0 && unfm_ptr < SB_BLOCK_COUNT (fs))*/
     if (unfm_ptr && !not_data_block (fs, unfm_ptr))
     {
 	unbh = bread (fs->fs_dev, unfm_ptr, fs->fs_blocksize);
 	if (!is_block_used (unfm_ptr))
-	    die ("append_to_unformatted_node:  unused block %d", unfm_ptr);
+	    reiserfs_panic ("%s: block %lu: The unformatted node %u, pointed by the file %k, is marked as unused", 
+		__FUNCTION__, bh->b_blocknr, unfm_ptr, &ih->ih_key);
+
 	if (unbh == 0)
 	    unfm_ptr = 0;
     } else {
@@ -794,15 +869,16 @@ static void adjust_free_space (struct buffer_head * bh, struct item_head * ih, s
 int reiserfsck_append_file (struct item_head * comingih, char * item, int pos, struct path * path,
 			    int was_in_tree)
 {
-    struct unfm_nodeinfo ni;
+    __u32 * ni;
     struct buffer_head * unbh;
     int retval;
     struct item_head * ih = PATH_PITEM_HEAD (path);
     __u16 keep_free_space;
     __u32 bytes_number;
+    int i, count = 0;
 
     if (!is_indirect_ih (ih))
-	die ("reiserfsck_append_file: can not append to non-indirect item");
+	reiserfs_panic ("reiserfsck_append_file: Operation is not allowed for non-indirect item %k", &ih->ih_key);
 
     //keep_free_space = ih_get_free_space(PATH_PLAST_BUFFER (path), PATH_PITEM_HEAD(path), 0);
     keep_free_space = 0;//get_ih_free_space (ih);
@@ -834,70 +910,81 @@ int reiserfsck_append_file (struct item_head * comingih, char * item, int pos, s
 //    mark_buffer_uptodate (unbh, 0);
 	mark_buffer_uptodate (unbh, 1);
 
-	ni.unfm_nodenum = cpu_to_le32 (unbh->b_blocknr);
-	ni.unfm_freespace = cpu_to_le16 (fs->fs_blocksize - coming_len - (get_offset (&comingih->ih_key) % unbh->b_size - 1));
+	ni = getmem (UNFM_P_SIZE);
+	*ni = cpu_to_le32 (unbh->b_blocknr);
+	count = 1;
+	
 	brelse (unbh);
 	retval = coming_len;
     } else {
 	/* coming item is indirect item */
-	//bytes_number = get_bytes_number (PATH_PLAST_BUFFER (path), PATH_PITEM_HEAD(path), 0, CHECK_FREE_BYTES);
+
 	bytes_number = get_bytes_number (ih, fs->fs_blocksize);
 	if (get_offset (&comingih->ih_key) + pos * fs->fs_blocksize != get_offset (&ih->ih_key) + bytes_number)
-	    fsck_log ("reiserfsck_append_file: can not append indirect item (%H) to the %H\n",
-			   comingih, ih);
+	    reiserfs_panic ("reiserfsck_append_file: file %K: Cannot append indirect pointers of the offset "
+		"(%LLu) at the position %LLu\n", &comingih->ih_key, get_offset (&comingih->ih_key) + pos * fs->fs_blocksize, 
+		get_offset (&ih->ih_key) + bytes_number);
 
 	/* take unformatted pointer from an indirect item */
-	ni.unfm_nodenum = *(__u32 *)(item + pos * UNFM_P_SIZE);/*B_I_POS_UNFM_POINTER (bh, ih, pos);*/
-	    
+	count = I_UNFM_NUM(comingih) - pos;
+	ni = getmem (count * UNFM_P_SIZE);
+	memcpy (ni, (item + pos * UNFM_P_SIZE), count * UNFM_P_SIZE);
+	
 	if (!was_in_tree) {
-	    if (still_bad_unfm_ptr_2 (le32_to_cpu (ni.unfm_nodenum)))
-		die ("reiserfsck_append_file: bad unfm pointer %u", le32_to_cpu (ni.unfm_nodenum));
-	    mark_block_used (le32_to_cpu (ni.unfm_nodenum), 0);
+	    for (i = 0; i < count; i++ ) {
+		if (still_bad_unfm_ptr_2 (le32_to_cpu (ni[i])))
+		    die ("reiserfsck_append_file: Trying to insert a pointer to illegal block (%u)", le32_to_cpu (ni[i]));
+		mark_block_used (le32_to_cpu (ni[i]), 0);
+	    }
 	}
 
-	ni.unfm_freespace = cpu_to_le16 (((pos == (I_UNFM_NUM (comingih) - 1)) ?
-			     //ih_get_free_space(0, comingih, item) /*comingih->u.ih_free_space*/ : 0);
-			     get_ih_free_space (comingih) /*comingih->u.ih_free_space*/ : 0));
-	ni.unfm_freespace = 0;
-	retval = fs->fs_blocksize - le16_to_cpu (ni.unfm_freespace);
+	retval = fs->fs_blocksize * count;
     }
 
-    reiserfsck_paste_into_item (path, (const char *)&ni, UNFM_P_SIZE);
+    reiserfsck_paste_into_item (path, (const char *)ni, count * UNFM_P_SIZE);
+    freemem (ni);
     return retval;
 }
-
 
 int must_there_be_a_hole (struct item_head * comingih, struct path * path)
 {
     struct item_head * ih = PATH_PITEM_HEAD (path);
-    int keep_free_space;
 
     if (is_direct_ih (ih)) {
-	direct2indirect2 (0, path, keep_free_space = 1);
+	direct2indirect2 (0, path, 1);
 	ih = PATH_PITEM_HEAD (path);
     }
 
     path->pos_in_item = I_UNFM_NUM (ih);
+
+    return (get_offset (&comingih->ih_key) - get_offset (&ih->ih_key)) / fs->fs_blocksize - I_UNFM_NUM (ih);
+/*
     if (get_offset (&ih->ih_key) + (I_UNFM_NUM (ih) + 1) * fs->fs_blocksize <= get_offset (&comingih->ih_key))
 	return 1;
 
-    return 0;
+    return 0;*/
 }
 
 
-int reiserfs_append_zero_unfm_ptr (struct path * path)
+int reiserfs_append_zero_unfm_ptr (struct path * path, int p_count)
 {
-    struct unfm_nodeinfo ni;
-    int keep_free_space;
-
-    ni.unfm_nodenum = 0;
-    ni.unfm_freespace = 0;
+    __u32 * ni;
+    int count;
 
     if (is_direct_ih (PATH_PITEM_HEAD (path)))
 	/* convert direct item to indirect */
-	direct2indirect2 (0, path, keep_free_space = 0);
+	direct2indirect2 (0, path, 0);
 	
-    reiserfsck_paste_into_item (path, (const char *)&ni, UNFM_P_SIZE);
+    count = MAX_INDIRECT_ITEM_LEN (fs->fs_blocksize) / UNFM_P_SIZE;
+    	
+    if (p_count <= count)
+       count = p_count;
+
+    ni = getmem (count * UNFM_P_SIZE);
+    memset (ni, 0, count * UNFM_P_SIZE);
+
+    reiserfsck_paste_into_item (path, (const char *)ni, count * UNFM_P_SIZE);
+    freemem(ni);
     return 0;
 }
 
@@ -923,25 +1010,26 @@ static int overwrite_by_direct_item (struct item_head * comingih, char * item, s
 	/**/
 	unbh = bread (fs->fs_dev, unfm_ptr, bh->b_size);
 	if (!is_block_used (unfm_ptr))
-	    die ("overwrite_by_direct_item: unused block %d", unfm_ptr);
+	    die ("overwrite_by_direct_item: block %lu, item %d, pointer %d: The pointed block"
+		"(%u) being overwritten is marked as unused.", bh->b_blocknr, PATH_LAST_POSITION(path), 
+		path->pos_in_item, unfm_ptr);
 	if (unbh == 0)
 	    unfm_ptr = 0;
     }
     if (unfm_ptr == 0 || unfm_ptr >= get_sb_block_count (fs->fs_ondisk_sb)) {
-	unbh = reiserfsck_get_new_buffer (bh->b_blocknr);
-	memset (unbh->b_data, 0, unbh->b_size);
-	B_I_POS_UNFM_POINTER (bh, ih, path->pos_in_item) = cpu_to_le32 (unbh->b_blocknr);
-	mark_buffer_dirty (bh);
+	if ((unbh = reiserfsck_get_new_buffer (bh->b_blocknr)) != NULL) {
+	    memset (unbh->b_data, 0, unbh->b_size);
+	    B_I_POS_UNFM_POINTER (bh, ih, path->pos_in_item) = cpu_to_le32 (unbh->b_blocknr);
+	    mark_buffer_dirty (bh);
+	} else {
+	    die ("overwrite_by_direct_item: Could not allocate a new block for new data");
+	}
     }
 
-    if (!unbh) {
-	die ("overwrite_by_direct_item: could not put direct item in");
-    }
-      
     offset = (get_offset (&comingih->ih_key) % bh->b_size) - 1;
-    if (offset + coming_len > MAX_DIRECT_ITEM_LEN (bh->b_size))
-    	die ("overwrite_by_direct_item: direct item too long (offset=%lu, length=%u)",
-	         ( long unsigned ) get_offset (&comingih->ih_key), 
+    if (offset + coming_len > bh->b_size)
+    	die ("overwrite_by_direct_item: The length of the file after insertion (offset=%lu, length=%u)"
+	    "will exceed the maximal possible length.", ( long unsigned ) get_offset (&comingih->ih_key), 
 	     ( unsigned ) coming_len);
 
     memcpy (unbh->b_data + offset, item, coming_len);
@@ -1081,19 +1169,21 @@ static int reiserfsck_overwrite_file (struct item_head * comingih, char * item,
 
 
     if (not_of_one_file (ih, &(comingih->ih_key)))
-	reiserfs_panic ("reiserfsck_overwrite_file: found [%K], new item [%K]",
-	     &ih->ih_key, &comingih->ih_key);
+	    reiserfs_panic ("reiserfsck_overwrite_file: The file to be overwritten %K must be of"
+		" the same as the new data %K", &ih->ih_key, &comingih->ih_key);
 
     if (is_direct_ih (ih)) {
 	unfm_ptr = 0;
 	if (is_indirect_ih (comingih)) {
 	    if (get_offset (&ih->ih_key) % fs->fs_blocksize != 1)
-		die ("reiserfsck_overwrite_file: second part of tail can not be overwritten by indirect item");
+		reiserfs_panic ("reiserfsck_overwrite_file: The second part of the tail %k can not"
+		    " be overwritten by indirect item %k", &ih->ih_key, &comingih->ih_key);
 	    /* use pointer from coming indirect item */
 	    unfm_ptr = le32_to_cpu (*(__u32 *)(item + *pos_in_coming_item * UNFM_P_SIZE));
 	    if (!was_in_tree) {
 		if (still_bad_unfm_ptr_2 (unfm_ptr))
-		    die ("reiserfsck_overwrite_file: still bad ");
+		    die ("reiserfsck_overwrite_file: The pointer to the unformatted block (%u)"
+			" points to the bad area.", unfm_ptr);
 	    }
 	}
 	/* */
@@ -1104,7 +1194,8 @@ static int reiserfsck_overwrite_file (struct item_head * comingih, char * item,
 	written = overwrite_by_direct_item (comingih, item, path);
     } else {
 	if (was_in_tree)
-	    die ("reiserfsck_overwrite_file: item we are going to overwrite with could not be in the tree yet");
+	    reiserfs_panic ("reiserfsck_overwrite_file: Item %k we are going to overwrite with"
+		" %k cannot not be in the tree yet", &ih->ih_key, &comingih->ih_key);
 	written = overwrite_by_indirect_item (comingih, (__u32 *)item, path, pos_in_coming_item);
     }
 
@@ -1122,18 +1213,20 @@ int reiserfsck_file_write (struct item_head * ih, char * item, int was_in_tree)
     struct key key;
     int file_format = KEY_FORMAT_UNDEFINED;
     int symlink = 0;
-/*    __u64 size;
-    __u32 blocks;*/
+    int relocated = 0;
 
     if (!was_in_tree) {
 	__u16 mode;
-        
-        // we already inserted all SD items. If we cannot find SD of this item - skip it
+
+        /* We already inserted all SD items. If we cannot find SD of this item - skip it */
 	memset (&key, 0, sizeof (key));
+
+check_again:
         copy_short_key (&key, &(ih->ih_key));
 	
         if (reiserfs_search_by_key_4 (fs, &key, &path) != ITEM_FOUND) {
-            fsck_log ("vpf-10260: no SD found, item skipped (%H)\n", ih);
+            fsck_log ("vpf-10260: The file we are inserting the new item (%H) into has not"
+		" StatData, insertion was skipped\n", ih);
             pathrelse (&path);
             return 0;
         }
@@ -1144,16 +1237,25 @@ int reiserfsck_file_write (struct item_head * ih, char * item, int was_in_tree)
         symlink = S_ISLNK(mode);
 
         if (!symlink && file_format != get_ih_key_format (ih)) {
-            fsck_log ("vpf-10270: item to be inserted is of different format then found SD,"\
-            		" item skipped \n\t(%H)\n\t(%H)\n", ih, get_ih(&path));
+            fsck_log ("vpf-10270: The file we are inserting the new item into has the different"
+		" format then found StatData, insertion was skipped\n\tSD: (%H)\n\tNew:(%H)\n", 
+		ih, get_ih(&path));
             pathrelse (&path);
             return 0;
         }
 
-	if (make_file_writeable (get_ih(&path), get_item (&path)) == -1) {
-	    /* write was not completed. Skip that item. Maybe it should be
-	       saved to lost_found */
-	    fsck_progress ("reiserfsck_file_write: skip writing %H\n", ih);
+	if (!relocated && should_relocate (ih)) {
+	    rewrite_file (ih, 1, 1/*change new_ih*/);
+	    pathrelse(&path);
+	    relocated = 1;
+	    goto check_again;
+	}
+	
+	if (make_file_writeable (get_bh(&path), get_item_pos (&path)) == -1) {
+	    /* write was not completed. Skip that item. Maybe it should be saved to lost_found */
+	    fsck_log ("reiserfsck_file_write: WARNING: The file we are inserting the new item %k into was"
+		" not recovered and is still in inconsistent state, insertion was skipped\n", &ih->ih_key);
+	    pathrelse(&path);
 	    return 0;
 	}
 
@@ -1168,9 +1270,17 @@ int reiserfsck_file_write (struct item_head * ih, char * item, int was_in_tree)
     while (count) {
 
 	retval = usearch_by_position (fs, &key, key_format (&key), &path);
+
+	/*  if there are items of bigger offset than we are looking for and
+	    there is no item between wamted offset and SD, insert first item */
+	if (retval == POSITION_NOT_FOUND &&
+	    (	PATH_LAST_POSITION (&path) >= B_NR_ITEMS (get_bh(&path)) ||
+		get_offset (&get_ih(&path)->ih_key) > get_offset (&key)))
+            retval = FILE_NOT_FOUND;	
 	
 	if (retval == DIRECTORY_FOUND)
-	    reiserfs_panic ("directory found %k", key);
+	    reiserfs_panic ("The directory was found at the place of the file we are going to insert"
+		" the item %k into", key);
 
 	if (retval == POSITION_FOUND) {
 	    written = reiserfsck_overwrite_file (ih, item, &path, &pos_in_coming_item, was_in_tree);
@@ -1178,7 +1288,7 @@ int reiserfsck_file_write (struct item_head * ih, char * item, int was_in_tree)
 	    set_offset (key_format (&key), &key, get_offset (&key) + written);
 	}
 	if (retval == FILE_NOT_FOUND) {
-	    written = create_first_item_of_file (ih, item, &path, &pos_in_coming_item, was_in_tree);
+	    written = create_first_item_of_file (ih, item, &path, was_in_tree);
 	    count -= written;
 
 	    set_offset (key_format (&key), &key, get_offset (&key) + written );
@@ -1190,17 +1300,18 @@ int reiserfsck_file_write (struct item_head * ih, char * item, int was_in_tree)
 	        mark_buffer_dirty (get_bh(&path));
 	    }
 	
-	    if (must_there_be_a_hole (ih, &path) == 1)
+	    if ((written = must_there_be_a_hole (ih, &path)) > 0)
 	    {
-		reiserfs_append_zero_unfm_ptr (&path);
+		reiserfs_append_zero_unfm_ptr (&path, written);
 	    }else {
-		count -= reiserfsck_append_file (ih, item, pos_in_coming_item, &path, was_in_tree);
-		set_offset (key_format (&key), &key, get_offset (&key) + fs->fs_blocksize);
-		pos_in_coming_item ++;
+		written = reiserfsck_append_file (ih, item, pos_in_coming_item, &path, was_in_tree);
+		count -= written;
+		set_offset (key_format (&key), &key, get_offset (&key) + written);
+		pos_in_coming_item += written / fs->fs_blocksize;
 	    }
 	}
 	if (count < 0)
-	    reiserfs_panic ("reiserfsck_file_write: %K: count < 0 (%d)",
+	    reiserfs_panic ("reiserfsck_file_write: We wrote into the file %K more bytes than needed - count (%d) < 0.",
 			    &key, count);
 	pathrelse (&path);
     }

@@ -154,7 +154,7 @@ static __u64 _look_for_lost (reiserfs_filsys_t * fs, int link_lost_dirs)
 			    relocate_dir (&tmp_ih, 1);
 			    lost_found_pass_stat (fs)->oid_sharing_dirs_relocated ++;
 			} else {
-			    relocate_file (&tmp_ih, 1);
+			    rewrite_file (&tmp_ih, 1, 1);
 			    lost_found_pass_stat (fs)->oid_sharing_files_relocated ++;
 			}
 		    }
@@ -185,7 +185,7 @@ static __u64 _look_for_lost (reiserfs_filsys_t * fs, int link_lost_dirs)
 		    /*fsck_progress ("\tChecking lost dir \"%s\":", lost_name);*/
 		    rebuild_semantic_pass (&obj_key, &lost_found_dir_key, /*dot_dot*/0, /*reloc_ih*/0);
 		    erase_name (strlen (lost_name));
-		    /*fsck_progress ("ok\n");*/
+		    /*fsck_progress ("finished\n");*/
 		    
 		    lost_found_pass_stat (fs)->lost_found_dirs ++;
 		} else {
@@ -235,12 +235,12 @@ static __u64 _look_for_lost (reiserfs_filsys_t * fs, int link_lost_dirs)
        marked DEH_Lost_found flag */
     fsck_progress ("Checking lost+found directory.."); fflush (stdout);
     check_semantic_tree (&lost_found_dir_key, &root_dir_key, 0, 1/* lost+found*/);
-    fsck_progress ("ok\n");
+    fsck_progress ("finished\n");
 #endif
 
     if (!link_lost_dirs && lost_files)
-	fsck_log ("look_for_lost: %d files seem to left not linked to lost+found\n",
-		  lost_files);
+	fsck_log ("look_for_lost: %d files seem to be left not linked to lost+found\n",
+	    lost_files);
 
     return size;
 
@@ -264,7 +264,7 @@ static void save_lost_found_result (reiserfs_filsys_t * fs)
     retval = unlink (state_dump_file (fs));
     retval = rename ("temp_fsck_file.deleteme", state_dump_file (fs));
     if (retval != 0)
-	fsck_progress ("pass 0: could not rename temp file temp_fsck_file.deleteme to %s",
+	fsck_progress ("pass 0: Could not rename the temporary file temp_fsck_file.deleteme to %s",
 		       state_dump_file (fs));
 }
 
@@ -299,7 +299,7 @@ void after_lost_found (reiserfs_filsys_t * fs)
     fs->fs_dirt = 1;
     reiserfs_flush_to_ondisk_bitmap (fsck_new_bitmap(fs), fs);
     reiserfs_flush (fs);
-    fsck_progress ("done\n");
+    fsck_progress ("finished\n");
 
     stage_report (0x3a, fs);
 
@@ -316,7 +316,7 @@ void after_lost_found (reiserfs_filsys_t * fs)
 
     fs->fs_dirt = 1;
     reiserfs_close (fs);
-    exit (4);
+    exit(0);
 }
 
 void pass_3a_look_for_lost (reiserfs_filsys_t * fs)
@@ -348,11 +348,11 @@ void pass_3a_look_for_lost (reiserfs_filsys_t * fs)
                                        &gen_counter, &lost_found_dir_key);
 
     if (!objectid) {
-       reiserfs_panic ("look_for_lost: 'lost+found' direntry not found");
+       reiserfs_panic ("look_for_lost: The entry 'lost+found' could not be found in the root directory.");
     }
 
     if (reiserfs_search_by_key_4 (fs, &lost_found_dir_key, &path) != ITEM_FOUND)
-	reiserfs_panic ("look_for_lost: /lost+found stat data %K not found",
+	reiserfs_panic ("look_for_lost: The StatData of the 'lost+found' directory %K could not be found",
 			&lost_found_dir_key);
     ih = get_ih (&path);
     sd = get_item (&path);

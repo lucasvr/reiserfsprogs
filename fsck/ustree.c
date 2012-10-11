@@ -244,7 +244,8 @@ void pass_through_tree (reiserfs_filsys_t * fs, do_after_read_t action1,
 
 	    if (action1)
 		if ((problem = action1 (fs, path, h))) {
-		    fsck_log ("whole subtree skipped\n");
+		    fsck_log (" the problem in the internal node occured (%lu), whole subtree is skipped\n", 
+			path[h]->b_blocknr);
 		    fsck_data (fs)->check.bad_nodes++;
  
 		    if (h == 0) {

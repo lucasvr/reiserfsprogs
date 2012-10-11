@@ -3,12 +3,15 @@
  */
 #include "fsck.h"
 
+static struct key *trunc_links = NULL;
+static __u32 links_num = 0;
+
 int wrong_mode (struct key * key, __u16 * mode, __u64 real_size, int symlink);
-int wrong_st_blocks (struct key * key, __u32 * blocks, __u32 sd_blocks, __u16 mode, int new_format);
+int wrong_st_blocks(struct key * key, __u32 * blocks, __u32 sd_blocks, __u16 mode, 
+		    int new_format);
 int wrong_st_size (struct key * key, loff_t max_file_size, int blocksize,
 		   __u64 * size, __u64 sd_size, int is_dir);
-int wrong_first_direct_byte (struct key * key, int blocksize, 
-			     __u32 * first_direct_byte,
+int wrong_first_direct_byte (struct key * key, int blocksize, __u32 * first_direct_byte,
 			     __u32 sd_first_direct_byte, __u32 size);
 void get_object_key (struct reiserfs_de_head * deh, struct key * key, 
 		     struct key * entry_key, struct item_head * ih);
@@ -36,7 +39,7 @@ static int check_path_key(struct key * key)
     while(cur != NULL)
     {
         if (!comp_short_keys(&cur->key, key)) {
-            fsck_log("\nsemantic check: directory %k has 2 names ", key);
+            fsck_log("\nsemantic check: The directory %k has 2 names.", key);
             return LOOP_FOUND;
         }
         cur = cur->next;
@@ -44,9 +47,9 @@ static int check_path_key(struct key * key)
     return 0;
 }
 
-static int add_path_key(struct key * key, int check)
+static int add_path_key(struct key * key)
 {
-    if (check && check_path_key(key))
+    if (check_path_key(key))
     	return LOOP_FOUND;
 
     if (tail_key == NULL)
@@ -68,7 +71,7 @@ static int add_path_key(struct key * key, int check)
 void del_path_key()
 {
     if (tail_key == NULL)
-        die("wrong path_key structure");
+        die("Wrong path_key structure");
 
     if (tail_key->prev == NULL)
     {
@@ -90,15 +93,16 @@ static int check_check_regular_file (struct path * path, void * sd,
 //    struct key key, sd_key;
     __u16 mode;
     __u32 nlink;
-    __u64 real_size, saved_size;
-    __u32 blocks, saved_blocks;	/* proper values and value in stat data */
-    __u32 first_direct_byte, saved_first_direct_byte;
+    __u64 real_size, sd_size;
+    __u32 blocks, sd_blocks;	/* proper values and value in stat data */
+    __u32 first_direct_byte, sd_first_direct_byte;
 
     struct buffer_head * bh;
     struct item_head * ih, sd_ih;
     int fix_sd;
     int symlnk = 0;
     int retval = OK;
+    __u32 tmp_position;
 
 
     ih = get_ih (path);
@@ -108,12 +112,13 @@ static int check_check_regular_file (struct path * path, void * sd,
 	/* this objectid is used already */
 	*new_ih = *ih;
 	pathrelse (path);
-	relocate_file (new_ih, 1);
+	rewrite_file (new_ih, 1, 1);
 	one_less_corruption (fs, fixable);
 	sem_pass_stat (fs)->oid_sharing_files_relocated ++;
 	retval = RELOCATED;
 	if (reiserfs_search_by_key_4 (fs, &(new_ih->ih_key), path) == ITEM_NOT_FOUND)
-	    reiserfs_panic ("check_check_regular_file: could not find stat data of relocated file");
+	    reiserfs_panic ("check_check_regular_file: Could not find a StatData of "
+		"the relocated file %K", &new_ih->ih_key);
 	/* stat data is marked unreachable again due to relocation, fix that */
 	ih = get_ih (path);
 	bh = get_bh (path);
@@ -129,11 +134,12 @@ static int check_check_regular_file (struct path * path, void * sd,
 
     get_sd_nlink (ih, sd, &nlink);
     get_sd_mode (ih, sd, &mode);
-    get_sd_size (ih, sd, &saved_size);
-    get_sd_blocks (ih, sd, &saved_blocks);
-	
+    get_sd_size (ih, sd, &sd_size);
+    get_sd_blocks (ih, sd, &sd_blocks);
+
+/*	
     if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
-    	/* check and set nlink first */
+    	// check and set nlink first 
     	nlink ++;
     	set_sd_nlink (ih, sd, &nlink);
     	mark_buffer_dirty (bh);
@@ -141,9 +147,10 @@ static int check_check_regular_file (struct path * path, void * sd,
     	if (nlink > 1)
 	    return OK;
     }
- 
+*/
+
     if (!is_new_file)
-	get_sd_first_direct_byte (ih, sd, &saved_first_direct_byte);
+	get_sd_first_direct_byte (ih, sd, &sd_first_direct_byte);
 
     if (S_ISLNK (mode)) 	
 	symlnk = 1;
@@ -152,27 +159,38 @@ static int check_check_regular_file (struct path * path, void * sd,
 //    sd_key = sd_ih.ih_key;
     pathrelse (path);
 
-    if (are_file_items_correct (&sd_ih, sd, &real_size, &blocks, 0/*do not mark items reachable*/, &symlnk) != 1) {
+    if (are_file_items_correct (&sd_ih, sd, &real_size, &blocks, 0/* do not mark reachable */,
+	&symlnk) != 1) 
+    {
 	one_more_corruption (fs, fatal);
-	fsck_log ("check_regular_file: broken file found %K\n", &sd_ih.ih_key);
+	fsck_log ("check_regular_file: The file %K with the corrupted structure found\n", 
+	    &sd_ih.ih_key);
     } else {
 	fix_sd = 0;
     
 	fix_sd += wrong_mode (&sd_ih.ih_key, &mode, real_size, symlnk);
 	if (!is_new_file)
 	    fix_sd += wrong_first_direct_byte (&sd_ih.ih_key, fs->fs_blocksize,
-					       &first_direct_byte, saved_first_direct_byte, real_size);
-	fix_sd += wrong_st_size (&sd_ih.ih_key, is_new_file ? MAX_FILE_SIZE_V2 : MAX_FILE_SIZE_V1,
-				 fs->fs_blocksize, &real_size, saved_size, 0/*not dir*/);
+		&first_direct_byte, sd_first_direct_byte, real_size);
 	
-	fix_sd += wrong_st_blocks (&sd_ih.ih_key, &blocks, saved_blocks, mode, is_new_file);
+	if (reiserfs_bin_search(&sd_ih.ih_key, trunc_links, links_num, sizeof(sd_ih.ih_key), 
+	    &tmp_position, comp_short_keys) != POSITION_FOUND) 
+	{
+	    fix_sd += wrong_st_size (&sd_ih.ih_key, is_new_file ? MAX_FILE_SIZE_V2 : 
+		MAX_FILE_SIZE_V1, fs->fs_blocksize, &real_size, sd_size, 0/*not dir*/);
+	} else {
+	    real_size = sd_size;
+	}
+	
+	fix_sd += wrong_st_blocks (&sd_ih.ih_key, &blocks, sd_blocks, mode, is_new_file);
 
 	if (fix_sd) {
 	    if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
   	        /* find stat data and correct it */
   	        set_type_and_offset (KEY_FORMAT_1, &sd_ih.ih_key, SD_OFFSET, TYPE_STAT_DATA);
 	        if (reiserfs_search_by_key_4 (fs, &sd_ih.ih_key, path) != ITEM_FOUND) {
-		    fsck_log ("check_regular_file: stat data not found");
+		    fsck_log ("check_regular_file: A StatData of the file %K cannot be "
+			"found\n", &sd_ih.ih_key);
                     one_more_corruption (fs, fatal);
                     return STAT_DATA_NOT_FOUND;
 	        }
@@ -195,12 +213,9 @@ static int check_check_regular_file (struct path * path, void * sd,
 }
 
 /* returns buffer, containing found directory item.*/
-static char * get_next_directory_item (struct key * key, /* on return this will
-						     contain key of next item
-						     in the tree */
-				struct key * parent,
-				struct item_head * ih,/*not in tree*/
-				__u32 * pos_in_item, int dir_format)
+static char * get_next_directory_item (
+	struct key * key, /* on return this will contain key of next item in the tree */
+	struct key * parent, struct item_head * ih, __u32 * pos_in_item, int dir_format)
 {
     INITIALIZE_PATH (path);
     char * dir_item;
@@ -216,7 +231,8 @@ start_again:
     retval = reiserfs_search_by_entry_key (fs, key, &path);
 
     if (retval != POSITION_FOUND && get_offset (key) != DOT_OFFSET)
-	reiserfs_panic ("get_next_directory_item: %k is not found", key);
+	reiserfs_panic ("get_next_directory_item: The current directory %k cannot be found", 
+	    key);
 
     /* leaf containing directory item */
     bh = PATH_PLAST_BUFFER (&path);
@@ -229,15 +245,15 @@ start_again:
 	(get_ih_entry_count (ih) < 2 || name_in_entry_length (ih, deh + 1, 1) != 2 ||
 	 strncmp (name_in_entry (deh + 1, 1), "..", 2)))) {
 
-	fsck_log ("get_next_directory_item: %k %s is not found", key,
-		(retval == POSITION_NOT_FOUND) ? "entry" : "directory");
+	fsck_log ("get_next_directory_item: The %s %k cannot be found in %k", 
+	    (retval == POSITION_NOT_FOUND) ? "entry" : "directory", key, &ih->ih_key);
 	
 	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 	    /* add "." and ".." exist */
 	    pathrelse (&path);
 	    reiserfs_add_entry (fs, key, ".",  name_length (".", dir_format), key, 0);
 	    reiserfs_add_entry (fs, key, "..", name_length ("..", dir_format), parent, 0);
-	    fsck_log (" - fixed\n");
+	    fsck_log (" - entry was added\n");
 	    goto start_again;
 	} else {
 	    one_more_corruption (fs, fixable);
@@ -278,13 +294,14 @@ start_again:
 		/* "." must point to the directory it is in */
 		
 		//deh->deh_objectid != REISERFS_ROOT_PARENT_OBJECTID)/*????*/ {
-		fsck_log ("get_next_directory_item: %k: \".\" pointes to [%K], "
-			"should point to [%K]", key, (struct key *)(&(deh->deh2_dir_id)));
+		fsck_log ("get_next_directory_item: The entry \".\" of the directory %K "
+		    "pointes to %K, instead of %K", key, (struct key *)(&(deh->deh2_dir_id)), 
+		    key);
 		if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 		    set_deh_dirid (deh, get_key_dirid (key));
 		    set_deh_objectid (deh, get_key_objectid (key));
 		    mark_buffer_dirty (bh);
-		    fsck_log (" - fixed\n");
+		    fsck_log (" - corrected\n");
 		} else
 		    fsck_log ("\n");
 	    }
@@ -293,13 +310,13 @@ start_again:
 	if (get_deh_offset (deh) == DOT_DOT_OFFSET) {
 	    /* set ".." so that it points to the correct parent directory */
 	    if (comp_short_keys (&(deh->deh2_dir_id), parent)) {
-		fsck_log ("get_next_directory_item: %k: \"..\" pointes to [%K], "
-			"should point to [%K]", key, (struct key *)(&(deh->deh2_dir_id)), parent);
+		fsck_log ("get_next_directory_item: The entry \"..\" of the directory %K "
+		    "pointes to %K, instead of %K", key, (struct key *)(&(deh->deh2_dir_id)));
 		if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 		    set_deh_dirid (deh, get_key_dirid (parent));
 		    set_deh_objectid (deh, get_key_objectid (parent));
 		    mark_buffer_dirty (bh);
-		    fsck_log (" - fixed\n");
+		    fsck_log (" - corrected\n");
 		} else
 		    fsck_log ("\n");
 	    }
@@ -328,7 +345,8 @@ start_again:
 }
 
 /* semantic pass of --check */
-static int check_semantic_pass (struct key * key, struct key * parent, int dot_dot, struct item_head * new_ih)
+static int check_semantic_pass (struct key * key, struct key * parent, int dot_dot, 
+    struct item_head * new_ih)
 {
     struct path path;
     void * sd;
@@ -343,8 +361,8 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
     struct key next_item_key, entry_key, object_key;
     __u64 dir_size = 0;
     __u32 blocks;
-    __u64 saved_size;
-    __u32 saved_blocks;
+    __u64 sd_size;
+    __u32 sd_blocks;
     int fix_sd;
     int relocate;
     int dir_format = 0;
@@ -355,7 +373,7 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
  start_again: /* when directory was relocated */
 
     if (!KEY_IS_STAT_DATA_KEY (key)) {
-	fsck_log ("check_semantic_pass: key must be key of a stat data");
+	fsck_log ("check_semantic_pass: The key %k must be key of a StatData\n", key);
 	one_more_corruption (fs, fatal);
         return STAT_DATA_NOT_FOUND;
     }
@@ -377,18 +395,25 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
         one_more_corruption (fs, fixable);
         return OK;
     }
-
+    
+    if (nlink == 0) {
+	fsck_log ("%s: block %lu: The StatData %k has bad nlink number (%u)\n",
+            __FUNCTION__, get_bh(&path)->b_blocknr, &ih->ih_key, nlink);
+	one_more_corruption (fs, fatal); 
+    }
+    
     if (not_a_directory (sd)) {
 	fsck_check_stat (fs)->files ++;
+	
 	retval = check_check_regular_file (&path, sd, relocate ? new_ih : 0);
 	pathrelse (&path);
 	return retval;
     }
-
+        
     if (relocate) {
 	if (!new_ih)
-	    reiserfs_panic ("check_semantic_pass: can not relocate %K",
-			    &ih->ih_key);
+	    reiserfs_panic ("check_semantic_pass: Memory is not prepared for relocation of "
+		"%K", &ih->ih_key);
 	*new_ih = *ih;
 	pathrelse (&path);
 	sem_pass_stat (fs)->oid_sharing_dirs_relocated ++;
@@ -398,25 +423,26 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 	retval = RELOCATED;
 	goto start_again;
     }
-    
+
+
+/* 
     if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
-    	/* it looks like stat data of a directory found */
+    	// it looks like stat data of a directory found 
     	if (nlink) {
-	    /* we saw this directory already */
+	    // we saw this directory already 
 	    if (!dot_dot) {
-	    	/* this name is not ".."  - and hard links are not allowed on
-      		   directories */
+	    	// this name is not ".."  - and hard links are not allowed on directories 
 	    	pathrelse (&path);
 	    	return STAT_DATA_NOT_FOUND;
 	    } else {
-	    	/* ".." found */
+	    	// ".." found 
 	    	nlink ++;
 	    	set_sd_nlink (ih, sd, &nlink);
 	    	mark_buffer_dirty (get_bh (&path));
 	    	pathrelse (&path);
 	    	return OK;
 	    }
-    	} /*do not run it for dot_dot on check at all*/
+    	} // do not run it for dot_dot on check at all
     	
      	nlink = 2;
     	if (get_key_objectid (key) == REISERFS_ROOT_OBJECTID)
@@ -424,7 +450,8 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
     	set_sd_nlink (ih, sd, &nlink);
     	mark_buffer_dirty (get_bh (&path));    
     }
-    
+*/
+
     /* directory stat data found */
     if (get_ih_item_len (ih) == SD_SIZE)
 	is_new_dir = 1;
@@ -432,8 +459,8 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 	is_new_dir = 0;
 
     /* save stat data's size and st_blocks */
-    get_sd_size (ih, sd, &saved_size);
-    get_sd_blocks (ih, sd, &saved_blocks);
+    get_sd_size (ih, sd, &sd_size);
+    get_sd_blocks (ih, sd, &sd_blocks);
     get_sd_mode (ih, sd, &mode);
 
     dir_format = (get_ih_item_len (get_ih (&path)) == SD_SIZE) ? KEY_FORMAT_2 : KEY_FORMAT_1;
@@ -449,7 +476,9 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
     set_key_uniqueness (&next_item_key, DIRENTRY_UNIQUENESS);
 
     dir_size = 0;
-    while ((dir_item = get_next_directory_item (&next_item_key, parent, &tmp_ih, &pos_in_item, dir_format)) != 0) {
+    while ((dir_item = get_next_directory_item (&next_item_key, parent, &tmp_ih, 
+	&pos_in_item, dir_format)) != 0) 
+    {
 	/* dir_item is copy of the item in separately allocated memory,
 	   item_key is a key of next item in the tree */
 	int i;
@@ -475,14 +504,17 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 	    if ((dir_format == KEY_FORMAT_2) && (entry_len % 8 != 0)) {
 		/* not alighed directory of new format - delete it */
 		if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
-		    fsck_log ("name \"%.*s\" in directory %K of wrong format, %K - deleted\n",
-			namelen, name, &tmp_ih.ih_key, (struct key *)&(deh->deh2_dir_id));
+		    fsck_log ("Entry %K (\"%.*s\") in the directory %K is not formated "
+			"properly - deleted\n",	(struct key *)&(deh->deh2_dir_id), 
+			namelen, name, &tmp_ih.ih_key);
 		    reiserfs_remove_entry (fs, &entry_key);
 		    entry_len = name_length (name, dir_format);
-		    reiserfs_add_entry (fs, key, name, entry_len, (struct key *)&(deh->deh2_dir_id), 0);
+		    reiserfs_add_entry (fs, key, name, entry_len, 
+			(struct key *)&(deh->deh2_dir_id), 0);
 		} else {
-		    fsck_log ("name \"%.*s\" in directory %K of wrong format, %K\n",
-			namelen, name, &tmp_ih.ih_key, (struct key *)&(deh->deh2_dir_id));
+		    fsck_log ("Entry %K (\"%.*s\") in the directory %K is not formated "
+			"properly.\n", (struct key *)&(deh->deh2_dir_id), namelen, name, 
+			&tmp_ih.ih_key);
 		    one_more_corruption (fs, fixable);
 		}
 	    }
@@ -492,16 +524,17 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 	    
 	    if (!is_properly_hashed (fs, name, namelen, get_deh_offset (deh))) {
 		one_more_corruption (fs, fatal);
-		fsck_log ("check_semantic_pass: hash mismatch detected (%.*s)\n", namelen, name);
+		fsck_log ("check_semantic_pass: Hash mismatch detected for (%.*s) in "
+		    "directory %K\n", namelen, name, &tmp_ih.ih_key);
 	    }
 	
-	    if (is_dot (name, namelen) || (is_dot_dot (name, namelen) &&
-           	(fsck_mode (fs) != FSCK_FIX_FIXABLE || get_key_objectid (&object_key) == REISERFS_ROOT_PARENT_OBJECTID))) {
+	    if (is_dot (name, namelen) || (is_dot_dot (name, namelen))) {
 		/* do not go through "." and ".." */
 		retval = OK;
 	    } else {
-		if ((retval = add_path_key (&object_key, (fsck_mode (fs) != FSCK_FIX_FIXABLE)? 1 : 0)) == 0) {
-		    retval = check_semantic_pass (&object_key, key, is_dot_dot(name, namelen), &relocated_ih);
+		if ((retval = add_path_key (&object_key)) == 0) {
+		    retval = check_semantic_pass (&object_key, key, 
+			is_dot_dot(name, namelen), &relocated_ih);
 		    del_path_key ();
 		}
 	    }
@@ -515,8 +548,8 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 		break;
 		
 	    case STAT_DATA_NOT_FOUND:
-		fsck_log ("check_semantic_pass: name \"%.*s\" in directory %K points to nowhere",
-			  namelen, name, &tmp_ih.ih_key);
+		fsck_log ("check_semantic_pass: Name \"%.*s\" in directory %K points to "
+		    "nowhere\n", namelen, name, &tmp_ih.ih_key);
 	    case LOOP_FOUND:
 		if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 		    reiserfs_remove_entry (fs, &entry_key);
@@ -528,8 +561,8 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 		break;
 		    
 	    case DIRECTORY_HAS_NO_ITEMS:
-		fsck_log ("check_semantic_pass: name \"%.*s\" in directory %K points dir without body\n",
-			  namelen, name, &tmp_ih.ih_key);
+		fsck_log ("check_semantic_pass: Name \"%.*s\" in directory %K points a "
+		    "directory without body\n", namelen, name, &tmp_ih.ih_key);
 		
 		/* fixme: stat data should be deleted as well */
 		/*
@@ -544,18 +577,19 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 	    case RELOCATED:
 		/* file was relocated, update key in corresponding directory entry */
 		if (reiserfs_search_by_entry_key (fs, &entry_key, &path) != POSITION_FOUND) {
-		    fsck_progress ("could not find name of relocated file\n");
+		    fsck_log("Cannot find a name of the relocated file %K in the directory "
+			"%K\n", &entry_key, &tmp_ih.ih_key);
 		} else {
 		    /* update key dir entry points to */
 		    struct reiserfs_de_head * tmp_deh;
 		    
 		    tmp_deh = B_I_DEH (get_bh (&path), get_ih (&path)) + path.pos_in_item;
-		    fsck_log ("name \"%.*s\" of dir %K pointing to %K updated to point to ",
-			      namelen, name, &tmp_ih.ih_key, &tmp_deh->deh2_dir_id);
+		    fsck_log ("The directory %K pointing to %K (\"%.*s\") updated to point "
+			"to ",	&tmp_ih.ih_key, &tmp_deh->deh2_dir_id, namelen, name);
 		    set_deh_dirid (tmp_deh, get_key_dirid (&relocated_ih.ih_key));
 		    set_deh_objectid (tmp_deh, get_key_objectid (&relocated_ih.ih_key));
 
-		    fsck_log ("%K\n",  &tmp_deh->deh2_dir_id);
+		    fsck_log ("%K (\"%.*s\")\n",  &tmp_deh->deh2_dir_id, namelen, name);
 		    mark_buffer_dirty (get_bh (&path));
 		}
 		dir_size += DEH_SIZE + entry_len;
@@ -583,15 +617,16 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
     blocks = dir_size2st_blocks (dir_size);
     
     fix_sd = 0;
-    fix_sd += wrong_st_blocks (key, &blocks, saved_blocks, mode, is_new_dir);
+    fix_sd += wrong_st_blocks (key, &blocks, sd_blocks, mode, is_new_dir);
     fix_sd += wrong_st_size (key, is_new_dir ? MAX_FILE_SIZE_V2 : MAX_FILE_SIZE_V1,
-			     fs->fs_blocksize, &dir_size, saved_size, 1/*dir*/);
+			     fs->fs_blocksize, &dir_size, sd_size, 1/*dir*/);
 
     if (fix_sd) {
 	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 	    /* we have to fix either sd_size or sd_blocks, so look for stat data again */
 	    if (reiserfs_search_by_key_4 (fs, key, &path) != ITEM_FOUND) {
-		fsck_log ("check_semantic_tree: stat data not found");
+		fsck_log ("check_semantic_tree: The StatData of the file %K was not found\n", 
+		    key);
 		one_more_corruption(fs, fatal);
                 return STAT_DATA_NOT_FOUND;
 	    }
@@ -626,7 +661,9 @@ int check_safe_links ()
 
 	reiserfs_search_by_key_4 (fs, &safe_link_key, &safe_link_path);
 	
-	if (get_blkh_nr_items ( B_BLK_HEAD (get_bh(&safe_link_path))) <= PATH_LAST_POSITION (&safe_link_path)) {
+	if (get_blkh_nr_items ( B_BLK_HEAD (get_bh(&safe_link_path))) <= 
+	    PATH_LAST_POSITION (&safe_link_path)) 
+	{
 	    pathrelse (&safe_link_path);
             break;
 	}	
@@ -640,7 +677,8 @@ int check_safe_links ()
 	}
 
         if (get_ih_item_len (tmp_ih) != 4)
-	    reiserfs_panic ("safe link cannot be of size %d", get_ih_item_len (tmp_ih));
+	    reiserfs_panic ("Safe Link %k cannot be of the size %d", 
+		&tmp_ih->ih_key, get_ih_item_len (tmp_ih));
 	
 	set_key_dirid(&key, le32_to_cpu(*(__u32 *)get_item(&safe_link_path)));
 	set_key_objectid(&key, get_key_objectid(&tmp_ih->ih_key));
@@ -652,29 +690,44 @@ int check_safe_links ()
 	if (reiserfs_search_by_key_4 (fs, &key, &path) == ITEM_NOT_FOUND) {
 	    /*sware on check, delete on fix-fixable*/
 	    if (fsck_mode(fs) == FSCK_CHECK) {
-		fsck_log ("invalid safe link, cannot find a pointed object (%K)\n", &key);
+		fsck_log ("Invalid safe link %k: cannot find the pointed object (%K)\n", 
+		    &tmp_ih->ih_key, &key);
 		one_more_corruption (fs, fixable);
 	    } else if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
-		fsck_log ("invalid safe link, cannot find a pointed object (%K) - delete\n", &key);
+		fsck_log ("Invalid safe link %k: cannot find the pointed object (%K) - "
+		    "safe link was deleted\n", &tmp_ih->ih_key, &key);
 		*(__u32 *)get_item(&safe_link_path) = (__u32)0;
 		pathrelse (&path);
 		reiserfsck_delete_item (&safe_link_path, 0);		
 		continue;
 	    }
 	} else if (get_offset(&tmp_ih->ih_key) == 0x1) {
+	    /* Truncate */
 	    if (!not_a_directory (get_item(&path))) {
 		/*truncate on directory should not happen*/
 		/*sware on check, delete on fix-fixable*/
 		if (fsck_mode(fs) == FSCK_CHECK) {
-		    fsck_log ("invalid truncate safe link, cannot happen for directory (%K)\n", &key);
+		    fsck_log ("Invalid 'truncate' safe link %k, cannot happen for "
+			"directory (%K)\n", &tmp_ih->ih_key, &key);
 		    one_more_corruption (fs, fixable);
 		} else if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
-		    fsck_log ("invalid truncate safe link, cannot happen for directory (%K) - delete\n", &key);
+		    fsck_log ("Invalid 'truncate' safe link %k, cannot happen for "
+			"a directory (%K) - safe link was deleted\n", &tmp_ih->ih_key, &key);
 		    *(__u32 *)get_item(&safe_link_path) = (__u32)0;
 		    pathrelse (&path);
 		    reiserfsck_delete_item (&safe_link_path, 0);		
 		    continue;
 		}
+	    } else {
+		/* save 'safe truncate links' to avoid swaring on wrong sizes. */
+		__u32 position;
+		
+		if (reiserfs_bin_search (&key, trunc_links, links_num, sizeof(key), 
+		    &position, comp_short_keys) != POSITION_FOUND) 
+		{
+		    blocklist__insert_in_position(&key, (void **)&trunc_links, &links_num, 
+			sizeof(key), &position);
+		}		
 	    }
 	}
 	pathrelse (&path);
@@ -684,48 +737,59 @@ int check_safe_links ()
     return OK;
 }
 
+void release_safe_links () {
+    freemem(trunc_links);
+}
+
 /* called when --check is given */
 void semantic_check (void)
 {
     if (fsck_data (fs)->check.bad_nodes) {
         fsck_progress ("Bad nodes were found, Semantic pass skipped\n");
-        return;
+        goto clean;
     }
 
     if (fsck_data (fs)->check.fatal_corruptions) {
         fsck_progress ("Fatal corruptions were found, Semantic pass skipped\n");
-        return;
+        goto clean;
     }
-
-    
-    fsck_progress ("Checking Semantic tree...\n");
+ 
+    fsck_progress ("Checking Semantic tree:\n");
 
     if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
         /*create new_bitmap, and initialize new_bitmap & allocable bitmap*/
-        fsck_new_bitmap (fs) = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+        fsck_new_bitmap (fs) = reiserfs_create_bitmap(get_sb_block_count(fs->fs_ondisk_sb));
         reiserfs_bitmap_copy (fsck_new_bitmap (fs), fs->fs_bitmap2);
-        fsck_allocable_bitmap (fs) = reiserfs_create_bitmap (get_sb_block_count (fs->fs_ondisk_sb));
+        fsck_allocable_bitmap (fs) = reiserfs_create_bitmap(get_sb_block_count
+	    (fs->fs_ondisk_sb));
         reiserfs_bitmap_copy (fsck_allocable_bitmap (fs), fs->fs_bitmap2);
 	fs->block_allocator = reiserfsck_reiserfs_new_blocknrs;
 	fs->block_deallocator = reiserfsck_reiserfs_free_block;
     }
     
+    check_safe_links ();
+    
     if (check_semantic_pass (&root_dir_key, &parent_root_dir_key, 0, 0) != OK) {
-        fsck_log ("check_semantic_tree: no root directory found");
+        fsck_log ("check_semantic_tree: No root directory found");
         one_more_corruption (fs, fatal);
     }
 
-    check_safe_links ();
+    release_safe_links ();
 
     if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
         reiserfs_delete_bitmap (fs->fs_bitmap2);
+	reiserfs_bitmap_delta (fsck_new_bitmap (fs), fsck_deallocate_bitmap (fs));	
         fs->fs_bitmap2 = fsck_new_bitmap (fs);
-        reiserfs_delete_bitmap (fsck_allocable_bitmap (fs));
+        reiserfs_delete_bitmap (fsck_allocable_bitmap (fs));	
         fsck_allocable_bitmap (fs) = NULL;
         set_sb_free_blocks (fs->fs_ondisk_sb, reiserfs_bitmap_zeros (fs->fs_bitmap2));
         mark_buffer_dirty (fs->fs_super_bh);
 	add_badblock_list(fs, 0);
     }
     
-    fsck_progress ("ok\n");
+    fsck_progress ("finished\n");
+    
+clean:
+    if (fsck_deallocate_bitmap (fs))
+	reiserfs_delete_bitmap (fsck_deallocate_bitmap (fs));
 }

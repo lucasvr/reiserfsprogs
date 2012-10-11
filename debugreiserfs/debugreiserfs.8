@@ -1,13 +1,13 @@
 .\" -*- nroff -*-
 .\" Copyright 1996-2002 Hans Reiser.
 .\" 
-.TH DEBUGREISERFS 8 "January 2002" "Reiserfsprogs 3.6.2"
+.TH DEBUGREISERFS 8 "January 2002" "Reiserfsprogs 3.6.4"
 .SH NAME
 debugreiserfs
 .SH SYNOPSIS
 .B debugreiserfs
 [
-.B -dJmoqpS
+.B -dDJmoqpS
 ] [
 .B -j \fIdevice
 ] [
@@ -36,7 +36,10 @@ journal into archive with other metadata
 print journal header.
 .TP
 .B -d
-print formatted nodes of the filesystem
+print formatted nodes of the internal tree of the filesystem
+.TP
+.B -D
+print formatted nodes of all used blocks of the filesystem
 .TP
 .B -m
 print contents of bitmap (not very useful)

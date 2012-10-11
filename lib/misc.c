@@ -19,6 +19,8 @@
 #include <time.h>
 #include <utime.h>
 #include <ctype.h>
+#include <linux/hdreg.h>
+#include <dirent.h>
 
 #include <unistd.h>
 //#include <linux/unistd.h>
@@ -48,7 +50,7 @@ void die (char * fmt, ...)
     vsprintf (buf, fmt, args);
     va_end (args);
 
-    fprintf (stderr, "\n%s\n\n\n", buf);
+    fprintf (stderr, "\n%s\n", buf);
     abort ();
 }
 
@@ -208,7 +210,7 @@ _syscall2(long, bad_stat64, char *, filename, struct stat64 *, statbuf);
 	return st.st_##field;\
 \
     perror ("stat failed");\
-    exit (1);\
+    exit (8);\
 
 
 mode_t get_st_mode (char * file_name)
@@ -404,6 +406,8 @@ unsigned long count_blocks (char * filename, int blocksize)
 {
     loff_t high, low;
     int fd;
+    unsigned long sz;
+    __u64 size;
 
     if (!S_ISBLK (get_st_mode (filename)) && !S_ISREG (get_st_mode (filename)))
 	return 0;
@@ -414,15 +418,11 @@ unsigned long count_blocks (char * filename, int blocksize)
 
 #ifdef BLKGETSIZE64
     {
-	__u64 size;
-	unsigned long sz;
-
 	if (ioctl (fd, BLKGETSIZE64, &size) >= 0) {
-	    size /= blocksize;
 	    sz = size;
 	    if ((__u64)sz != size)
 		    die ("count_blocks: block device too large");
-	    return sz;
+	    return (size / 4096) * 4096 / blocksize;
 	}
     }
 #endif
@@ -430,10 +430,9 @@ unsigned long count_blocks (char * filename, int blocksize)
 
 #ifdef BLKGETSIZE
     {
-	unsigned long size;
-
-	if (ioctl (fd, BLKGETSIZE, &size) >= 0) {
-	    return  size / (blocksize / 512);
+	if (ioctl (fd, BLKGETSIZE, &sz) >= 0) {
+	    size = sz;
+	    return (size * 512 / 4096) * 4096 / blocksize;
 	}
     }
 #endif
@@ -453,180 +452,10 @@ unsigned long count_blocks (char * filename, int blocksize)
 
     close (fd);
 
-    return (low + 1) / (blocksize);
+    return (low + 1) * 4096 / 4096 / blocksize ;
 }
 
 
-
-/*
- * These have been stolen somewhere from linux
- */
-int le_set_bit (int nr, void * addr)
-{
-    __u8 * p, mask;
-    int retval;
-
-    p = (__u8 *)addr;
-    p += nr >> 3;
-    mask = 1 << (nr & 0x7);
-    /*cli();*/
-    retval = (mask & *p) != 0;
-    *p |= mask;
-    /*sti();*/
-    return retval;
-}
-
-
-int le_clear_bit (int nr, void * addr)
-{
-    __u8 * p, mask;
-    int retval;
-
-    p = (__u8 *)addr;
-    p += nr >> 3;
-    mask = 1 << (nr & 0x7);
-    /*cli();*/
-    retval = (mask & *p) != 0;
-    *p &= ~mask;
-    /*sti();*/
-    return retval;
-}
-
-int le_test_bit(int nr, const void * addr)
-{
-    __u8 * p, mask;
-  
-    p = (__u8 *)addr;
-    p += nr >> 3;
-    mask = 1 << (nr & 0x7);
-    return ((mask & *p) != 0);
-}
-
-int le_find_first_zero_bit (const void *vaddr, unsigned size)
-{
-    const __u8 *p = vaddr, *addr = vaddr;
-    int res;
-
-    if (!size)
-	return 0;
-
-    size = (size >> 3) + ((size & 0x7) > 0);
-    while (*p++ == 255) {
-	if (--size == 0)
-	    return (p - addr) << 3;
-    }
-  
-    --p;
-    for (res = 0; res < 8; res++)
-	if (!test_bit (res, p))
-	    break;
-    return (p - addr) * 8 + res;
-}
-
-
-int le_find_next_zero_bit (const void *vaddr, unsigned size, unsigned offset)
-{
-    const __u8 *addr = vaddr;
-    const __u8 *p = addr + (offset >> 3);
-    int bit = offset & 7, res;
-  
-    if (offset >= size)
-	return size;
-  
-    if (bit) {
-	/* Look for zero in first char */
-	for (res = bit; res < 8; res++)
-	    if (!test_bit (res, p))
-		return (p - addr) * 8 + res;
-	p++;
-    }
-    /* No zero yet, search remaining full bytes for a zero */
-    res = find_first_zero_bit (p, size - 8 * (p - addr));
-    return (p - addr) * 8 + res;
-}
-
-int be_set_bit (int nr, void * addr)
-{
-    __u8 mask = 1 << (nr & 0x7);
-    __u8 *p = (__u8 *) addr + (nr >> 3);
-    __u8 old = *p;
-
-    *p |= mask;
-
-    return (old & mask) != 0;
-}
- 
-int be_clear_bit (int nr, void * addr)
-{
-    __u8 mask = 1 << (nr & 0x07);
-    __u8 *p = (unsigned char *) addr + (nr >> 3);
-    __u8 old = *p;
- 
-    *p = *p & ~mask;
-    return (old & mask) != 0;
-}
- 
-int be_test_bit(int nr, const void * addr)
-{
-    const __u8 *ADDR = (__const__ __u8 *) addr;
- 
-    return ((ADDR[nr >> 3] >> (nr & 0x7)) & 1) != 0;
-}
- 
-int be_find_first_zero_bit (const void *vaddr, unsigned size)
-{
-    return find_next_zero_bit( vaddr, size, 0 );
-}
-
-static unsigned long ffz(unsigned long word)
-{
-        unsigned long result = 0;
- 
-        while(word & 1) {
-                result++;
-                word >>= 1;
-        }
-        return result;
-}
-
-/* stolen from linux/include/asm-mips/bitops.h:ext2_find_next_zero_bit()
- * the bitfield is assumed to be little endian, which is the case here,
- * since we're reading/writing from the disk in LE order */
-int be_find_next_zero_bit (const void *vaddr, unsigned size, unsigned offset)
-{
-    __u32 *p = ((__u32 *) vaddr) + (offset >> 5);
-    __u32 result = offset & ~31UL;
-    __u32 tmp;
-
-    if (offset >= size)
-        return size;
-    size -= result;
-    offset &= 31UL;
-    if (offset) {
-        tmp = *(p++);
-        tmp |= swab32(~0UL >> (32-offset));
-        if (size < 32)
-            goto found_first;
-        if (~tmp)
-            goto found_middle;
-        size -= 32;
-        result += 32;
-    }
-    while (size & ~31UL) {
-        if (~(tmp = *(p++)))
-            goto found_middle;
-        result += 32;
-        size -= 32;
-    }
-    if (!size)
-        return result;
-    tmp = *p;
-
-found_first:
-    return result + ffz(swab32(tmp) | (~0UL << size));
-found_middle:
-    return result + ffz(swab32(tmp));
-}
 
 /* there are masks for certain bits  */
 __u16 mask16 (int from, int count)
@@ -713,7 +542,7 @@ int reiserfs_bin_search (void * key, void * base, __u32 num, int width,
 }
 
 
-#define BLOCKLIST__INCREASE_BLOCK_NUMBER 10
+#define BLOCKLIST__ELEMENT_NUMBER 10
 
 /*element is block number and device*/
 int blockdev_list_compare (const void * block1, const void * block2) {
@@ -751,17 +580,18 @@ int blocklist__is_block_saved (struct block_handler ** base, __u32 * count,
     return 0;
 }
 */
-void blocklist__insert_in_position (void ** base, __u32 * count, void * elem,
-		int elem_size, __u32 * position) {
+void blocklist__insert_in_position (void *elem, void **base, __u32 *count, int elem_size, 
+    __u32 * position) 
+{
     if (elem_size == 0)
     	return;
     	
     if (*base == NULL)
-        *base = getmem (BLOCKLIST__INCREASE_BLOCK_NUMBER * elem_size);
+        *base = getmem (BLOCKLIST__ELEMENT_NUMBER * elem_size);
     
     if (*count == get_mem_size ((void *)*base) / elem_size)
         *base = expandmem (*base, get_mem_size((void *)*base), 
-                        BLOCKLIST__INCREASE_BLOCK_NUMBER * elem_size);
+                        BLOCKLIST__ELEMENT_NUMBER * elem_size);
     
     if (*position < *count) {
         memmove (*base + (*position + 1), 
@@ -860,3 +690,135 @@ int set_uuid (const unsigned char * text, unsigned char * UUID)
     return 0;
 }
 
+/* 0 - dma is not supported, scsi or regular file */
+/* 1 - xt drive                                   */
+/* 2 - ide drive */
+static void get_dma_support(dma_info_t *dma_info){
+    if (S_ISREG(dma_info->stat.st_mode))
+	dma_info->stat.st_rdev = dma_info->stat.st_dev;
+
+    if (IDE_DISK_MAJOR(MAJOR(dma_info->stat.st_rdev))) {
+        dma_info->support_type = 2;
+	return;
+    }
+    
+#ifdef XT_DISK_MAJOR
+    if (MAJOR(dma_info->stat.st_rdev) == XT_DISK_MAJOR) {
+	dma_info->support_type = 1;
+	return;
+    }
+#endif    
+    dma_info->support_type = 0;
+}
+
+/* 
+ * Return values: 
+ * 0 - ok;
+ * 1 - preparation cannot be done 
+ * -1 - preparation failed
+ */
+int prepare_dma_check(dma_info_t *dma_info) {
+    DIR *dir;
+    struct dirent *dirent;
+    struct stat64 stat;    
+    dev_t rdev;
+    int rem;
+    char buf[256];
+
+#ifndef HDIO_GET_DMA
+        return -1;
+#endif
+	
+    if (fstat64(dma_info->fd, &dma_info->stat))
+	die("stat64 on device failed\n");
+   
+    get_dma_support(dma_info);
+   
+    /* dma should be supported */
+    if (dma_info->support_type == 0)
+	return 1;
+    
+    if (dma_info->support_type == 2) {
+	rdev = dma_info->stat.st_rdev;
+
+	if ((rem = (MINOR(rdev) % 64)) != 0) {
+	    rdev -= rem;
+	    if(!(dir = opendir("/dev/"))) {
+		dma_info->support_type = 1;
+		return 0;
+	    }
+	    
+	    while ((dirent = readdir(dir)) != NULL) {
+		if (strncmp(dirent->d_name, ".", 1) == 0 || strncmp(dirent->d_name, "..", 2) == 0)
+		    continue;
+		memset(buf, 0, 256);
+		strncat(buf, "/dev/", 5);
+		strncat(buf, dirent->d_name, strlen(dirent->d_name));
+		if (stat64(buf, &stat)) 
+		    break; 
+		if (S_ISBLK(stat.st_mode) && stat.st_rdev == rdev) 
+		{
+		    dma_info->stat = stat;
+		    dma_info->fd = open(buf, O_RDONLY | O_LARGEFILE);
+		    closedir(dir);
+		    return 0;
+		}
+	    }
+	    closedir(dir);
+	    dma_info->support_type = 1;
+	    return 1;
+	}
+    }
+    
+    return 0;
+}
+
+static int is_dma_on (int fd) {
+#ifdef HDIO_GET_DMA    
+    static long parm;
+    if (ioctl(fd, HDIO_GET_DMA, &parm))
+	return -1;
+    else 
+	return parm;
+#endif
+    return 0;
+}
+
+
+static __u64 dma_speed(int fd, int support_type) {
+    static struct hd_driveid id;
+    __u64 speed = 0;
+            
+    if (support_type != 2) 
+	return 0;
+
+#ifdef HDIO_OBSOLETE_IDENTITY
+    if (!ioctl(fd, HDIO_GET_IDENTITY, &id) || 
+	!ioctl(fd, HDIO_OBSOLETE_IDENTITY)) {
+#else
+    if (!ioctl(fd, HDIO_GET_IDENTITY, &id)) {
+#endif
+	speed |= (__u64)id.dma_1word &  ~(__u64)0xff;
+	speed |= ((__u64)id.dma_mword & ~(__u64)0xff) << 16;
+	speed |= ((__u64)id.dma_ultra & ~(__u64)0xff) << 32;
+    } else if (errno == -ENOMSG)
+	return -1;
+    else 
+	return -1;
+    
+    return speed;
+}
+
+int get_dma_info(dma_info_t *dma_info) {
+    if ((dma_info->dma = is_dma_on(dma_info->fd)) == -1)
+	return -1;
+    if ((dma_info->speed = dma_speed(dma_info->fd, dma_info->support_type)) == (__u64)-1) 
+	return -1;
+    return 0;
+}
+
+void clean_after_dma_check(int fd, dma_info_t *dma_info) {
+    signal(SIGALRM, SIG_IGN);
+    if (dma_info->fd && fd != dma_info->fd)
+	close(dma_info->fd);
+}

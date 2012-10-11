@@ -40,6 +40,8 @@ extern reiserfs_filsys_t * fs;
 #define DO_LOOK_FOR_NAME 	10 /* -N */
 #define DO_SCAN_JOURNAL  	11 /* -J */
 #define DO_EXTRACT_BADBLOCKS	12
+#define DO_FILE_MAP 		13
+
 
 /*first bits are in reiserfs_fs.b*/
 #define PRINT_JOURNAL 		0x10
@@ -221,7 +223,8 @@ struct debugreiserfs_data {
     char * pattern; /* for -n */
     char * device_name;
     char * journal_device_name; /* for -j */
-    char * map_file; /* for -n, -N and -r */
+    char * map_file; /* for -n, -N and -f */
+    char * recovery_file; /* for -r */
 
     unsigned long options; /* -q only yet*/
     int JJ;
@@ -238,7 +241,7 @@ struct debugreiserfs_data {
 #define device_name(fs) (data(fs)->device_name)
 #define journal_device_name(fs) (data(fs)->journal_device_name)
 #define map_file(fs) (data(fs)->map_file)
-
+#define recovery_file(fs) (data(fs)->recovery_file)
 
 #define be_quiet(fs)  (data(fs)->options & BE_QUIET)
 
@@ -256,3 +259,14 @@ void do_scan (reiserfs_filsys_t * fs);
 
 /* journal.c */
 void scan_journal (reiserfs_filsys_t * fs);
+
+void print_map(reiserfs_filsys_t * fs);
+
+struct saved_item {
+    struct item_head si_ih;
+    unsigned long si_block;
+    int si_item_num;
+    struct saved_item * si_next; /* list of items having the same key */
+};
+
+
