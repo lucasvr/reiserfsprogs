@@ -95,7 +95,7 @@ int Hash = DEFAULT_HASH;
 int Offset = 0;
 char * Format;
 unsigned char UUID[16];
-unsigned char * LABEL = NULL;
+char * LABEL = NULL;
 char * badblocks_file;
 
 enum mkfs_mode {

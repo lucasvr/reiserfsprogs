@@ -203,7 +203,7 @@ struct reiserfs_super_block
 /* 76 */     __u32 sb_inode_generation; 
 /* 80 */     __u32 s_flags;                /* Right now used only by inode-attributes, if enabled */
 /* 84 */    unsigned char s_uuid[16];      /* filesystem unique identifier */
-/*100 */    unsigned char s_label[16];     /* filesystem volume label */
+/*100 */    char s_label[16];              /* filesystem volume label */
 /*116 */    __u16 s_mnt_count;
 /*118 */    __u16 s_max_mnt_count;
 /*120 */    __u32 s_lastcheck;
