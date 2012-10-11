@@ -104,8 +104,13 @@ AC_PROG_GCC_TRADITIONAL
 AC_FUNC_MEMCMP
 AC_FUNC_STRFTIME
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS(strerror strstr strtol register_printf_function statfs getmntent\
-	       hasmntopt memset time uname strptime ctime_r)
+AC_CHECK_FUNCS(strerror strstr strtol statfs getmntent hasmntopt memset time \
+	       uname strptime ctime_r register_printf_modifier \
+	       register_printf_specifier)
+
+if test -z "${ac_cv_func_register_printf_function}" -a -z "${ac_cv_func_register_printf_specifier}"; then
+	AC_MSG_ERROR(reiserfsprogs requires a method to add printf modifiers)
+fi
 
 
 dnl Never enable this. It is for debugging only

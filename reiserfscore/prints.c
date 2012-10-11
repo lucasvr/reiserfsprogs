@@ -16,46 +16,22 @@
 #  include <uuid/uuid.h>
 #endif
 
-#define PA_KEY		(PA_LAST)
-#define PA_BUFFER_HEAD	(PA_LAST + 1)
-#define PA_ITEM_HEAD	(PA_LAST + 2)
-#define PA_DISK_CHILD	(PA_LAST + 3)
-
-
-static int _arginfo_b (const struct printf_info *info, size_t n, int *argtypes) {
-    if (n > 0)
-	argtypes[0] = PA_BUFFER_HEAD | PA_FLAG_PTR;
-    return 1;
-}
-
-static int _arginfo_K (const struct printf_info *info, size_t n, int *argtypes) {
-    if (n > 0)
-	argtypes[0] = PA_KEY | PA_FLAG_PTR;
-    return 1;
-}
-
-static int _arginfo_H (const struct printf_info *info, size_t n, int *argtypes) {
-    if (n > 0)
-	argtypes[0] = PA_ITEM_HEAD | PA_FLAG_PTR;
-    return 1;
-}
-
-static int _arginfo_y (const struct printf_info *info, size_t n, int *argtypes) {
-    if (n > 0)
-	argtypes[0] = PA_DISK_CHILD | PA_FLAG_PTR;
-    return 1;
-}
-
-static int _arginfo_M (const struct printf_info *info, size_t n, int *argtypes) {
-    if (n > 0)
-	argtypes[0] = PA_INT | PA_FLAG_SHORT | PA_FLAG_PTR;
-    return 1;
-}
-
-static int _arginfo_U (const struct printf_info *info, size_t n, int *argtypes) {
-    if (n > 0)
-	argtypes[0] = (PA_CHAR|PA_FLAG_PTR);
-    return 1;
+#ifndef HAVE_REGISTER_PRINTF_SPECIFIER
+#define register_printf_specifier(x, y, z) register_printf_function(x, y, z)
+static int arginfo_ptr (const struct printf_info *info, size_t n,
+			int *argtypes)
+#else
+static int arginfo_ptr (const struct printf_info *info, size_t n,
+			int *argtypes, int *size)
+#endif
+{
+	if (n > 0) {
+		argtypes[0] = PA_FLAG_PTR;
+#ifdef HAVE_REGISTER_PRINTF_SPECIFIER
+		size[0] = sizeof (void *);
+#endif
+	}
+	return 1;
 }
 
 #define FPRINTF \
@@ -224,13 +200,13 @@ void reiserfs_warning (FILE * fp, const char * fmt, ...)
     if (!registered) {
 	registered = 1;
 	
-	register_printf_function ('K', print_short_key, _arginfo_K);
-	register_printf_function ('k', print_key, _arginfo_K);
-	register_printf_function ('H', print_item_head, _arginfo_H);
-	register_printf_function ('b', print_block_head, _arginfo_b);
-	register_printf_function ('y', print_disk_child, _arginfo_y);
-	register_printf_function ('M', print_sd_mode, _arginfo_M);
-	register_printf_function ('U', print_sd_uuid, _arginfo_U);
+	register_printf_specifier ('K', print_short_key, arginfo_ptr);
+	register_printf_specifier ('k', print_key, arginfo_ptr);
+	register_printf_specifier ('H', print_item_head, arginfo_ptr);
+	register_printf_specifier ('b', print_block_head, arginfo_ptr);
+	register_printf_specifier ('y', print_disk_child, arginfo_ptr);
+	register_printf_specifier ('M', print_sd_mode, arginfo_ptr);
+	register_printf_specifier ('U', print_sd_uuid, arginfo_ptr);
     }
 
     va_start (args, fmt);
