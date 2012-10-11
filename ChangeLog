@@ -1,3 +1,26 @@
+2009-01-09
+	3.6.21 release.
+2009-01-09
+	Patches from Jeff Mahoney:
+	- reiserfsprogs-mkreiserfs-quiet.diff
+	- reiserfsprogs-large-block-warning.diff
+	- reiserfsprogs-fsck-mapid.diff
+	- reiserfsprogs-external-journal-changes.diff
+	- reiserfsprogs-remove-stupid-fsck_sleep.diff
+	- reiserfsprogs-mkfs-use-o_excl.diff
+	- reiserfsprogs-enforce-block-limit.diff
+	- reiserfsprogs-large-fs.diff
+	- reiserfsprogs-better-fsck-a-behavior.diff
+	- reiserfsprogs-remove-dependency-on-asm_unaligned.h.diff
+	- reiserfsprogs-progress.diff
+	- reiserfsprogs-reorder-libs.diff
+
+	Patches from Ludwig Nussel:
+	- mkreiserfs-set-the-owner-of-the-root-directory-to-the-calling-user.diff
+
+	Patches from Edward Shishkin:
+	- reiserfsprogs-disable-small-block.diff
+	- reiserfsprogs-new-version.diff
 2004-10-13
 	3.6.19 release.
 2004-09-22
