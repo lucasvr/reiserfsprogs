@@ -313,7 +313,7 @@ int search_by_key (reiserfs_filsys_t * fs,
 		   int  n_stop_level)   /* How far down the tree to search.*/
 {
     struct reiserfs_super_block * sb;
-    int n_block_number,
+    unsigned int n_block_number,
 	expected_level,
 	n_block_size    = fs->fs_blocksize;
     struct buffer_head  *       p_s_bh;

@@ -59,7 +59,8 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags,
     reiserfs_filsys_t * fs;
     struct buffer_head * bh;
     struct reiserfs_super_block * sb;
-    int fd, i;
+    int fd;
+    unsigned int i;
 
     /* convert root dir key and parent root dir key to little endian format */
     make_const_keys ();
@@ -200,7 +201,7 @@ reiserfs_filsys_t * reiserfs_create (char * filename,
 	block_size, block_count, 0)) 
     {
 	reiserfs_warning (stderr, "reiserfs_create: can not create that small "
-	    "(%d blocks) filesystem\n", block_count);
+	    "(%u blocks) filesystem\n", block_count);
 	return 0;
     }
 

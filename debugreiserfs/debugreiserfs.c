@@ -59,11 +59,11 @@ Options:\n\
 
 #if 1
 struct reiserfs_fsstat {
-    int nr_internals;
-    int nr_leaves;
-    int nr_files;
-    int nr_directories;
-    int nr_unformatted;
+    unsigned int nr_internals;
+    unsigned int nr_leaves;
+    unsigned int nr_files;
+    unsigned int nr_directories;
+    unsigned int nr_unformatted;
 } g_stat_info;
 #endif
 
@@ -465,14 +465,14 @@ static void init_bitmap (reiserfs_filsys_t * fs)
     case ALL_BLOCKS:
 	    input_bitmap (fs) = reiserfs_create_bitmap (block_count);
 	    reiserfs_bitmap_fill (input_bitmap (fs));
-	    reiserfs_warning (stderr, "Whole device (%d blocks) is to be scanned\n", 
+	    reiserfs_warning (stderr, "Whole device (%u blocks) is to be scanned\n",
 			      reiserfs_bitmap_ones (input_bitmap (fs)));	
 	    break;
     case USED_BLOCKS:
 	    reiserfs_warning (stderr, "Loading on-disk bitmap .. ");
 	    input_bitmap (fs) = reiserfs_create_bitmap (block_count);
 	    reiserfs_bitmap_copy (input_bitmap (fs), fs->fs_bitmap2);
-	    reiserfs_warning (stderr, "%d bits set - done\n",
+	    reiserfs_warning (stderr, "%lu bits set - done\n",
 			      reiserfs_bitmap_ones (input_bitmap (fs)));
 	    break;
     case UNUSED_BLOCKS:
@@ -480,7 +480,7 @@ static void init_bitmap (reiserfs_filsys_t * fs)
 	    input_bitmap (fs) = reiserfs_create_bitmap (block_count);
 	    reiserfs_bitmap_copy (input_bitmap (fs), fs->fs_bitmap2);
 	    reiserfs_bitmap_invert (input_bitmap (fs));
-	    reiserfs_warning (stderr, "%d bits set - done\n",
+	    reiserfs_warning (stderr, "%lu bits set - done\n",
 			      reiserfs_bitmap_ones (input_bitmap (fs)));
 	    break;
     case EXTERN_BITMAP:
@@ -494,7 +494,7 @@ static void init_bitmap (reiserfs_filsys_t * fs)
 		    reiserfs_exit (1, "could not load fitmap from \"%s\"", 
 				   input_bitmap_file_name(fs));
 	    }
-	    reiserfs_warning (stderr, "%d blocks marked in the given bitmap\n",
+	    reiserfs_warning (stderr, "%u blocks marked in the given bitmap\n",
 			      reiserfs_bitmap_ones (input_bitmap (fs)));
 	    fclose (fp);
 	    break;
@@ -554,8 +554,8 @@ static void do_dump_tree (reiserfs_filsys_t * fs)
 	    }
 
 	    /* print the statistic */
-	    printf ("\t%d internal + %d leaves + %d "
-		    "unformatted nodes = %d blocks\n", 
+	    printf ("\t%u internal + %u leaves + %u "
+		    "unformatted nodes = %u blocks\n",
 		    g_stat_info.nr_internals,   g_stat_info.nr_leaves, 
 		    g_stat_info.nr_unformatted, g_stat_info.nr_internals + 
 		    g_stat_info.nr_leaves + g_stat_info.nr_unformatted);

@@ -1032,7 +1032,7 @@ void do_scan (reiserfs_filsys_t * fs)
     /* step 2: */
     done = 0;
     total = reiserfs_bitmap_ones (input_bitmap (fs));
-    printf ("%ld bits set in bitmap\n", total);
+    printf ("%lu bits set in bitmap\n", total);
     for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
 	int type;
 	

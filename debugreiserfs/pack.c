@@ -8,7 +8,7 @@
 
 
 /* counters for each kind of blocks */
-int packed,
+unsigned int packed,
     packed_leaves,
     full_blocks,
     having_ih_array, /* blocks with broken block head */
@@ -638,7 +638,7 @@ static void pack_frozen_data (reiserfs_filsys_t * fs)
     }
     reiserfs_warning (stderr, "ok\n");fflush (stderr);
     reiserfs_warning (stderr, 
-		      "Super block, bitmaps, journal - %d blocks - done, %d blocks left\n",
+		      "Super block, bitmaps, journal - %u blocks - done, %u blocks left\n",
 		      packed, reiserfs_bitmap_ones (what_to_pack));
 }
 
@@ -693,13 +693,13 @@ void pack_partition (reiserfs_filsys_t * fs)
     magic16 = END_MAGIC;
     fwrite_le16 (&magic16);
 
-    fprintf (stderr, "\nPacked %d blocks:\n"
-	     "\tcompessed %d\n"
-	     "\tfull blocks %d\n"
-	     "\t\tleaves with broken block head %d\n"
-	     "\t\tcorrupted leaves %d\n"
-	     "\t\tinternals %d\n"
-	     "\t\tdescriptors %d\n",
+    fprintf (stderr, "\nPacked %u blocks:\n"
+	     "\tcompessed %u\n"
+	     "\tfull blocks %u\n"
+	     "\t\tleaves with broken block head %u\n"
+	     "\t\tcorrupted leaves %u\n"
+	     "\t\tinternals %u\n"
+	     "\t\tdescriptors %u\n",
 	     packed,
 	     packed_leaves, full_blocks, having_ih_array,
 	     bad_leaves, internals, descs);

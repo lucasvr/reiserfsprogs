@@ -245,7 +245,7 @@ void do_stat (reiserfs_filsys_t * fs)
 	reiserfs_exit (1, "could not open %s to save bitmap: %m\n",
 		       input_bitmap_file_name(fs));
     }
-    reiserfs_warning (stderr, "Updated bitmap contains %d blocks marked\n",
+    reiserfs_warning (stderr, "Updated bitmap contains %u blocks marked\n",
 		      reiserfs_bitmap_ones (input_bitmap (fs)));
     
     reiserfs_bitmap_save (fp, input_bitmap (fs));

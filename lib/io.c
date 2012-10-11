@@ -628,7 +628,7 @@ void close_rollback_file () {
             return;
         fwrite (&rollback_blocks_number, sizeof (rollback_blocksize), 1, s_rollback_file);
         if (log_file != 0) 
-            fprintf (log_file, "rollback: %d blocks backed up\n", rollback_blocks_number);
+            fprintf (log_file, "rollback: %u blocks backed up\n", rollback_blocks_number);
     }
         
     fclose (s_rollback_file);

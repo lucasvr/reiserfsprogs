@@ -577,7 +577,7 @@ int reiserfs_create_journal(
 	{
 	    /* host device does not contain enough blocks */
 	    reiserfs_warning (stderr, "reiserfs_create_journal: cannot create "
-		"a journal of %lu blocks with %lu offset on %d blocks\n", 
+		"a journal of %lu blocks with %lu offset on %u blocks\n",
 		len, offset, get_sb_block_count(sb));
 		return 0;
 	}

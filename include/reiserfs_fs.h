@@ -32,6 +32,8 @@
 #ifndef REISERFSPROGS_FS_H
 #define REISERFSPRIGS_FS_H 
 
+typedef unsigned int blocknr_t;
+
 #ifndef NO_EXTERN_INLINE
 # define extern_inline extern inline
 #else

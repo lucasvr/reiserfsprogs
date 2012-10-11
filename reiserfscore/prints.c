@@ -148,7 +148,7 @@ static int print_disk_child (FILE * stream,
     int len;
 
     dc = *((const struct disk_child **)(args[0]));
-    len = asprintf (&buffer, "[dc_number=%u, dc_size=%u]", get_dc_child_blocknr (dc),
+    len = asprintf (&buffer, "[dc_number=%lu, dc_size=%u]", get_dc_child_blocknr (dc),
 		    get_dc_child_size (dc));
     FPRINTF;
 }
@@ -373,9 +373,9 @@ static void print_sequence (FILE * fp, __u32 start, int len)
 	return;
 
     if (len == 1)
-	reiserfs_warning (fp, " %d", le32_to_cpu (start));
+	reiserfs_warning (fp, " %u", le32_to_cpu (start));
     else
-	reiserfs_warning (fp, " %d(%d)", le32_to_cpu (start), len);
+	reiserfs_warning (fp, " %u(%d)", le32_to_cpu (start), len);
 }
 
 
@@ -491,7 +491,7 @@ static int print_internal (FILE * fp, struct buffer_head * bh, int first, int la
 	to = last < B_NR_ITEMS (bh) ? last : B_NR_ITEMS (bh);
     }
 
-    reiserfs_warning (fp, "INTERNAL NODE (%ld) contains %b\n",  bh->b_blocknr, bh);
+    reiserfs_warning (fp, "INTERNAL NODE (%lu) contains %b\n",  bh->b_blocknr, bh);
 
     dc = B_N_CHILD (bh, from);
     reiserfs_warning (fp, "PTR %d: %y ", from, dc);
@@ -527,7 +527,7 @@ static int print_leaf (FILE * fp, reiserfs_filsys_t * fs, struct buffer_head * b
 
     reiserfs_warning (fp,
 		      "\n===================================================================\n");
-    reiserfs_warning (fp, "LEAF NODE (%ld) contains %b (real items %d)\n",
+    reiserfs_warning (fp, "LEAF NODE (%lu) contains %b (real items %d)\n",
 		      bh->b_blocknr, bh, real_nr);
 
     if (!(print_mode & PRINT_TREE_DETAILS)) {
@@ -761,7 +761,7 @@ void print_block (FILE * fp, reiserfs_filsys_t * fs,
         if (print_super_block (fp, fs, file_name, bh, 0))
 	    if (print_leaf (fp, fs, bh, mode, first, last))
 		if (print_internal (fp, bh, first, last))
-		    reiserfs_warning (fp, "Block %ld contains unformatted data\n", bh->b_blocknr);
+		    reiserfs_warning (fp, "Block %lu contains unformatted data\n", bh->b_blocknr);
 }
 
 
@@ -797,7 +797,7 @@ void print_tb (int mode, int item_pos, int pos_in_item, struct tree_balance * tb
       tbSh = 0;
       tbFh = 0;
     }
-    printf ("* %u * %3lu(%2lu) * %3lu(%2lu) * %3lu(%2lu) * %5ld * %5ld * %5ld * %5ld * %5ld *\n",
+    printf ("* %u * %3lu(%2lu) * %3lu(%2lu) * %3lu(%2lu) * %5lu * %5lu * %5lu * %5lu * %5lu *\n",
 	    h, 
 	    tbSh ? tbSh->b_blocknr : ~0ul,
 	    tbSh ? tbSh->b_count : ~0ul,

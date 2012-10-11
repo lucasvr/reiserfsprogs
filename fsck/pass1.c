@@ -646,8 +646,8 @@ void load_pass_1_result (FILE * fp, reiserfs_filsys_t * fs)
     fetch_objectid_map (proper_id_map (fs), fs);
     */
 
-    fsck_progress ("Pass 1 result loaded. %d blocks used, %d allocable, "
-		   "still to be inserted %d\n",
+    fsck_progress ("Pass 1 result loaded. %u blocks used, %u allocable, "
+		   "still to be inserted %u\n",
 		   reiserfs_bitmap_ones (fsck_new_bitmap (fs)),
 		   reiserfs_bitmap_zeros (fsck_allocable_bitmap (fs)),
 		   reiserfs_bitmap_zeros (fsck_uninsertables (fs)));

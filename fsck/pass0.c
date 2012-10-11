@@ -1759,7 +1759,7 @@ static void init_source_bitmap (reiserfs_filsys_t * fs)
     case ALL_BLOCKS:
 	fsck_source_bitmap (fs) = reiserfs_create_bitmap (block_count);
 	reiserfs_bitmap_fill (fsck_source_bitmap (fs));
-	fsck_progress ("The whole partition (%d blocks) is to be scanned\n", 
+	fsck_progress ("The whole partition (%u blocks) is to be scanned\n",
 		       reiserfs_bitmap_ones (fsck_source_bitmap (fs)));	
 	break;
 
@@ -1768,7 +1768,7 @@ static void init_source_bitmap (reiserfs_filsys_t * fs)
 	fsck_source_bitmap (fs) = reiserfs_create_bitmap (block_count);	
 	reiserfs_bitmap_copy (fsck_source_bitmap (fs), fs->fs_bitmap2);
 	
-	fsck_progress ("ok, %d blocks marked used\n", 
+	fsck_progress ("ok, %u blocks marked used\n",
 		       reiserfs_bitmap_ones (fsck_source_bitmap (fs)));
 	break;
 
@@ -1787,7 +1787,7 @@ static void init_source_bitmap (reiserfs_filsys_t * fs)
 			   fsck_data (fs)->rebuild.bitmap_file_name);
 	}
 
-	fsck_progress ("%d blocks marked used in extern bitmap\n", 
+	fsck_progress ("%u blocks marked used in extern bitmap\n",
 		       reiserfs_bitmap_ones (fsck_source_bitmap (fs)));
 	fclose (fp);
 	break;
@@ -1863,8 +1863,8 @@ static void init_source_bitmap (reiserfs_filsys_t * fs)
 
     fsck_source_bitmap (fs)->bm_set_bits = reiserfs_bitmap_ones (fsck_source_bitmap (fs));
 
-    fsck_progress ("Skipping %d blocks (super block, journal, "
-		   "bitmaps) %d blocks will be read\n", tmp, fsck_source_bitmap (fs)->bm_set_bits);
+    fsck_progress ("Skipping %u blocks (super block, journal, "
+		   "bitmaps) %u blocks will be read\n", tmp, fsck_source_bitmap (fs)->bm_set_bits);
 		
 }
 

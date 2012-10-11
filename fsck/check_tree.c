@@ -119,7 +119,7 @@ static int is_block_free (reiserfs_filsys_t * fs, unsigned long block)
 }
 
 
-/*static int hits = 0;*/
+/*static unsigned int hits = 0;*/
 
 /* we have seen this block in the tree, mark corresponding bit in the
    control bitmap */
@@ -156,7 +156,7 @@ static void init_control_bitmap (reiserfs_filsys_t * fs)
     for (i = 0; i <= fs->fs_super_bh->b_blocknr; i ++)
     	we_met_it (i);
 
-    /*printf ("SKIPPED: %d blocks marked used (%d)\n", hits, 
+    /*printf ("SKIPPED: %u blocks marked used (%d)\n", hits,
               reiserfs_bitmap_zeros (control_bitmap));
       hits = 0;*/
 
@@ -172,7 +172,7 @@ static void init_control_bitmap (reiserfs_filsys_t * fs)
 	    block ++;	
     }
     
-    /*printf ("BITMAPS: %d blocks marked used (%d)\n", hits, 
+    /*printf ("BITMAPS: %u blocks marked used (%d)\n", hits,
 	      reiserfs_bitmap_zeros (control_bitmap));
 	      
       hits = 0;*/
