@@ -148,7 +148,7 @@ static int print_disk_child (FILE * stream,
     int len;
 
     dc = *((const struct disk_child **)(args[0]));
-    len = asprintf (&buffer, "[dc_number=%lu, dc_size=%u]", get_dc_child_blocknr (dc),
+    len = asprintf (&buffer, "[dc_number=%u, dc_size=%u]", get_dc_child_blocknr (dc),
 		    get_dc_child_size (dc));
     FPRINTF;
 }

@@ -964,7 +964,7 @@ static int reiserfs_check_auto_state(reiserfs_filsys_t *fs)
 	}
 
 	if (interval != UINT_MAX && now > lastcheck + interval) {
-		fprintf(stderr, "File system hasn't been checked in %u days. "
+		fprintf(stderr, "File system hasn't been checked in %lu days. "
 		        "Checking now.\n", (now - lastcheck) / (60*60*24));
 		return 1;
 	}
