@@ -952,28 +952,6 @@ inline unsigned long long misc_find_next_set_bit(const void *vaddr,
     return res + (p - addr) * 8;
 }
 
-#include "credits.h"
-
-/* Reads the "CREDITS" file and prints one paragraph from it. */
-void misc_print_credit(FILE *out) {
-    char *line;
-    __u32 num1, num2;
-    
-    fprintf(out, "A pair of credits:\n");
-    
-    srandom (time (0));
-    
-    num1 = random() % CREDITS_COUNT;
-    line = credits[num1];
-    fprintf(out, "%s\n", line);
-    
-    while ((num1 == (num2 = random() % CREDITS_COUNT))) {}
-    
-    line = credits[num2];
-    
-    fprintf(out, "%s\n", line);
-}
-
 int user_confirmed (FILE * fp, char * q, char * yes) {
     char * answer = 0;
     size_t n = 0;

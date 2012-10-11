@@ -675,11 +675,6 @@ int main (int argc, char **argv)
 
     print_banner (program_name);
 
-    if (!(mode & QUIET_MODE)) {
-	misc_print_credit(stdout);
-	printf("\n");
-    }
-    
     if (mode & QUIET_MODE)
 	fclose(stdout);
     

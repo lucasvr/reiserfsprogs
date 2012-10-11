@@ -60,8 +60,6 @@ typedef struct mount_hint {
 struct mntent *misc_mntent(char *device);
 int misc_device_mounted(char *device);
 	
-void misc_print_credit(FILE *out);
-
 typedef struct dma_info {
     int fd;
     struct stat st;

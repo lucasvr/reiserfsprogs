@@ -122,41 +122,6 @@ AC_ARG_ENABLE(io-failure-emulation,
   fi
 ])
 
-credits="./CREDITS"
-AC_MSG_CHECKING(for $credits)
-if test -r $credits ; then
-    AC_MSG_RESULT(yes)
-else
-    AC_MSG_ERROR(Missing file $credits)
-fi
-
-$AWK ['
-BEGIN  {in_header = 1; start = 2; count = 0}
-
-{
-    if (in_header) {
-	print $0
-	if ($0 == "") {
-	    in_header = 0;
-	    printf "char *credits[] = {\n"
-	}
-    } else {
-	if (($0 == "") || (length($0) < 1)) {
-	    start = 1;
-	    count++;
-	} else {
-	    if (!start)
-		printf "\t\\\n"
-	    else if (start == 1)
-		printf ",\n\n"
-	    printf "\t\"" $0 "\\n\""
-	    start = 0;
-	}
-    }
-}
-END    { print "\n};\n#define CREDITS_COUNT "  count }
-']  $credits > include/credits.h
-
 if test x$enable_debug = xyes; then
 	if test "x" = "x$PRESET_CFLAGS"; then
 		CFLAGS="-g -Wall"
