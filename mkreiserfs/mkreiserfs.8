@@ -1,9 +1,9 @@
 .\" -*- nroff -*-
 .\" Copyright 1996-2004 Hans Reiser.
 .\" 
-.TH MKREISERFS 8 "February 2004" "Reiserfsprogs-3.6.13"
+.TH MKREISERFS 8 "February 2004" "Reiserfsprogs-3.6.18"
 .SH NAME
-mkreiserfs \- create tool for the Linux ReiserFS file system
+mkreiserfs \- The create tool for the Linux ReiserFS filesystem.
 .SH SYNOPSIS
 .B mkreiserfs
 [ \fB-dfV\fR ]
@@ -20,94 +20,95 @@ mkreiserfs \- create tool for the Linux ReiserFS file system
 [ \fB-B\fR | \fB--badblocks\fR \fIfile\fR ] \fI device\fR
 [ \fIfilesystem-size\fR ]
 .SH DESCRIPTION
-It creates a Linux ReiserFS file system on a device
-(usually a disk partition).
+\fBmkreiserfs\fR creates a Linux ReiserFS filesystem on a device (usually a disk
+partition).
 .TP
 .I device
-is the special file corresponding to the device (e.g /dev/hdXX for
-IDE disk partition or /dev/sdXX for SCSI disk partition).
+is the special file corresponding to a device or to a partition (e.g 
+/dev/hdXX for an IDE disk partition or /dev/sdXX for a SCSI disk partition).
 .TP
 .I filesystem-size
-size of filesystem in blocks. If omitted, it will be
-determined by
-.B mkreiserfs
-automatically.
+is the size in blocks of the filesystem. If omitted, \fBmkreiserfs\fR will
+automatically set it.
 .SH OPTIONS
 .TP
 \fB-b\fR | \fB--block-size \fIN\fR
-\fIN\fR is block size in bytes. 4096 only for now.
+\fIN\fR is block size in bytes. It may only be set to a power of 2 within the
+512-8192 interval.
 .TP
 \fB-h\fR | \fB--hash \fIHASH\fR
-\fIHASH\fR specifies the name of hash function file names in directories
-will be sorted with. Choose one of r5, rupasov, tea. r5 is default
+\fIHASH\fR specifies which hash function will sort the names in the directories.
+Choose from r5, rupasov, or tea. r5 is the default one.
 .TP
 \fB--format \fIFORMAT\fR
-\fIFORMAT\fR specifies a format new filsystem has to be of. Choose one
-of 3.5 and 3.6. If none is specified \fBmkreiserfs\fR will create format 3.6
-if running kernel is 2.4, 3.5 if 2.2 is running, and will refuse
-creation under other kernels.
+\fIFORMAT\fR specifies the format for the new filsystem. Choose format 3.5 or
+3.6. If none is specified \fBmkreiserfs\fR will create format 3.6 if running
+kernel is 2.4 or higher, and format 3.5 if kernel 2.2 is running, and will
+refuse creation under all other kernels.
 .TP
 \fB-u\fR | \fB--uuid \fIUUID\fR
-Set  the  universally  unique  identifier (\fB UUID \fR) of the filesystem to 
-\fIUUID\fR (see also \fBuuidgen(8)\fR). The  format  of  the  UUID  is  a 
-series  of  hex  digits  separated  by  hypthens,  like  this:
-"c1b9d5a2-f162-11cf-9ece-0020afc76f16". If the option skipped,
-\fBmkreiserfs\fR generates a new one.
+Sets  the  Universally  Unique  IDentifier  of  the  filesystem  to  \fIUUID\fR 
+(see  also  \fBuuidgen(8)\fR).  The  format  of  the  \fIUUID\fR  is  a  series 
+of  hex  digits separated by hypthens, e.g.: "c1b9d5a2-f162-11cf-9ece-0020afc76f16".
+If  the option  is skipped,  \fBmkreiserfs\fR  will by default generate a new
+\fIUUID\fR.
 .TP
 \fB-l\fR | \fB--label \fILABEL\fR
-Set  the  volume  label  of  the filesystem. \fILABEL\fR can be at most 16
-characters long; if it is longer than 16 characters, \fBmkreiserfs\fR will truncate it.
+Sets  the  volume  label  of  the filesystem. \fILABEL\fR can at most be 16
+characters long; if it is longer than 16 characters, \fBmkreiserfs\fR will 
+truncate it.
 .TP
 \fB-q\fR | \fB--quiet \fR
-Make \fBmkreiserfs\fR to work quiet without producing any message, progress and question. 
-It is useful if you run \fBmkreiserfs\fR in a script. For use by end users only.
+Sets \fBmkreiserfs\fR to work quietly without producing messages, progress or
+questions. It is useful, but only for use by end users, if you run \fBmkreiserfs\fR 
+in a script.
 .TP
 \fB-j\fR | \fB--journal-device \fIFILE\fR
-\fIFILE\fR is name of block device where the file system is to have
-journal on.
+\fIFILE\fR is the name of the block device on which is to be places the 
+filesystem journal.
 .TP
 \fB-o\fR | \fB--journal-offset \fIN\fR
-\fIN\fR is an offset where journal starts when it is to be on a
-separate device. Default is 0. Makes no effect when journal is to be
-on a host device
+\fIN\fR is the offset where the journal starts when it is to be on a separate
+device. Default is 0. \fIN\fR has no effect when the journal is to be on the
+host device.
 .TP
 \fB-s\fR | \fB--journal-size \fIN
-\fIN\fR is size of journal in blocks. When journal is to be on a
-separate device - its size defaults to number of blocks that device
-has. When journal is to be on a host device - its size defaults 8193
-and maximal possible value is 32749 (for blocksize 4k). Minimun is 513
-for both cases.
+\fIN\fR is the size of the journal in blocks. When the journal is to be on a
+separate device, its size defaults to the number of blocks that the device has.
+When journal is to be on the host device, its size defaults to 8193 and the
+maximal possible size is 32749 (for blocksize 4k). The minimum size is 513 blocks
+(whether the journal is on the host or on a separate device).
 .TP
 \fB-t\fR | \fB--transaction-max-size \fIN
 \fIN\fR is the maximum transaction size parameter for the journal. The
 default, and max possible, value is 1024 blocks. It should be less
-than half the size of the journal. If specifed incorrectly, it will be
-adjusted.
+than half the size of the journal. If specified incorrectly, it will automatically 
+be adjusted.
 .TP
 \fB-B\fR | \fB--badblocks \fIfile
-\fIFile\fR is the file name of the file that contains the list of blocks 
-to be marked as bad on the filesystem. This list can be created by
+\fIFile\fR is the file name of the file that contains the list of blocks to be 
+marked as bad on the filesystem. This list can be created by
 \fB/sbin/badblocks -b block-size device\fR.
 .TP
 \fB-f\fR
-This forces \fBmkreiserfs\fR to continue even if device is either whole
-disk, or looks mounted or is not a block device. Specified more than
-once allows to avoid asking for confirmation.
+Forces \fBmkreiserfs\fR to continue even when the device is the whole disk, 
+looks mounted, or is not a block device. If \fB-f\fR is specified more than
+once, it allows the user to avoid asking for confirmation.
 .TP
 \fB-d\fR
-This makes \fBmkreiserfs\fR to print debugging information during \fBmkreiserfs\fR.
+Sets \fBmkreiserfs\fR to print debugging information during \fBmkreiserfs\fR.
 .TP
 \fB-V\fR
-This prints version and exits.
+Prints the version and then exits.
 
 .SH AUTHOR
 This version of
 .B mkreiserfs
 has been written by Edward Shishkin <edward@namesys.com>.
 .SH BUGS
-No other blocksizes but 4k are available.
-Please, report about other bugs to 
-the ReiserFS mail-list <reiserfs-list@namesys.com>
+Please report bugs to the ReiserFS developers <reiserfs-dev@namesys.com>, providing 
+as much information as possible--your hardware, kernel, patches, settings, all printed
+messages; check the syslog file for any related information.
 .SH SEE ALSO
 .BR reiserfsck (8),
 .BR debugreiserfs (8),

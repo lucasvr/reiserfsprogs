@@ -6,16 +6,6 @@
 #include "includes.h"
 
 
-/* this is one and only function that is used outside (do_balance.c) */
-int	balance_internal (
-    /*struct reiserfs_transaction_handle *th,*/
-			  struct tree_balance * ,
-			  int,
-			  int,
-			  struct item_head * ,
-			  struct buffer_head ** 
-			  );
-
 /* modes of internal_shift_left, internal_shift_right and internal_insert_childs */
 #define INTERNAL_SHIFT_FROM_S_TO_L 0
 #define INTERNAL_SHIFT_FROM_R_TO_S 1

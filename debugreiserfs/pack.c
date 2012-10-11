@@ -114,7 +114,7 @@ static void pack_direct (struct packed_item * pi, struct buffer_head * bh,
         set_pi_mask (pi, get_pi_mask (pi) | IH_FREE_SPACE);
 
     if (get_pi_mask(pi) & SAFE_LINK)
-	set_key_dirid(&ih->ih_key, le32_to_cpu(*(__u32 *)B_I_PITEM (bh, ih)) );
+	set_key_dirid(&ih->ih_key, d32_get((__u32 *)B_I_PITEM (bh, ih), 0) );
 
     /* send key components which are to be sent */
     pack_ih (pi, ih);
@@ -127,8 +127,9 @@ static int should_pack_indirect (__u32 * ind_item, int unfm_num)
     int i, len;
 
     for (i = 1, len = 1; i < unfm_num; i ++) {
-	if ((ind_item [i] == 0 && ind_item [i - 1] == 0) || /* hole continues */
-	    le32_to_cpu (ind_item [i]) == le32_to_cpu (ind_item [i - 1]) + 1) { /* subsequent blocks */
+	if ((d32_get(ind_item, i) == 0 && d32_get(ind_item, i - 1) == 0) ||
+	    d32_get(ind_item, i) == d32_get(ind_item, i - 1) + 1) 
+	{
 	    len ++;
 	    if (len > 2)
 		return 1;
@@ -161,7 +162,7 @@ static void pack_indirect (struct packed_item * pi, struct buffer_head * bh,
 
 
     if (get_pi_mask(pi) & SAFE_LINK)
-	set_key_dirid(&ih->ih_key, le32_to_cpu(*ind_item) );
+	set_key_dirid(&ih->ih_key, d32_get(ind_item, 0));
 
     pack_ih (pi, ih);
 
@@ -177,12 +178,13 @@ static void pack_indirect (struct packed_item * pi, struct buffer_head * bh,
     fwrite32 (&ind_item [0]);
 
     for (i = 1, len = 1; i < I_UNFM_NUM (ih); i ++) {
-	if ((ind_item [i] == 0 && ind_item [i - 1] == 0)  || /* hole continues */
-	    ind_item [i] == ind_item[ i - 1] + 1) { /* subsequent blocks */
+	if ((d32_get(ind_item, i) == 0 && d32_get(ind_item, i - 1) == 0)  || 
+	    d32_get(ind_item, i) == d32_get(ind_item, i - 1) + 1) 
+	{
 	    len ++;
 	} else {
 	    fwrite_le16 (&len);
-	    fwrite32 (&ind_item[i]);
+	    fwrite32 ((char *)(ind_item + i));
 	    len = 1;
 	}
     }

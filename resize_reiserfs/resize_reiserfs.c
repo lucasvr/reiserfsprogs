@@ -10,6 +10,8 @@
  *
  */
 
+#define _GNU_SOURCE
+
 #include "resize.h"
 #include <limits.h>
 

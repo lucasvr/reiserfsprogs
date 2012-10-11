@@ -3,6 +3,8 @@
  *  reiserfsprogs/README
  */
 
+#define _GNU_SOURCE
+
 #include "includes.h"
 #include <linux/kdev_t.h>
 
@@ -63,7 +65,11 @@ reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int *error, void 
     if (error) 
 	*error = 0;
 
-    fd = open (filename, flags | O_LARGEFILE);
+    fd = open (filename, flags 
+#if defined(O_LARGEFILE)
+	       | O_LARGEFILE
+#endif
+	       );
     if (fd == -1) {
 	if (error)
 	    *error = errno;
@@ -199,7 +205,11 @@ reiserfs_filsys_t * reiserfs_create (char * filename,
 	return 0;
     }
 
-    fs->fs_dev = open (filename, O_RDWR | O_LARGEFILE);
+    fs->fs_dev = open (filename, O_RDWR 
+#if defined(O_LARGEFILE)
+		       | O_LARGEFILE
+#endif
+		       );
     if (fs->fs_dev == -1) {
 	reiserfs_warning (stderr, "reiserfs_create: could not open %s: %s\n",
 			  filename, strerror(errno));
@@ -322,7 +332,11 @@ static void reiserfs_only_reopen (reiserfs_filsys_t * fs, int flag)
     if (close (fs->fs_dev))
 	die ("reiserfs_reopen: closed failed: %s", strerror(errno));
     
-    fs->fs_dev = open (fs->fs_file_name, flag | O_LARGEFILE);
+    fs->fs_dev = open (fs->fs_file_name, flag 
+#if defined(O_LARGEFILE)
+		       | O_LARGEFILE
+#endif
+		       );
     if (fs->fs_dev == -1)
 	die ("reiserfs_reopen: could not reopen device: %s", strerror(errno));
 
@@ -412,18 +426,6 @@ int reiserfs_free_block (reiserfs_filsys_t * fs, unsigned long block)
     die ("block deallocator is not defined\n");
     return 0;
 }
-
-/*
-inline int reiserfs_bin_search (void * key, void * base, int num, int width,
-			 int *ppos, comparison_fn_t comp_func) {
-    __u32 position = *ppos;
-    int retval;
-
-    retval = reiserfs_bin_search (key, base, num, width, &position, comp_func);
-    *ppos = position;
-    return retval;
-}
-*/
 
 static int reiserfs_search_by_key_x (reiserfs_filsys_t * fs, struct key * key,
 				     struct path * path, int key_length)
@@ -572,16 +574,14 @@ int usearch_by_position (reiserfs_filsys_t * s, struct key * key,
 
 static int comp_dir_entries (const void * p1, const void * p2)
 {
-    __u32 deh_offset;
-    const __u32 * off1, * off2;
+    __u32 off1, off2;
 
-    off1 = p1;
-    off2 = p2;
-    deh_offset = le32_to_cpu (*off1);
-
-    if (deh_offset < *off2)
+    off1 = d32_get((__u32 *)p1, 0);
+    off2 = *(__u32 *)p2;
+    
+    if (off1 < off2)
 	return -1;
-    if (deh_offset > *off2)
+    if (off1 > off2)
 	return 1;
     return 0;
 }
@@ -1211,8 +1211,8 @@ int can_we_format_it (char * device_name, int force)
 	reiserfs_warning (stderr, "%s is not a block special device\n", device_name);
 	check_forcing_ask_confirmation (force);
     } else {
-	if ((IDE_DISK_MAJOR (MAJOR(rdev)) && MINOR(rdev) % 64 == 0) ||
-	    (SCSI_BLK_MAJOR (MAJOR(rdev)) && MINOR(rdev) % 16 == 0)) {
+	if ((IDE_DISK_MAJOR (major(rdev)) && minor(rdev) % 64 == 0) ||
+	    (SCSI_BLK_MAJOR (major(rdev)) && minor(rdev) % 16 == 0)) {
 	    /* /dev/hda or similar */
 	    reiserfs_warning (stderr, "%s is entire device, not just one partition!\n",
 		    device_name);
@@ -1351,9 +1351,9 @@ void mark_badblock(reiserfs_filsys_t *fs,
 	tmp_ih = get_ih(badblock_path);
 	ind_item = (__u32 *)get_item(badblock_path);
 
-	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++, ind_item++) {
+	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++) {
 		reiserfs_bitmap_set_bit(fs->fs_badblocks_bm, 
-					le32_to_cpu(*ind_item));
+					d32_get(ind_item, i));
 	}
 	
 	pathrelse (badblock_path);

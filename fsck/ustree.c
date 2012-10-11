@@ -5,23 +5,6 @@
 
 #include "fsck.h"
 
-
-/* key1 and key2 are pointer to deh_offset of the struct reiserfs_de_head */
-int comp_dir_entries (void * key1, void * key2)
-{
-    __u32 off1, off2;
-
-    off1 = le32_to_cpu (*(__u32 *)key1);
-    off2 = le32_to_cpu (*(__u32 *)key2);
-
-    if (off1 < off2)
-	return -1;
-    if (off1 > off2)
-	return 1;
-    return 0;
-}
-
-
 struct tree_balance * cur_tb = 0;
 
 void reiserfsck_paste_into_item (struct path * path, const char * body, int size)
@@ -54,19 +37,21 @@ static void free_unformatted_nodes (struct item_head * ih, struct buffer_head * 
     __u32 * punfm = (__u32 *)B_I_PITEM (bh, ih);
     unsigned int i;
 
-    for (i = 0; i < I_UNFM_NUM (ih); i ++, punfm ++)
-	if (*punfm != 0) {
+    for (i = 0; i < I_UNFM_NUM (ih); i ++) {
+        __u32 unfm = d32_get (punfm, i);
+	if (unfm != 0) {
 	    struct buffer_head * to_be_forgotten;
 
-	    to_be_forgotten = find_buffer (fs->fs_dev, le32_to_cpu (*punfm), fs->fs_blocksize);
+	    to_be_forgotten = find_buffer (fs->fs_dev, unfm, fs->fs_blocksize);
 	    if (to_be_forgotten) {
 		//atomic_inc(&to_be_forgotten->b_count);
 		to_be_forgotten->b_count ++;
 		bforget (to_be_forgotten);
 	    }
 
-	    reiserfs_free_block (fs, le32_to_cpu (*punfm));
+	    reiserfs_free_block (fs, unfm);
 	}
+    }
 }
 
 void reiserfsck_delete_item (struct path * path, int temporary)
@@ -95,17 +80,18 @@ void reiserfsck_cut_from_item (struct path * path, int cut_size)
 	die ("reiserfsck_cut_from_item: cut size == %d", cut_size);
 
     if (is_indirect_ih (ih = PATH_PITEM_HEAD (path))) {
-	__u32 unfm_ptr = B_I_POS_UNFM_POINTER (PATH_PLAST_BUFFER (path), ih, I_UNFM_NUM (ih) - 1);
+	struct buffer_head *bh = PATH_PLAST_BUFFER (path);
+	__u32 unfm_ptr = d32_get ((__u32 *)B_I_PITEM(bh, ih), I_UNFM_NUM (ih) - 1);
 	if (unfm_ptr != 0) {
 	    struct buffer_head * to_be_forgotten;
 
-	    to_be_forgotten = find_buffer (fs->fs_dev, le32_to_cpu (unfm_ptr), fs->fs_blocksize);
+	    to_be_forgotten = find_buffer (fs->fs_dev, unfm_ptr, fs->fs_blocksize);
 	    if (to_be_forgotten) {
 		//atomic_inc(&to_be_forgotten->b_count);
 		to_be_forgotten->b_count ++;
 		bforget (to_be_forgotten);
 	    }
-	    reiserfs_free_block (fs, le32_to_cpu (unfm_ptr));
+	    reiserfs_free_block (fs, unfm_ptr);
 	}
     }
 

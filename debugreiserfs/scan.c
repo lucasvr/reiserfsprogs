@@ -51,7 +51,7 @@ struct saved_name {
 
 /* attach item to every name in the list */
 static void store_item (struct saved_name * name, struct buffer_head * bh,
-			struct item_head * ih)
+			struct item_head * ih, int pos)
 {
     struct saved_item * new;
     void * vp;
@@ -62,6 +62,7 @@ static void store_item (struct saved_name * name, struct buffer_head * bh,
     new->si_block = bh->b_blocknr;
     new->si_item_num = ih - B_N_PITEM_HEAD (bh, 0);
     new->si_next = 0;
+    new->si_entry_pos = pos;
     
     vp = tfind (new, &name->items, comp_keys);
     if (vp) {
@@ -122,8 +123,10 @@ static int name_found (struct saved_name * name, struct saved_name ** name_in)
     cur = *name_in;
     while (cur) {
 	if (!not_of_one_file (&name->dirid, &cur->dirid) &&
-	    !not_of_one_file (&name->parent_dirid, &cur->parent_dirid)) {
+	    !not_of_one_file (&name->parent_dirid, &cur->parent_dirid)) 
+	{
 	    cur->count ++;
+	    *name_in = cur;
 	    return 1;
 	}
 	cur = cur->name_next;
@@ -251,12 +254,86 @@ static void scan_for_name (struct buffer_head * bh)
     return;
 }
 
+static struct saved_name *scan_for_key(struct key *key) {
+	char *name;
+	struct saved_name * new, *name_in;
+
+	asprintf (&name, "%u_%u", get_key_dirid (key), get_key_objectid (key));
+	new = obstack_alloc (&name_store, sizeof (struct saved_name) + strlen(name));
+
+	/* pointed object */
+	new->dirid = get_key_dirid (key);
+	new->objectid = get_key_objectid (key);
+
+	/* pointer to first name which points the same key */
+	new->first_name = 0;
+
+	/* where this name is from */
+
+	new->parent_dirid = 0;
+	new->parent_objectid = 0;
+	new->block = 0;
+	new->count = 1;
+	new->items = 0;
+
+	/* name */
+	new->name_len = strlen(name);
+	memcpy (new->name, name, new->name_len);
+	new->name [new->name_len] = 0;
+	new->name_next = 0;
+
+	free(name);
+	
+	if (name_found (new, &name_in)) {
+		/* there was already exactly this name */
+		obstack_free (&name_store, new);
+		return name_in;
+	}
+
+	saved_names ++;
+	add_name (new, name_in);
+
+	return new;
+}
+
+static int comp_token_key(struct buffer_head *bh, struct item_head *ih, struct key *key) {
+    struct reiserfs_de_head * deh;
+    int j, ih_entry_count = 0;
+    int min_entry_size = 1;
+    
+    if ((get_key_dirid(&ih->ih_key) == get_key_dirid(key) || 
+	 get_key_dirid(key) == ~(__u32)0) &&
+	(get_key_objectid(&ih->ih_key) == get_key_objectid(key) || 
+	 get_key_objectid(key) == ~(__u32)0))
+	return -1;
+
+    if (!is_direntry_ih (ih))
+	return 0;
+	
+    deh = B_I_DEH (bh, ih);
+
+    if ( (get_ih_entry_count (ih) > (get_ih_item_len(ih) / (DEH_SIZE + min_entry_size))) ||
+	 (get_ih_entry_count (ih) == 0))
+	 ih_entry_count = get_ih_item_len(ih) / (DEH_SIZE + min_entry_size);
+    else 
+	 ih_entry_count = get_ih_entry_count (ih);
+
+	
+    for (j = 0; j < ih_entry_count; j ++, deh ++) {
+	if ((get_deh_dirid (deh) == get_key_dirid (key) || (int)get_key_dirid (key) == -1) &&
+	    (get_deh_objectid (deh) == get_key_objectid (key) || (int)get_key_objectid (key) == -1)) 
+	{
+	    return j;
+	}
+    }
+
+    return 0;
+}
 
 /* take every item, look for its key in the key index, if it is found - store
    item in the sorted list of items of a file */
-static void scan_items (struct buffer_head * bh)
-{
-    int i, i_num;
+static void scan_items (struct buffer_head * bh, struct key *key) {
+    int i, i_num, pos;
     struct item_head * ih;
     struct saved_name * name_in_store;
     void * res;
@@ -265,15 +342,21 @@ static void scan_items (struct buffer_head * bh)
     ih = B_N_PITEM_HEAD (bh, 0);
     i_num = leaf_item_number_estimate(bh);
     for (i = 0; i < i_num; i ++, ih ++) {
-	res = tfind (&ih->ih_key, &key_index, comp_pointed);
-	if (!res)
-	    /* there were no names pointing to this key */
-	    continue;
+	if (key) {
+	    if (!(pos = comp_token_key(bh, ih, key)))
+		    continue;
 
-	/* name pointing to this key found */
-	name_in_store = *(struct saved_name **)res;
+	    name_in_store = scan_for_key(&ih->ih_key);
+	} else {
+	    if (!(res = tfind (&ih->ih_key, &key_index, comp_pointed)))
+		continue;
 
-	store_item (name_in_store, bh, ih);
+	    /* name pointing to this key found */
+	    name_in_store = *(struct saved_name **)res;
+	    pos = -1;
+	}
+
+	store_item (name_in_store, bh, ih, pos);
     }
 }
 
@@ -674,7 +757,21 @@ static void save_items(const void *nodep, VISIT value, int level) {
     item = *(struct saved_item **)nodep;
 
     while (item) {
-	fwrite(item, sizeof(struct saved_item) - sizeof(struct saved_item *), 1, fp);
+	if (fp) {
+	    fwrite(item, sizeof(struct saved_item) - sizeof(struct saved_item *), 1, fp);
+	} else {
+	    if (is_direntry_ih (&item->si_ih) && item->si_entry_pos != -1) {
+		reiserfs_warning(log_to, "block %lu, item %d (%H): entry %d\n",
+				 item->si_block, item->si_item_num, 
+				 &item->si_ih, item->si_entry_pos);
+	    } else {
+		reiserfs_warning(log_to, "block %lu, item %d belongs to file %K: %H\n",
+				 item->si_block, item->si_item_num, &item->si_ih.ih_key,
+				 &item->si_ih);
+
+	    } 
+	}
+	
 	item = item->si_next;
     }
 }
@@ -688,23 +785,27 @@ static void make_map(const void *nodep, VISIT value, int level) {
     
     if (value == leaf || value == postorder) {
 	while (name) {
-	    asprintf(&file_name, "%s.%d", map_file(fs), ++nr);
-	    reiserfs_warning (log_to, "%d - (%d): [%K]:\"%s\": stored in the %s\n", 
-		nr, name->count, &name->parent_dirid, name->name, file_name);
-	    
-	    if (fp == 0) {
-		fp = fopen (file_name, "w+");
-		if (!fp)
-		    reiserfs_panic ("could open %s: %m", file_name);
+	    if (map_file(fs)) {
+		asprintf(&file_name, "%s.%d", map_file(fs), ++nr);
+		reiserfs_warning (log_to, "%d - (%d): [%K]:\"%s\": stored in the %s\n", 
+				  nr, name->count, &name->parent_dirid, name->name, file_name);
+
+		if (fp == 0) {
+		    fp = fopen (file_name, "w+");
+		    if (!fp)
+			reiserfs_panic ("could open %s: %m", file_name);
+		}
 	    }
-	    
+
 	    if (name->items) 
 		twalk (name->items, save_items);
 
 	    name = name->name_next;
-	    fclose(fp);
-	    fp = NULL;
-	    free(file_name);
+	    if (fp) {
+		fclose(fp);
+		fp = NULL;
+		free(file_name);
+	    }
 	}
     }
 }
@@ -807,6 +908,7 @@ static void look_for_name (reiserfs_filsys_t * fs)
     }
 }
 
+#if 0
 static void scan_for_key (struct buffer_head * bh, struct key * key)
 {
     int i, j, i_num;
@@ -849,8 +951,7 @@ static void scan_for_key (struct buffer_head * bh, struct key * key)
     }
     return;
 }
-
-
+#endif
 
 void do_scan (reiserfs_filsys_t * fs)
 {
@@ -900,48 +1001,24 @@ void do_scan (reiserfs_filsys_t * fs)
 	reiserfs_warning (stderr, "looking for (%K)\n", &key);
     }
 
-    done = 0;
-    for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
-	if (!reiserfs_bitmap_test_bit (input_bitmap (fs), i))
-	    continue;
-	bh = bread (fs->fs_dev, i, fs->fs_blocksize);
-	if (!bh) {
-	    printf ("could not read block %lu\n", i);
-	    continue;
-	}
-	type = who_is_this (bh->b_data, bh->b_size);
-	switch (type) {
-	case THE_JDESC:
-	    if (!get_key_dirid (&key))
-		printf ("block %lu is journal descriptor\n", i);
-	    reiserfs_bitmap_clear_bit (input_bitmap (fs), i);
-	    break;
-	case THE_SUPER:
-	    if (!get_key_dirid (&key))
-		printf ("block %lu is reiserfs super block\n", i);
-	    reiserfs_bitmap_clear_bit (input_bitmap (fs), i);
-	    break;
-	case THE_INTERNAL:
-	    if (!get_key_dirid (&key))
-		printf ("block %lu is reiserfs internal node\n", i);
-	    reiserfs_bitmap_clear_bit (input_bitmap (fs), i);
-	    break;
-	case THE_LEAF:
-	case HAS_IH_ARRAY:
-	    if (debug_mode (fs) == DO_SCAN_FOR_NAME) {
-		scan_for_name (bh);
-	    } else if (get_key_dirid (&key)) {
-		scan_for_key (bh, &key);
-	    } else {
-		printf ("block %lu is reiserfs leaf node\n", i);
+    if (debug_mode (fs) == DO_SCAN_FOR_NAME) {
+	done = 0;
+	for (i = 0; i < get_sb_block_count (fs->fs_ondisk_sb); i ++) {
+	    if (!reiserfs_bitmap_test_bit (input_bitmap (fs), i))
+		continue;
+	    bh = bread (fs->fs_dev, i, fs->fs_blocksize);
+	    if (!bh) {
+		printf ("could not read block %lu\n", i);
+		continue;
 	    }
-	    break;
-	default:
-	    reiserfs_bitmap_clear_bit (input_bitmap (fs), i);
-	    break;
+	    type = who_is_this (bh->b_data, bh->b_size);
+	    if (type == THE_LEAF || type == HAS_IH_ARRAY)
+		scan_for_name (bh);
+	    else
+		reiserfs_bitmap_clear_bit (input_bitmap (fs), i);
+	    brelse (bh);
+	    print_how_far (stderr, &done, total, 1, be_quiet (fs));
 	}
-	brelse (bh);
-	print_how_far (stderr, &done, total, 1, be_quiet (fs));
     }
 
     fprintf (stderr, "\n");
@@ -950,9 +1027,6 @@ void do_scan (reiserfs_filsys_t * fs)
             saved_names, name_pattern (fs), skipped_names);
     fflush (stderr);
 
-
-    if (debug_mode (fs) != DO_SCAN_FOR_NAME)
-	return;
 
     /* step 2: */
     done = 0;
@@ -969,13 +1043,27 @@ void do_scan (reiserfs_filsys_t * fs)
 	    continue;
 	}
 	type = who_is_this (bh->b_data, bh->b_size);
-	if (type != THE_LEAF && type != HAS_IH_ARRAY) {
-	    brelse (bh);
-	    continue;
+	switch (type) {
+	case THE_JDESC:
+	    if (!get_key_dirid (&key))
+		printf ("block %lu is journal descriptor\n", i);
+	    break;
+	case THE_SUPER:
+	    if (!get_key_dirid (&key))
+		printf ("block %lu is reiserfs super block\n", i);
+	    break;
+	case THE_INTERNAL:
+	    if (!get_key_dirid (&key))
+		printf ("block %lu is reiserfs internal node\n", i);
+	    break;
+	case THE_LEAF:
+	case HAS_IH_ARRAY:
+	    scan_items (bh, (debug_mode (fs) == DO_SCAN_FOR_NAME ? NULL : &key));
+	    break;
+	default:
+	    break;
 	}
 
-	scan_items (bh);
-	
 	brelse (bh);
 	print_how_far (stderr, &done, total, 1, be_quiet (fs));
     }

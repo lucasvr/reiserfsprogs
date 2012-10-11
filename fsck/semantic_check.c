@@ -398,6 +398,7 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
     /* It seems quite difficult to relocate objects on fix-fixable - 
      * rewrite_file calls reiserfs_file_write which can convert tails 
      * to unfm, plus unreachable, was_tail flags, etc. */
+#if 0
     if ((/* relocate = */ should_be_relocated(&ih->ih_key))) {
 	/*
 	if (fsck_mode(fs) == FSCK_CHECK)
@@ -405,6 +406,7 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 	*/
 	one_more_corruption(fs, FATAL);
     }
+#endif
 
     if (fix_obviously_wrong_sd_mode (&path)) {
         one_more_corruption (fs, FIXABLE);
@@ -699,7 +701,7 @@ int check_safe_links ()
 	    reiserfs_panic ("Safe Link %k cannot be of the size %d", 
 		&tmp_ih->ih_key, get_ih_item_len (tmp_ih));
 	
-	set_key_dirid(&key, le32_to_cpu(*(__u32 *)get_item(&safe_link_path)));
+	set_key_dirid(&key, d32_get((__u32 *)get_item(&safe_link_path), 0));
 	set_key_objectid(&key, get_key_objectid(&tmp_ih->ih_key));
 	if ((rkey = reiserfs_next_key(&safe_link_path)) == NULL)
 	    set_key_dirid (&safe_link_key, 0);
@@ -715,7 +717,7 @@ int check_safe_links ()
 	    } else if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
 		fsck_log ("Invalid safe link %k: cannot find the pointed object (%K) - "
 		    "safe link was deleted\n", &tmp_ih->ih_key, &key);
-		*(__u32 *)get_item(&safe_link_path) = (__u32)0;
+		d32_put((__u32 *)get_item(&safe_link_path), 0, 0);
 		pathrelse (&path);
 		reiserfsck_delete_item (&safe_link_path, 0);		
 		continue;
@@ -732,7 +734,7 @@ int check_safe_links ()
 		} else if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
 		    fsck_log ("Invalid 'truncate' safe link %k, cannot happen for "
 			"a directory (%K) - safe link was deleted\n", &tmp_ih->ih_key, &key);
-		    *(__u32 *)get_item(&safe_link_path) = (__u32)0;
+		    d32_put((__u32 *)get_item(&safe_link_path), 0, 0);
 		    pathrelse (&path);
 		    reiserfsck_delete_item (&safe_link_path, 0);		
 		    continue;

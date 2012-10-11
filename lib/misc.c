@@ -3,17 +3,14 @@
  * reiserfsprogs/README
  */
 
-/* for stat64() */
-#define _FILE_OFFSET_BITS 64
-
-/* for getline() proto and _LARGEFILE64_SOURCE */
 #define _GNU_SOURCE
+
+#include "misc.h"
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
-#include <asm/types.h>
-#include <stdlib.h>
 #include <mntent.h>
 #include <sys/vfs.h>
 #include <time.h>
@@ -23,7 +20,9 @@
 #include <dirent.h>
 #include <assert.h>
 
-#include "misc.h"
+#include <sys/ioctl.h>
+#include <signal.h>
+
 
 /* Debian modifications by Ed Boraas <ed@debian.org> */
 #include <sys/mount.h>
@@ -42,8 +41,8 @@ inline Type misc_device_##Field(char *device) {				\
 
 STAT_FIELD(mode, mode_t);
 STAT_FIELD(rdev, dev_t);
-STAT_FIELD(size, off64_t);
-STAT_FIELD(blocks, blkcnt64_t);
+STAT_FIELD(size, off_t);
+STAT_FIELD(blocks, blkcnt_t);
 
 void die (char * fmt, ...)
 {
@@ -185,19 +184,21 @@ typedef int (*func_t) (char *);
    not correct. */
 static struct mntent *misc_mntent_lookup(char *mntfile, 
 					 char *file, 
-					 int fsname) 
+					 int path) 
 {
 	struct mntent *mnt;
+	int name_match = 0;
 	struct stat st;
 	dev_t rdev = 0;
 	dev_t dev = 0;
 	ino_t ino = 0;
+	char *name;
 	FILE *fp;
-
+	
 	assert(mntfile != NULL);
 	assert(file != NULL);
 
-	if (fsname && stat(file, &st) == 0) {
+	if (stat(file, &st) == 0) {
 		/* Devices is stated. */
 		if (S_ISBLK(st.st_mode)) {
 			rdev = st.st_rdev;
@@ -212,26 +213,44 @@ static struct mntent *misc_mntent_lookup(char *mntfile,
 
 	while ((mnt = getmntent(fp)) != NULL) {
 		/* Check if names match. */
-		if (fsname) {
-			if (strcmp(file, mnt->mnt_fsname) == 0)
-				break;
-		} else {
-			if (strcmp(file, mnt->mnt_dir) == 0)
-				break;
+		name = path ? mnt->mnt_dir : mnt->mnt_fsname;
+		
+		if (strcmp(file, name) == 0)
+			name_match = 1;
 
+		if (stat(name, &st))
 			continue;
+		
+		/* If names do not match, check if stats match. */
+		if (!name_match) {
+			if (rdev && S_ISBLK(st.st_mode)) {
+				if (rdev != st.st_rdev)
+					continue;
+			} else if (dev && !S_ISBLK(st.st_mode)) {
+				if (dev != st.st_dev ||
+				    ino != st.st_ino)
+					continue;
+			} else {
+				continue;
+			}
 		}
 
-		/* Check if stats match. */
-		if (stat(mnt->mnt_fsname, &st) == 0) {
-			if (rdev && S_ISBLK(st.st_mode)) {
-				if (rdev == st.st_rdev)
-					break;
-			} else {
-				if (dev == st.st_dev &&
-				    ino == st.st_ino)
-					break;
-			}
+		/* If not path and not block device do not check anything more. */
+		if (!path && !rdev) 
+			break;
+
+		if (path) {
+			/* Either names or stats match. Make sure the st_dev of 
+			   the path is same as @mnt_fsname device rdev. */
+			if (stat(mnt->mnt_fsname, &st) == 0 && 
+			    dev == st.st_rdev)
+				break;
+		} else {
+			/* Either names or stats match. Make sure the st_dev of 
+			   the mount entry is same as the given device rdev. */
+			if (stat(mnt->mnt_dir, &st) == 0 && 
+			    rdev == st.st_dev)
+				break;
 		}
 	}
 
@@ -288,10 +307,10 @@ struct mntent *misc_mntent(char *device) {
 			   case as root entry can present as:
 				rootfs / rootfs rw 0 0
 			   Look up the mount point in this case. */
-			mnt = misc_mntent_lookup("/proc/mounts", "/", 0);
+			mnt = misc_mntent_lookup("/proc/mounts", "/", 1);
 		} else {
 			/* Lookup the @device /proc/mounts */
-			mnt = misc_mntent_lookup("/proc/mounts", device, 1);
+			mnt = misc_mntent_lookup("/proc/mounts", device, 0);
 		}
 		
 		if (mnt == INVAL_PTR) 
@@ -311,9 +330,9 @@ struct mntent *misc_mntent(char *device) {
 		path = 1;
 
 		if (root) {
-			mnt = misc_mntent_lookup(MOUNTED, "/", 0);
+			mnt = misc_mntent_lookup(MOUNTED, "/", 1);
 		} else {
-			mnt = misc_mntent_lookup(MOUNTED, device, 1);
+			mnt = misc_mntent_lookup(MOUNTED, device, 0);
 		}
 
 		if (mnt == INVAL_PTR) 
@@ -455,7 +474,7 @@ int valid_offset( int fd, loff_t offset) {
     loff_t res;
 
     /*res = reiserfs_llseek (fd, offset, 0);*/
-    res = lseek64 (fd, offset, SEEK_SET);
+    res = lseek (fd, offset, SEEK_SET);
     if (res < 0)
 	return 0;
 
@@ -657,16 +676,16 @@ void blocklist__insert_in_position (void *elem, void **base, __u32 *count,
 /* 1 - xt drive                                   */
 /* 2 - ide drive */
 static void get_dma_support(dma_info_t *dma_info){
-    if (S_ISREG(dma_info->stat.st_mode))
-	dma_info->stat.st_rdev = dma_info->stat.st_dev;
+    if (S_ISREG(dma_info->st.st_mode))
+	dma_info->st.st_rdev = dma_info->st.st_dev;
 
-    if (IDE_DISK_MAJOR(MAJOR(dma_info->stat.st_rdev))) {
+    if (IDE_DISK_MAJOR(major(dma_info->st.st_rdev))) {
         dma_info->support_type = 2;
 	return;
     }
     
 #ifdef XT_DISK_MAJOR
-    if (MAJOR(dma_info->stat.st_rdev) == XT_DISK_MAJOR) {
+    if (major(dma_info->st.st_rdev) == XT_DISK_MAJOR) {
 	dma_info->support_type = 1;
 	return;
     }
@@ -680,10 +699,11 @@ static void get_dma_support(dma_info_t *dma_info){
  * 1 - preparation cannot be done 
  * -1 - preparation failed
  */
+
 int prepare_dma_check(dma_info_t *dma_info) {
     DIR *dir;
     struct dirent *dirent;
-    struct stat64 stat;    
+    struct stat st;
     dev_t rdev;
     int rem;
     char buf[256];
@@ -692,8 +712,8 @@ int prepare_dma_check(dma_info_t *dma_info) {
         return -1;
 #endif
 	
-    if (fstat64(dma_info->fd, &dma_info->stat))
-	die("stat64 on device failed\n");
+    if (fstat(dma_info->fd, &dma_info->st))
+	die("stat on device failed\n");
    
     get_dma_support(dma_info);
    
@@ -702,9 +722,9 @@ int prepare_dma_check(dma_info_t *dma_info) {
 	return 1;
     
     if (dma_info->support_type == 2) {
-	rdev = dma_info->stat.st_rdev;
+	rdev = dma_info->st.st_rdev;
 
-	if ((rem = (MINOR(rdev) % 64)) != 0) {
+	if ((rem = (minor(rdev) % 64)) != 0) {
 	    rdev -= rem;
 	    if(!(dir = opendir("/dev/"))) {
 		dma_info->support_type = 1;
@@ -717,12 +737,18 @@ int prepare_dma_check(dma_info_t *dma_info) {
 		memset(buf, 0, 256);
 		strncat(buf, "/dev/", 5);
 		strncat(buf, dirent->d_name, strlen(dirent->d_name));
-		if (stat64(buf, &stat)) 
-		    break; 
-		if (S_ISBLK(stat.st_mode) && stat.st_rdev == rdev) 
+		
+		if (stat(buf, &st))
+		    break;
+		
+		if (S_ISBLK(st.st_mode) && st.st_rdev == rdev) 
 		{
-		    dma_info->stat = stat;
-		    dma_info->fd = open(buf, O_RDONLY | O_LARGEFILE);
+		    dma_info->st = st;
+		    dma_info->fd = open(buf, O_RDONLY
+#if defined(O_LARGEFILE)
+					| O_LARGEFILE
+#endif
+					);
 		    closedir(dir);
 		    return 0;
 		}

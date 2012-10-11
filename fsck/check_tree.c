@@ -5,6 +5,7 @@
 
 #include "fsck.h"
 
+#if 0
 struct check_relocated {
     __u32 old_dir_id;
     __u32 old_objectid;
@@ -81,6 +82,8 @@ void clear_relocated_list() {
         relocated_list = next;
     }
 }
+
+#endif
 
 //
 //
@@ -351,12 +354,11 @@ static int bad_stat_data (reiserfs_filsys_t * fs,
 
     if (id_map_mark(proper_id_map (fs), objectid)) {
 	fsck_log ("bad_stat_data: The objectid (%lu) is shared by at least two "
-		  "files\n", objectid);
-	
-	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) 
-            to_be_relocated (&ih->ih_key);
-	    
+		  "files. Can be fixed with --rebuild-tree only.\n", objectid);
+#if 0
+	to_be_relocated (&ih->ih_key);
 //	one_more_corruption (fs, FIXABLE);	
+#endif
     }
 
     return 0;
@@ -392,11 +394,11 @@ static int bad_direct_item (reiserfs_filsys_t * fs,
 
 inline void handle_one_pointer (reiserfs_filsys_t * fs, 
 				struct buffer_head * bh,
-				__u32 * ptr) 
+				__u32 * item, int offset)
 {
     if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 	fsck_log (" - zeroed");
-	*ptr = 0;
+	d32_put (item, offset, 0);
 	mark_buffer_dirty (bh);
     } else {
 	one_more_corruption (fs, FIXABLE);
@@ -421,7 +423,7 @@ static int bad_badblocks_item (reiserfs_filsys_t * fs, struct buffer_head * bh,
 	    return 0;
     
     for (i = 0; i < I_UNFM_NUM (ih); i ++) {
-	if (!le32_to_cpu (ind [i])) {
+	if (!d32_get (ind, i)) {
 /*	    fsck_log ("%s: block %lu: badblocks item (%H) has zero pointer.",
 		      __FUNCTION__, bh->b_blocknr, ih);
 	    
@@ -435,14 +437,14 @@ static int bad_badblocks_item (reiserfs_filsys_t * fs, struct buffer_head * bh,
 	}
 
 	/* check list of badblocks pointers */
-	if (le32_to_cpu (ind [i]) >= get_sb_block_count (fs->fs_ondisk_sb)) {
+	if (d32_get (ind, i) >= get_sb_block_count (fs->fs_ondisk_sb)) {
 	    fsck_log ("%s: badblock pointer (block %lu) points out of disk spase (%lu)",
-			__FUNCTION__, bh->b_blocknr, le32_to_cpu (ind [i]));
-	    handle_one_pointer (fs, bh, &ind[i]);
+			__FUNCTION__, bh->b_blocknr, d32_get (ind, i));
+	    handle_one_pointer (fs, bh, ind, i);
 	    fsck_log ("\n");
 	}
 
-	if (did_we_meet_it (le32_to_cpu (ind [i]))) {
+	if (did_we_meet_it (d32_get (ind, i))) {
 	    /* it can be
 	       1. not_data_block
 	       		delete pointer
@@ -450,23 +452,23 @@ static int bad_badblocks_item (reiserfs_filsys_t * fs, struct buffer_head * bh,
 	          advice to run fix-fixable if there is no fatal errors
 	          with list of badblocks, say that it could fix it. */
 	
-	    if (not_data_block (fs, le32_to_cpu (ind [i]))) {
+	    if (not_data_block (fs, d32_get (ind, i))) {
 		fsck_log ("%s: badblock pointer (block %lu) points on fs metadata (%lu)",
-			  __FUNCTION__, bh->b_blocknr, le32_to_cpu (ind [i]));
-		handle_one_pointer (fs, bh, &ind[i]);
+			  __FUNCTION__, bh->b_blocknr, d32_get (ind, i));
+		handle_one_pointer (fs, bh, ind, i);
 		fsck_log ("\n");
 	    } else {
 		one_more_corruption(fs, FIXABLE);
 	        fsck_log ("%s: badblock pointer (block %lu) points to a block (%lu) "
 			  "which is in the tree already. Use badblock option (-B) to"
 			  " fix the problem\n", __FUNCTION__, bh->b_blocknr, 
-			  le32_to_cpu(ind[i]));
+			  d32_get (ind, i));
 	    }
 
 	    continue;
 	}
 	
-	we_met_it(le32_to_cpu(ind[i]));
+	we_met_it(d32_get(ind, i));
     }
 
     return 0;
@@ -488,33 +490,31 @@ static int bad_indirect_item (reiserfs_filsys_t * fs, struct buffer_head * bh,
     }
 
     for (i = 0; i < I_UNFM_NUM (ih); i ++) {
-//	__u32 unfm_ptr;
 
 	fsck_check_stat (fs)->unfm_pointers ++;
-//	unfm_ptr = le32_to_cpu (ind [i]);
-	if (!le32_to_cpu (ind [i])) {
+	if (!d32_get (ind, i)) {
 	    fsck_check_stat (fs)->zero_unfm_pointers ++;
 	    continue;
 	}
 
 	/* check unformatted node pointer and mark it used in the
            control bitmap */
-	if (bad_block_number (fs, le32_to_cpu (ind [i]))) {
+	if (bad_block_number (fs, d32_get (ind, i))) {
 	    fsck_log ("%s: block %lu: The item %k has the bad pointer (%d) to "
 		      "the block (%lu)", __FUNCTION__, bh->b_blocknr, 
-		      &ih->ih_key, i, le32_to_cpu (ind [i]));
+		      &ih->ih_key, i, d32_get (ind, i));
 	    
-	    handle_one_pointer (fs, bh, &ind[i]);
+	    handle_one_pointer (fs, bh, ind, i);
 	    fsck_log ("\n");
 	    continue;
 	}
 
-        if (got_already (fs, le32_to_cpu (ind [i]))) {
+        if (got_already (fs, d32_get (ind, i))) {
 	    fsck_log ("%s: block %lu: The item (%H) has the bad pointer (%d) "
 		      "to the block (%lu), which is in tree already", 
-		      __FUNCTION__, bh->b_blocknr, ih, i, le32_to_cpu(ind[i]));
+		      __FUNCTION__, bh->b_blocknr, ih, i, d32_get (ind, i));
 	    
-	    handle_one_pointer (fs, bh, &ind [i]);
+	    handle_one_pointer (fs, bh, ind, i);
 	    fsck_log ("\n");
             continue;
 	}
@@ -856,6 +856,72 @@ static inline int h_to_level (reiserfs_filsys_t * fs, int h)
     return get_sb_tree_height (fs->fs_ondisk_sb) - h - 1;
 }
 
+#if 0
+int dc_fix(struct buffer_head *bh, int pos, __u32 block) {
+	if (!bh || !bh->b_data)
+		return -1;
+
+	if (B_NR_ITEMS(bh) < pos)
+		return -1;
+
+	set_dc_child_blocknr(B_N_CHILD(bh,pos), block);
+
+	mark_buffer_dirty(bh);
+	bwrite(bh);
+
+	return 0;
+}
+
+/* Removes @N-th key and @(N+1) pointer. */
+int internal_remove(struct buffer_head *bh, int pos) {
+	char *delete;
+	__u32 nr;
+	
+	if (!bh || !bh->b_data)
+		return -1;
+
+	if (B_NR_ITEMS(bh) < pos)
+		return -1;
+
+	delete = (char *)B_N_CHILD(bh, pos + 2);
+	memmove(delete - DC_SIZE, delete, 
+		bh->b_size - (delete - bh->b_data));
+
+	delete = (char *)B_N_PDELIM_KEY(bh, pos + 1);
+	memmove(delete - KEY_SIZE, delete, 
+		bh->b_size - (delete - bh->b_data));
+
+	nr = B_NR_ITEMS(bh) - 1;
+	
+	set_blkh_nr_items(B_BLK_HEAD(bh), nr);
+	set_blkh_free_space(B_BLK_HEAD(bh), bh->b_size - 
+			    (BLKH_SIZE + KEY_SIZE * nr + DC_SIZE * (nr + 1)));
+	
+	mark_buffer_dirty(bh);
+	bwrite(bh);
+	
+	return 0;
+}
+
+int leaf_fix_key_oid(struct buffer_head *bh, int pos, __u32 oid) {
+	struct item_head * ih;
+
+
+	if (!bh || !bh->b_data)
+		return -1;
+
+	if (B_NR_ITEMS(bh) < pos)
+		return -1;
+
+	ih = B_N_PITEM_HEAD (bh, pos);
+	set_key_objectid(&ih->ih_key, oid);
+	
+	mark_buffer_dirty(bh);
+	bwrite(bh);
+
+	return 0;
+}
+#endif
 
 /* bh must be formatted node. blk_level must be tree_height - h + 1 */
 static int bad_node (reiserfs_filsys_t * fs, struct buffer_head ** path, int h)

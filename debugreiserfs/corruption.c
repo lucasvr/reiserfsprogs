@@ -4,6 +4,7 @@
  */
 
 #include "debugreiserfs.h"
+#include <time.h>
 
 extern struct reiserfs_fsstat g_stat_info;
 
@@ -488,7 +489,8 @@ void do_one_corruption_in_one_block (reiserfs_filsys_t * fs,
 							  "not so many unfm ptrs in it\n");
 			return;
 	    }
-	    * ((__u32 *)B_I_PITEM (bh, ih) + pos_in_item) = get_sb_block_count (fs->fs_ondisk_sb) + 100;
+	    d32_put((__u32 *)B_I_PITEM (bh, ih), pos_in_item, 
+		    get_sb_block_count (fs->fs_ondisk_sb) + 100);
 	    break;
 	    
 	case 'D': /* delete item */

@@ -174,7 +174,7 @@ int wrong_st_blocks (struct key * key, __u32 * blocks, __u32 sd_blocks, __u16 mo
     if (S_ISREG (mode) || S_ISLNK (mode) || S_ISDIR (mode)) {
 	if (*blocks != sd_blocks) {
 	    fsck_log ("vpf-10680: The %s %K has the wrong block count in the StatData "
-		"(%u)%s(%u)\n", S_ISDIR (mode) ? "directory" : "file",  key, sd_blocks, 
+		"(%u)%s(%u)\n", S_ISDIR (mode) ? "directory" : S_ISREG (mode) ? "file" : "link",  key, sd_blocks, 
 		fsck_mode(fs) == FSCK_CHECK ? ", should be " : " - corrected to ", *blocks);
 	    ret = 1;
 	}

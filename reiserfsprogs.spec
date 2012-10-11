@@ -1,4 +1,4 @@
-%define reiserfsprogsversion 3.6.13
+%define reiserfsprogsversion 3.6.18
 
 Vendor:       Hans Reiser
 Distribution: Hans Reiser
@@ -44,7 +44,7 @@ Vladimir Saveliev <monstr@namesys.com>
   %{__ln_s} -f reiserfsck fsck.reiserfs
   %{__ln_s} -f mkreiserfs mkfs.reiserfs
 
-# __os_install_post is normally executed after %install disable it
+# __os_install_post is normally executed after \%install disable it
 %define ___build_post %{nil} 
 # explicitly call it now, so manpages get compressed, exec's stripped etc.
 %{?__os_install_post}

@@ -4,7 +4,6 @@
  */
 
 #include "fsck.h"
-#include <stdlib.h>
 
 reiserfs_bitmap_t * bad_unfm_in_tree_once_bitmap;
 
@@ -106,7 +105,7 @@ static void indirect_in_tree (struct buffer_head * bh,
     unp = (__u32 *)B_I_PITEM (bh, ih);
     
     for (i = 0; i < I_UNFM_NUM (ih); i ++) {
-	unfm_ptr = le32_to_cpu (unp[i]);
+	unfm_ptr = d32_get (unp, i);
 	if (unfm_ptr == 0)
 	    continue;
 	if ((ret = still_bad_unfm_ptr_1 (unfm_ptr)))
@@ -395,8 +394,8 @@ static void pass1_correct_leaf (reiserfs_filsys_t * fs,
 	/* correct indirect items */
 	ind_item = (__u32 *)B_I_PITEM (bh, ih);
 
-	for (j = 0; j < I_UNFM_NUM (ih); j ++, ind_item ++) {
-	    unfm_ptr = le32_to_cpu (*ind_item);
+	for (j = 0; j < I_UNFM_NUM (ih); j ++) {
+	    unfm_ptr = d32_get (ind_item, j);
 
 	    if (!unfm_ptr)
 		continue;
@@ -410,7 +409,7 @@ static void pass1_correct_leaf (reiserfs_filsys_t * fs,
 	    /* 1. zero slots pointing to a leaf */
 	    if (is_used_leaf (unfm_ptr)) {
 		dirty ++;
-		*ind_item = 0;
+		d32_put (ind_item, j, 0);
 		pass_1_stat (fs)->pointed_leaves ++;
 		continue;
 	    }
@@ -425,7 +424,7 @@ static void pass1_correct_leaf (reiserfs_filsys_t * fs,
 		else {
 		    /* Yes, we have seen this pointer already, zero other pointers to it. */
 		    dirty ++;
-		    *ind_item = 0;
+		    d32_put (ind_item, j, 0);
 		    pass_1_stat (fs)->non_unique_pointers ++;
 		    continue;
 		}

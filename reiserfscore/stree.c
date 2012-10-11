@@ -60,8 +60,8 @@ int comp_short_keys (const void * k1, const void * k2)
     __u32 u1, u2;
 
     for( ; n_key_length--; ++p_s_key1, ++p_s_key2 ) {
-	u1 = le32_to_cpu(*p_s_key1) ;
-	u2 = le32_to_cpu(*p_s_key2) ;
+	u1 = d32_get(p_s_key1, 0) ;
+	u2 = d32_get(p_s_key2, 0) ;
 	if ( u1 < u2 )
 	    return -1;
 	if ( u1 > u2 )

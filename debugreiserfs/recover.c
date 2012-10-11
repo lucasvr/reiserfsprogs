@@ -265,7 +265,7 @@ static void recover_items(FILE *fp, reiserfs_filsys_t * fs, FILE *target_file) {
     int size = sizeof(struct saved_item) - sizeof(struct saved_item *);
     struct saved_item *map = NULL;
     __u32 map_size = 0;
-    int start = 0;
+    int start = -1;
     unsigned int i, j;
     __u64 offset = 0, length;
     long int result = 0;
@@ -293,7 +293,7 @@ static void recover_items(FILE *fp, reiserfs_filsys_t * fs, FILE *target_file) {
 	    }
 	    
 	    start = -1;
-	} else if (is_direntry_ih(&(cur - 1)->si_ih)) {
+	} else if (is_direntry_ih(&(cur - 1)->si_ih) || is_stat_data_ih(&(cur - 1)->si_ih)) {
 	    brelse(bh);
 	    continue;
 	} else { 
@@ -339,7 +339,7 @@ static void recover_items(FILE *fp, reiserfs_filsys_t * fs, FILE *target_file) {
 	    fwrite(B_I_PITEM(bh, ih), (map + result)->si_ih.ih2_item_len, 1, target_file);
 	} else if (is_indirect_ih(ih)) {
 	    for (j = 0; j < I_UNFM_NUM (ih); j ++) {
-		unfm_ptr = le32_to_cpu (((__u32 *)B_I_PITEM(bh, ih))[j]);
+		unfm_ptr = d32_get((__u32 *)B_I_PITEM(bh, ih), j);
 		if (!unfm_ptr) {
 		    fseek(target_file, fs->fs_blocksize, SEEK_CUR);
 		    continue;

@@ -3,30 +3,14 @@
  * reiserfsprogs/README
  */
 
-#define _GNU_SOURCE
-
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <asm/types.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <sys/vfs.h>
-#include <time.h>
-#include <sys/ioctl.h>
-#include <sys/mount.h>
-#include <sys/stat.h>
-#include <linux/kdev_t.h>
-#include <sys/utsname.h>
-#include <getopt.h>
-#include <stdarg.h>
+#ifndef HAVE_CONFIG_H
+#  include "config.h"
+#endif
 
 #include "io.h"
 #include "misc.h"
 #include "reiserfs_lib.h"
-#include "../include/config.h"
+
 #include "../version.h"
 
 #if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)

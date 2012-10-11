@@ -211,10 +211,12 @@ void id_map_flush(struct id_map * map, reiserfs_filsys_t * fs) {
     max = ((fs->fs_blocksize - size) >> 3 << 1);
     set_sb_oid_maxsize (fs->fs_ondisk_sb, max);
     
-    sb_objectid_map[0] = id = 1;
+    id = 1;
+    sb_objectid_map[0] = cpu_to_le32(1);
 
-    for (i = 1; i < max - 1; i++) {	
-	sb_objectid_map[i] = id = id_map_next_bound(map, id);
+    for (i = 1; i < max - 1; i++) {
+	id = id_map_next_bound(map, id);
+	sb_objectid_map[i] = cpu_to_le32(id);
 	if (id == 0) {
 	    if (i % 2)
 		die ("%s: Used interval is not closed on flushing.", __FUNCTION__);
@@ -256,7 +258,7 @@ void id_map_flush(struct id_map * map, reiserfs_filsys_t * fs) {
 	    prev_id++;
 	}
 	
-	sb_objectid_map[max - 1] = prev_id + map->last_used * BM_INTERVAL;
+	sb_objectid_map[max - 1] = cpu_to_le32(prev_id + map->last_used * BM_INTERVAL);
     } else { 
 	i--;
 	memset(sb_objectid_map + i, 0, (max - i) * sizeof (__u32));

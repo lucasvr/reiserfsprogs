@@ -124,11 +124,11 @@ static unsigned long move_formatted_block(reiserfs_filsys_t * fs, unsigned long 
 				for (j = 0; j < I_UNFM_NUM(ih); j++) {
 					unsigned long  unfm_block;
 
-					if (indirect [j] == 0) /* hole */
+					if (d32_get (indirect, j) == 0) /* hole */
 						continue;
-					unfm_block = move_unformatted_block(fs, le32_to_cpu (indirect [j]), bnd, h + 1);
+					unfm_block = move_unformatted_block(fs, d32_get (indirect, j), bnd, h + 1);
 					if (unfm_block) {
-						indirect [j] = cpu_to_le32 (unfm_block);
+						d32_put (indirect, j, unfm_block);
 						mark_buffer_dirty(bh);
 					}
 				}

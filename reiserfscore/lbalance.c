@@ -949,7 +949,8 @@ void leaf_cut_from_buffer (reiserfs_filsys_t * fs,
 	set_dc_child_size (dc, get_dc_child_size (dc) - cut_size);
 	mark_buffer_dirty(bi->bi_parent);
     }
-    if (is_a_leaf(bh->b_data, bh->b_size) != THE_LEAF)
+    if (is_a_leaf(bh->b_data, bh->b_size) != THE_LEAF &&
+	is_a_leaf(bh->b_data, bh->b_size) != HAS_IH_ARRAY)
 	reiserfs_panic ("leaf_cut_from_buffer: bad leaf %lu: %b",
 			bh->b_blocknr, bh);
 }
@@ -1015,7 +1016,8 @@ static void leaf_delete_items_entirely (reiserfs_filsys_t * fs,
 	    (j - last_removed_loc + IH_SIZE * del_num));
 	mark_buffer_dirty(bi->bi_parent);
     }
-    if (is_a_leaf(bh->b_data, bh->b_size) != THE_LEAF)
+    if (is_a_leaf(bh->b_data, bh->b_size) != THE_LEAF &&
+	is_a_leaf(bh->b_data, bh->b_size) != HAS_IH_ARRAY)
 	reiserfs_panic ("leaf_delete_items_entirely: bad leaf %lu: %b", bh->b_blocknr, bh);
 }
 

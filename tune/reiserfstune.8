@@ -1,9 +1,9 @@
 .\" -*- nroff -*-
 .\" Copyright 1996-2004 Hans Reiser.
 .\" 
-.TH REISERFSTUNE 8 "February 2004" "Reiserfsprogs-3.6.13"
+.TH REISERFSTUNE 8 "February 2004" "Reiserfsprogs-3.6.18"
 .SH NAME
-reiserfstune \- tunning tool for the ReiserFS filesystem
+reiserfstune \- The tunning tool for the ReiserFS filesystem.
 .SH SYNOPSIS
 .B reiserfstune
 [ \fB-f\fR ]
@@ -19,17 +19,18 @@ reiserfstune \- tunning tool for the ReiserFS filesystem
 [ \fB-l\fR | \fB--label \fILABEL\fR ]
 .I device
 .SH DESCRIPTION
-\fBreiserfstune\fR is used for tuning the ReiserFS
-journal. It can change two parameters (journal size and maximum
-transaction size), and it can move the journal's location to a new specified
-block device. (The old ReiserFS's journal may be
-kept unused, or discarded at the user's option.)  Note: At the time of
-writing this feature was implemented for a special release of
-ReiserFS, and was not expected to be put into the mainstream kernel
-until approximately Linux 2.5.  This means that if you have the stock
-kernel you must apply a special patch. Without this patch the kernel
-will refuse to mount the newly modified file system.  We will charge
-$25 to explain this to you if you ask us why it doesn't work.
+\fBreiserfstune\fR is used for tuning the ReiserFS. It can change two journal 
+parameters (the journal size and the maximum transaction size), and it can move 
+the journal's location to a new specified block device. (The old ReiserFS's 
+journal may be kept unused, or discarded at the user's option.) Besides that
+\fBreiserfstune\fR can store the bad block list to the ReiserFS and set UUID
+and LABEL.
+Note: At the time of writing the relocated journal was implemented for a special 
+release of ReiserFS, and was not expected to be put into the mainstream kernel
+until approximately Linux 2.5.  This means that if you have the stock kernel you 
+must apply a special patch. Without this patch the kernel will refuse to mount 
+the newly modified file system.  We will charge $25 to explain this to you if 
+you ask us why it doesn't work.
 .PP
 Perhaps the most interesting application of this code is to put the
 journal on a solid state disk.
@@ -149,7 +150,9 @@ using /dev/hda1 under patched kernel
 This version of \fBreiserfstune\fR has been written by Vladimir
 Demidov <vova@namesys.com> and Edward Shishkin <edward@namesys.com>.
 .SH BUGS
-Please repoort bugs to the ReiserFS mail list <reiserfs-list@namesys.com>
+Please report bugs to the ReiserFS developers <reiserfs-dev@namesys.com>, providing
+as much information as possible--your hardware, kernel, patches, settings, all printed
+messages; check the syslog file for any related information.
 .SH SEE ALSO
 .BR reiserfsck (8),
 .BR debugreiserfs (8),

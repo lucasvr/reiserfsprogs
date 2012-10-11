@@ -16,11 +16,13 @@ Options:\n\
   -m\t\tprint bitmap blocks\n\
   -o\t\tprint objectid map\n\n\
   -J\t\tprint journal header\n\
-  -j journal_device\n\t\tprint journal\n\
+  -j filename\n\t\tprint journal located on the device 'filename'\n\
+  \t\tstores the journal in the specified file 'filename.\n\
   -p\t\tsend filesystem metadata to stdout\n\
+  -u\t\tread stdin and unpack the metadata\n\
   -S\t\thandle all blocks, not only used\n\
   -1 block\tblock to print\n\
-  -q\t\tno speed info (for -p, -s and -n)\n\
+  -q\t\tno speed info\n\
   -V\t\tprint version and exit\n\n", argv[0]);\
   exit (16);\
 }
@@ -29,18 +31,29 @@ Options:\n\
 
  Undocumented options:
   -a map_file\n\tstore to the file the map of file. Is used with -n, -N, -r, -f\n
-  -f creates a file map.\n
-  -S\t\tgo through whole device when running -p, -s or -n\n\
-  -U\t\tgo through unused blocks only when running -p, -s or -n\n\
+  -f \tprints the file map specified by -a.\n
+  -n name\n\stcan device for specific name in reiserfs directories\n\
+  -N \tscan tree for specific key in reiserfs directories\n\
+  -k \tscan device either for specific key or for any metadata\n\
+  -r name\n\trecovers the file spacified by -a to the 'name' file.\n\
+
+  -S\t\tgo through whole device when running -p, -k or -n\n\
+  -U\t\tgo through unused blocks only when running -p, -k or -n\n\
   -D\t\tprint blocks details scanning the device, not the tree as -d does\n\
-  -b bitmap_file\n\t\trunning -p, -s or -n read blocks marked in this bitmap only\n\
-  -n\tscan device for specific name in reiserfs directories\n\
-  -N\tscan tree for specific key in reiserfs directories\n\
-  -s\tscan device either for specific key or for any metadata\n\
+  -b bitmap_file\n\t\trunning -p, -k or -n read blocks marked in this bitmap only\n\
   -C\tallow to change reiserfs metadata\n\
-  -r\tprint map file content.\n\
   -J\tsearch block numbers in the journal\n\
   -t\tstat the device\n\
+  -v\tverboes unpack, prints the block number of every block being unpacked\n\
+
+  To build a map of a file blocks by name: 
+  debugreiserfs device -a mapfile -n filename 
+  
+  To build a map of a file blocks by key: 
+  debugreiserfs device -a mapfile -k 
+  
+  To extract some:
+  debugreiserfs device -a mapfile -r filename > backup
 */
 
 #if 1
@@ -98,11 +111,9 @@ static void print_disk_tree (reiserfs_filsys_t * fs, unsigned long block_nr)
 		for (i = 0; i < count; i++, ih++) {
 			if (is_indirect_ih(ih)) {
 				__u32 * ind_item = (__u32 *)B_I_PITEM (bh, ih);
-				__u32 unfm_ptr;
 				
 				for (j =  0; j < (int)I_UNFM_NUM (ih); j ++) {
-					unfm_ptr = le32_to_cpu (ind_item [j]);
-					if (unfm_ptr) {
+					if (d32_get (ind_item, j)) {
 						g_stat_info.nr_unformatted += 1;
 					}
 				}
@@ -229,7 +240,7 @@ static char * parse_options (struct debugreiserfs_data * data, int argc, char * 
     else
 	program_name = argv[ 0 ];
 
-    while ((c = getopt (argc, argv, "a:b:C:F:SU1:psn:Nfr:dDomj:JqtZl:LVB:")) != EOF) {
+    while ((c = getopt (argc, argv, "a:b:C:F:SU1:pkn:Nfr:dDomj:JqtZl:LVB:uv")) != EOF) {
 		switch (c) {
 		case 'a': /* -r will read this, -n and -N will write to it */
 			asprintf (&data->map_file, "%s", optarg);
@@ -237,18 +248,18 @@ static char * parse_options (struct debugreiserfs_data * data, int argc, char * 
 			
 		case 'b':
 			/* will load bitmap from a file and read only blocks
-               marked in it. This is for -p and -s */
+			   marked in it. This is for -p and -k */
 			asprintf (&data->input_bitmap, "%s", optarg);
 			data->scan_area = EXTERN_BITMAP;
 			break;
 			
 		case 'S':
-			/* have debugreiserfs -p or -s to read all the device */
+			/* have debugreiserfs -p or -k to read all the device */
 			data->scan_area = ALL_BLOCKS;
 			break;
 			
 		case 'U':
-			/* have debugreiserfs -p or -s to read unused blocks only */
+			/* have debugreiserfs -p or -k to read unused blocks only */
 			data->scan_area = UNUSED_BLOCKS;
 			break;
 			
@@ -277,11 +288,15 @@ static char * parse_options (struct debugreiserfs_data * data, int argc, char * 
 			data->mode = DO_PACK;
 			break;
 			
+		case 'u':
+			data->mode = DO_UNPACK;
+			break;
+
 		case 't':
 			data->mode = DO_STAT;
 			break;
 			
-		case 's':
+		case 'k':
 			/* read the device and print reiserfs blocks which contain defined key */
 			data->mode = DO_SCAN;
 			break;
@@ -365,6 +380,9 @@ static char * parse_options (struct debugreiserfs_data * data, int argc, char * 
 			break;
 		case 'V':
 			data->mode = DO_NOTHING;
+			break;
+		case 'v':
+			data->options |= BE_VERBOSE;
 			break;
 		}
     }
@@ -527,8 +545,8 @@ static void callback_badblock_print(reiserfs_filsys_t *fs,
 	tmp_ih = get_ih(badblock_path);
 	ind_item = (__u32 *)get_item(badblock_path);
 	
-	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++, ind_item++)
-		fprintf (fd, "%u\n", le32_to_cpu (*ind_item));
+	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++)
+		fprintf (fd, "%u\n", d32_get (ind_item, i));
 
 	pathrelse (badblock_path);
 }
@@ -638,6 +656,12 @@ int main (int argc, char * argv[])
 	
     data = getmem (sizeof (struct debugreiserfs_data));
     file_name = parse_options (data, argc, argv);
+    
+    if (data->mode == DO_UNPACK) {
+	    do_unpack(file_name, data->journal_device_name, 
+		      data->input_bitmap, data->options & BE_VERBOSE);
+	    return 0;
+    }
     
     fs = reiserfs_open (file_name, O_RDONLY, &error, data, 0);
     

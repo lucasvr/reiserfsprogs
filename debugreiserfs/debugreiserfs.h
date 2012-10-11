@@ -2,26 +2,20 @@
  * Copyright 2000-2004 by Hans Reiser, licensing governed by 
  * reiserfsprogs/README
  */
-
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <time.h>
-#include <malloc.h>
-#include <sys/types.h>
-#include <asm/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
+#ifndef HAVE_CONFIG_H
+#  include "config.h"
+#endif
 
 #include "io.h"
 #include "misc.h"
 #include "reiserfs_lib.h"
-#include "../include/config.h"
+
 #include "../version.h"
+
+#include <string.h>
+#include <errno.h>
 
 extern reiserfs_filsys_t * fs;
 
@@ -38,14 +32,15 @@ extern reiserfs_filsys_t * fs;
 #define DO_RECOVER 		6
 #define DO_TEST    		7
 #define DO_PACK    		8  /* -p extract meta data of reiserfs filesystem */
-#define DO_STAT    		9
-#define DO_SCAN_FOR_NAME 	10 /* -n */
-#define DO_LOOK_FOR_NAME 	11 /* -N */
-#define DO_SCAN_JOURNAL  	12 /* -J */
-#define DO_EXTRACT_BADBLOCKS	13
-#define DO_FILE_MAP 		14
-#define DO_ZERO_BITMAP		15
-#define DO_NOTHING		16
+#define DO_UNPACK    		9  /* -u create the fs by the givem metadata  */
+#define DO_STAT    		10
+#define DO_SCAN_FOR_NAME 	11 /* -n */
+#define DO_LOOK_FOR_NAME 	12 /* -N */
+#define DO_SCAN_JOURNAL  	13 /* -J */
+#define DO_EXTRACT_BADBLOCKS	14
+#define DO_FILE_MAP 		15
+#define DO_ZERO_BITMAP		16
+#define DO_NOTHING		17
 
 
 /*first bits are in reiserfs_fs.b*/
@@ -54,6 +49,7 @@ extern reiserfs_filsys_t * fs;
 #define PRINT_BITMAP 		0x40
 #define PRINT_OBJECTID_MAP	0x80
 #define BE_QUIET 		0x100
+#define BE_VERBOSE 		0x200
 
 /* these moved to reiserfs_fs.h */
 //#define PRINT_TREE_DETAILS 		
@@ -272,13 +268,16 @@ void do_scan (reiserfs_filsys_t * fs);
 /* journal.c */
 void scan_journal (reiserfs_filsys_t * fs);
 
+/* unpack.c */
+extern int do_unpack(char *host, char *j_filename, char *filename, int verbose);
+
 void print_map(reiserfs_filsys_t * fs);
 
 struct saved_item {
     struct item_head si_ih;
     unsigned long si_block;
-    int si_item_num;
-    struct saved_item * si_next; /* list of items having the same key */
+    int si_item_num, si_entry_pos;
+    struct saved_item *si_next; /* list of items having the same key */
 };
 
 /*

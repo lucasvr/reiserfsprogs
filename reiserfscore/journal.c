@@ -3,15 +3,9 @@
  * reiserfsprogs/README
  */
 
-#include "includes.h"
+#define _GNU_SOURCE
 
-/* this is provided for anybody who wants to deal with journal */
-int replay_one_transaction (reiserfs_filsys_t *, reiserfs_trans_t *);
-void for_each_transaction (reiserfs_filsys_t *, action_on_trans_t);
-void for_each_block (reiserfs_filsys_t *, reiserfs_trans_t *, action_on_block_t);
-int get_boundary_transactions (reiserfs_filsys_t *, reiserfs_trans_t *,
-			       reiserfs_trans_t *);
-int next_transaction (reiserfs_filsys_t *, reiserfs_trans_t *, reiserfs_trans_t);
+#include "includes.h"
 
 /* compares description block with commit block. returns 0 if they differ, 1
    if they match */
@@ -185,7 +179,6 @@ int get_boundary_transactions (reiserfs_filsys_t * fs,
 }
 
 #define TRANS_FOUND     1
-#define TRANS_LAST      2
 #define TRANS_NOT_FOUND 0
 
 /* trans is a valid transaction. Look for valid transaction with smallest
@@ -235,8 +228,6 @@ int next_transaction (reiserfs_filsys_t * fs, reiserfs_trans_t * trans, reiserfs
 	trans->commit_blocknr = commit_expected (fs, next_d_bh);
 	trans->next_trans_offset = next_desc_expected (fs, next_d_bh) - j_start;
 	found = TRANS_FOUND;
-	if (break_trans.trans_id == get_desc_trans_id (next_d_bh))
-	    found = TRANS_LAST;
     }
 
     brelse (d_bh);
@@ -327,6 +318,7 @@ int replay_one_transaction (reiserfs_filsys_t * fs,
 			    reiserfs_trans_t * trans)
 {
     for_each_block (fs, trans, read_journal_write_in_place);
+    fsync(fs->fs_dev);
     return 0;
 }
 
@@ -341,10 +333,7 @@ void for_each_transaction (reiserfs_filsys_t * fs, action_on_trans_t action)
 
     while (1) {
 	action (fs, &oldest);	
-	if (ret == TRANS_LAST)
-	    break;
-	ret = next_transaction (fs, &oldest, newest);	
-	if (ret == TRANS_NOT_FOUND)
+	if ((ret = next_transaction (fs, &oldest, newest)) == TRANS_NOT_FOUND)
 	    break;
     }
 }
@@ -497,7 +486,11 @@ int reiserfs_open_journal (reiserfs_filsys_t * fs, char * j_filename, int flags)
 	}
     }
 
-    fs->fs_journal_dev = open (j_filename, flags | O_LARGEFILE);
+    fs->fs_journal_dev = open (j_filename, flags 
+#if defined(O_LARGEFILE)
+			       | O_LARGEFILE
+#endif
+			       );
     if (fs->fs_journal_dev == -1) 
         return -1;
     
@@ -624,7 +617,11 @@ int reiserfs_create_journal(
 */
     }
 
-    fs->fs_journal_dev = open (j_device, O_RDWR | O_LARGEFILE);
+    fs->fs_journal_dev = open (j_device, O_RDWR 
+#if defined(O_LARGEFILE)
+			       | O_LARGEFILE
+#endif
+			       );
     if (fs->fs_journal_dev == -1) {
 	reiserfs_warning (stderr, "reiserfs_create_journal: could not open "
 	    "%s: %s\n", j_device, strerror(errno));
@@ -691,7 +688,11 @@ void reiserfs_reopen_journal (reiserfs_filsys_t * fs, int flag)
     if (close (fs->fs_journal_dev))
 	die ("reiserfs_reopen_journal: closed failed: %s", strerror(errno));
 
-    fs->fs_journal_dev = open (fs->fs_j_file_name, flag | O_LARGEFILE);
+    fs->fs_journal_dev = open (fs->fs_j_file_name, flag 
+#if defined(O_LARGEFILE)
+			       | O_LARGEFILE
+#endif
+			       );
     if (fs->fs_journal_dev == -1)
 	die ("reiserfs_reopen_journal: could not reopen journal device");
 
@@ -734,17 +735,21 @@ void reiserfs_close_journal (reiserfs_filsys_t * fs)
 }
 
 /* update journal header */
-static void update_journal_header (struct buffer_head * bh_jh, reiserfs_trans_t trans) {
+static void update_journal_header (reiserfs_filsys_t * fs, 
+				   struct buffer_head * bh_jh, 
+				   reiserfs_trans_t *trans) 
+{
     struct reiserfs_journal_header * j_head;
 	
     j_head = (struct reiserfs_journal_header *)(bh_jh->b_data);
 
     /* update journal header */
-    set_jh_last_flushed (j_head, trans.trans_id);
-    set_jh_mount_id (j_head, trans.mount_id);
-    set_jh_replay_start_offset (j_head, trans.next_trans_offset);
+    set_jh_last_flushed (j_head, trans->trans_id);
+    set_jh_mount_id (j_head, trans->mount_id);
+    set_jh_replay_start_offset (j_head, trans->next_trans_offset);
     mark_buffer_dirty (bh_jh);
     bwrite (bh_jh);
+    fsync(fs->fs_journal_dev);
 }
 
 /* fixme: what should be done when not all transactions can be replayed in proper order? */
@@ -780,29 +785,21 @@ int replay_journal (reiserfs_filsys_t * fs)
     replayed = 0;
     ret = TRANS_FOUND;
     
-    while (cur.mount_id != control.mount_id || cur.trans_id != control.trans_id) {
-	if (control.mount_id == cur.mount_id && control.trans_id == 0 && 
-	    control.desc_blocknr == 0)
+    /* Looking to the first valid not replayed transaction. */
+    while (1) {
+	if (cur.mount_id == control.mount_id && 
+	    cur.trans_id > control.trans_id)
 	    break;
-	
-	ret = next_transaction (fs, &cur, newest);
-	
-	if (ret != TRANS_FOUND)
+
+	if ((ret = next_transaction (fs, &cur, newest)) != TRANS_FOUND)
 	    break;
     }
-
+    
     while (ret == TRANS_FOUND) {
-	if (control.mount_id != cur.mount_id || control.trans_id != 0 || 
-	    control.desc_blocknr != 0) 
-	{
-	    ret = next_transaction (fs, &cur, newest);
-	    
-	    if (ret == TRANS_NOT_FOUND)
-		break;
-	    
-	    if (cur.mount_id != control.mount_id || cur.trans_id != control.trans_id + 1)
-		break;	    
-	}
+	/* If not the next transaction to be replayed, break out here. */
+	if ((cur.mount_id != control.mount_id) || 
+	    (cur.trans_id != control.trans_id + 1 && control.trans_id))
+	    break;
 	
 	if (!transaction_check_content(fs, &cur)) {
 	    reiserfs_warning (stderr, "Trans broken: mountid %lu, transid %lu, desc %lu, "
@@ -816,17 +813,24 @@ int replay_journal (reiserfs_filsys_t * fs)
 	    cur.mount_id, cur.trans_id, cur.desc_blocknr, cur.trans_len,
 	    cur.commit_blocknr, cur.next_trans_offset);
 	replay_one_transaction (fs, &cur);
-	update_journal_header (bh, cur);
+	update_journal_header (fs, bh, &cur);
 	control = cur;
         replayed ++;
+
+	ret = next_transaction (fs, &cur, newest);
     }
 
-    reiserfs_warning (stderr, "%d transactions replayed\n", replayed);
+    reiserfs_warning (stderr, "Reiserfs journal '%s' in blocks [%u..%u]: %d "
+		      "transactions replayed\n", fs->fs_j_file_name, 
+		      get_jp_journal_1st_block(sb_jp(fs->fs_ondisk_sb)),
+		      get_jp_journal_1st_block(sb_jp(fs->fs_ondisk_sb)) + 
+		      get_jp_journal_size(sb_jp(fs->fs_ondisk_sb)) + 1,
+		      replayed);
 	
     mark_buffer_dirty (fs->fs_super_bh);
     bwrite (fs->fs_super_bh);
 	
-    update_journal_header (bh, newest);
+    update_journal_header (fs, bh, &newest);
 
     return 0;
 }

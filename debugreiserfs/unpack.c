@@ -9,8 +9,8 @@
 
 #define print_usage_and_exit() die ("Usage: %s [-v] [-b filename] device\n\
 -v		prints blocks number of every block unpacked\n\
--b filename	makes unpack to save bitmap of blocks unpacked\n\
--j filename     makes unpack to store journal in specified file\n", argv[0]);
+-b filename	saves bitmap of blocks unpacked to filename\n\
+-j filename     stores journal in the filename\n", argv[0]);
 
 
 /* when super block gets unpacked for the first time - create a bitmap
@@ -235,7 +235,7 @@ static void unpack_indirect (struct packed_item * pi, struct buffer_head * bh,
     ind_item = (__u32 *)B_I_PITEM (bh, ih);
 
     if (get_pi_mask(pi) & SAFE_LINK) {
-        *ind_item = cpu_to_le32(get_key_dirid(&ih->ih_key));
+	d32_put(ind_item, 0, get_key_dirid(&ih->ih_key));
 	set_key_dirid(&ih->ih_key, (__u32)-1);
 	return;
     }
@@ -250,12 +250,12 @@ static void unpack_indirect (struct packed_item * pi, struct buffer_head * bh,
         __u32 base;
 	fread32 (ind_item);
 	fread_le16 (&v16);
-        base = le32_to_cpu(ind_item[0]);
+        base = d32_get(ind_item, 0);
 	for (i = 1; i < v16; i ++) {
-	    if (ind_item[0] != 0)
-		ind_item [i] = cpu_to_le32(base + i);
+	    if (base != 0)
+		d32_put(ind_item, i, base + i);
 	    else
-		ind_item [i] = 0;
+		d32_put(ind_item, i, 0);
 	}
 	ind_item += i;
     }
@@ -274,7 +274,7 @@ static void unpack_direct (struct packed_item * pi, struct buffer_head * bh,
         set_ih_entry_count (ih, 0xffff);
 
     if (get_pi_mask(pi) & SAFE_LINK) {
-        *d_item = cpu_to_le32(get_key_dirid(&ih->ih_key));
+	d32_put(d_item, 0, get_key_dirid(&ih->ih_key));
 	set_key_dirid(&ih->ih_key, (__u32)-1);
     } else {
 	memset (d_item, 'a', get_pi_item_len(pi));
@@ -583,43 +583,27 @@ out:
 }
 
 
-int main (int argc, char ** argv)
-{
+int do_unpack(char *host, char *j_filename, char *filename, int verbose) {
     int fd, fdj = -2;
-    int c;
-    char * j_filename;
-    char * filename = ".bitmap";
-    struct rlimit lim = {0xffffffff, 0xffffffff};
+    struct rlimit lim = {RLIM_INFINITY, RLIM_INFINITY};
 
-    print_banner ("unpack");
-
+    if (filename == NULL)
+	    filename = ".bitmap";
+    
+    if (j_filename)
+	    Default_journal = 0;
+    
     /* with this 2.4.0-test9's file_write does not send SIGXFSZ */
     if (setrlimit (RLIMIT_FSIZE, &lim)) {
 	fprintf  (stderr, "sertlimit failed: %m\n");
     }
 
-    while ((c = getopt (argc, argv, "vb:j:")) != EOF) {
-	switch (c) {
-	case 'v':
-	    verbose = 1;
-	    break;
-	case 'b':
-	    asprintf (&filename, "%s", optarg);
-	    break;
-	case 'j':
-	    Default_journal = 0;
-	    asprintf (&j_filename, "%s", optarg);
-	    break;    
-	}
+    if (misc_device_mounted(host) > 0) {
+	fprintf(stderr, "%s seems mounted, umount it first\n", host);
+	return 0;
     }
-    if (optind != argc - 1)
-	/* only one non-option argument is permitted */
-	print_usage_and_exit();
-
-    if (misc_device_mounted(argv[optind]) > 0)
-	reiserfs_panic ("%s seems mounted, umount it first\n", argv[optind]);
   
-    fd = open (argv[optind], O_RDWR | O_LARGEFILE);
+    fd = open (host, O_RDWR | O_LARGEFILE);
     if (fd == -1) {
 	perror ("open failed");
 	return 0;

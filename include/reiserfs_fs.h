@@ -29,11 +29,16 @@
 
 */
 
+#ifndef REISERFSPROGS_FS_H
+#define REISERFSPRIGS_FS_H 
+
 #ifndef NO_EXTERN_INLINE
 # define extern_inline extern inline
 #else
 # define extern_inline
 #endif
+
+#include <asm/unaligned.h>
 
 #define get_leXX(xx,p,field)	(le##xx##_to_cpu ((p)->field))
 #define set_leXX(xx,p,field,val) do { (p)->field = cpu_to_le##xx(val); } while (0)
@@ -1420,6 +1425,16 @@ struct buffer_info {
                   ( get_offset(&(p_s_ih)->ih_key) <= (n_offset) && \
                     get_offset(&(p_s_ih)->ih_key) + get_bytes_number(p_s_ih,n_blocksize) > (n_offset) )
 
+/* these operate on indirect items, where you've got an array of ints
+** at a possibly unaligned location.  These are a noop on ia32
+**
+** p is the array of __u32, i is the index into the array, v is the value
+** to store there.
+*/
+#define d32_get(p, i) le32_to_cpu(get_unaligned((p) + (i)))
+#define d32_put(p, i, v) put_unaligned(cpu_to_le32(v), (p) + (i))
+
+
 /* get the item header */ 
 #define B_N_PITEM_HEAD(bh,item_num) ( (struct item_head * )((bh)->b_data + BLKH_SIZE) + (item_num) )
 
@@ -1445,13 +1460,6 @@ struct buffer_info {
 
 #define MAX_DIRECT_ITEM_LEN(size) ((size) - BLKH_SIZE - 2*IH_SIZE - SD_SIZE - UNFM_P_SIZE)
 #define MAX_INDIRECT_ITEM_LEN(size) MAX_ITEM_LEN(size)
-
-/* indirect items consist of entries which contain blocknrs, pos
-   indicates which entry, and B_I_POS_UNFM_POINTER resolves to the
-   blocknr contained by the entry pos points to */
-#define B_I_POS_UNFM_POINTER(bh,ih,pos) (*(((__u32 *)B_I_PITEM(bh,ih)) + (pos)))
-
-
 
 /***************************************************************************/
 /*                    FUNCTION DECLARATIONS                                */
@@ -1560,6 +1568,7 @@ extern unsigned int get_journal_new_start_must (reiserfs_filsys_t * fs);
 extern unsigned int get_journal_start_must (reiserfs_filsys_t * fs);
 /*extern hashf_t hashes [];*/
 
+#endif
 
 /*
  * Local variables:

@@ -1,7 +1,7 @@
 .\" -*- nroff -*-
 .\" Copyright 1996-2004 Hans Reiser.
 .\" 
-.TH RESIZE_REISERFS 8 "January 2004" "Reiserfsprogs-3.6.13"
+.TH RESIZE_REISERFS 8 "January 2004" "Reiserfsprogs-3.6.18"
 .SH NAME
 resize_reiserfs \- resizer tool for the ReiserFS filesystem
 .SH SYNOPSIS
@@ -59,7 +59,7 @@ space on block
 .I device.
 
 .PP
-If you wish to shrink an reiserfs partition, first use
+If you wish to shrink a reiserfs partition, first use
 .B resize_reiserfs
 to shrink the file system. You may then use
 .BR cfdisk (8)
@@ -86,7 +86,7 @@ Turn on extra progress status messages (default).
 .SH RETURN VALUES
 0	Resizing successful.
 .TP
-\-1	In another case.
+\-1	Resizing not successful.
 
 .SH EXAMPLES
 The following example shows how to test
@@ -108,15 +108,14 @@ with a
 .br
 \	df /mnt
 
-.SH WARNING
-Note that this is a BETA program and may corrupt filesystems.
 .SH AUTHOR
 This version of
 .B resize_reiserfs
 has been written by Alexander Zarochentcev <zam@namesys.com>.
 .SH BUGS
-Please, report about the bugs to Alexander Zarochentcev <zam@namesys.com> or 
-to Hans Reiser <reiser@namesys.com>.
+Please report bugs to the ReiserFS developers <reiserfs-dev@namesys.com>, providing
+as much information as possible--your hardware, kernel, patches, settings, all printed
+messages; check the syslog file for any related information.
 .SH SEE ALSO
 .BR cfdisk (8),
 .BR reiserfsck (8),

@@ -3,6 +3,20 @@
  * reiserfsprogs/README
  */
 
+#ifndef REISERFSPROGS_IO_H
+#define REISERFSPROGS_IO_H
+
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
+
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#include "misc.h"
+
 struct buffer_head {
     unsigned long b_blocknr;
     int b_dev;
@@ -66,3 +80,5 @@ void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * log);
 void flush_buffers (int);
 void free_buffers (void);
 void invalidate_buffers (int);
+
+#endif

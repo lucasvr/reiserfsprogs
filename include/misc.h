@@ -5,18 +5,29 @@
 
 /* nothing abount reiserfs here */
 
-#ifndef REISERFS_MISC_H
-#define REISERFS_MISC_H
+#ifndef REISERFSPROGS_MISC_H
+#define REISERFSPROGS_MISC_H
 
-#include <endian.h>
-#include "swab.h"
-#include <linux/major.h>
-#include <signal.h>
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
+
+#include <stdio.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdlib.h>
+
+#include <linux/major.h>
+
+#if MAJOR_IN_MKDEV
+#   include <sys/mkdev.h>
+#elif MAJOR_IN_SYSMACROS
+#   include <sys/sysmacros.h>
+#endif
+
+#include "swab.h"
 
 #define POSITION_FOUND          8
 #define POSITION_NOT_FOUND      9
@@ -53,7 +64,7 @@ void misc_print_credit(FILE *out);
 
 typedef struct dma_info {
     int fd;
-    struct stat64 stat;
+    struct stat st;
     int support_type;
     int dma;
     __u64 speed;
@@ -80,45 +91,21 @@ extern inline unsigned long long misc_find_first_zero_bit (const void *vaddr, un
 extern inline unsigned long long misc_find_next_zero_bit (const void *vaddr, unsigned long long size, unsigned long long offset);
 extern inline unsigned long long misc_find_next_set_bit(const void *vaddr, unsigned long long size, unsigned long long offset);
 extern inline unsigned long long misc_find_first_set_bit (const void *vaddr, unsigned long long size);
- 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-
-# define cpu_to_le16(val)                 (val)
-# define le16_to_cpu(val)                 (val)
-# define cpu_to_le32(val)                 (val)
-# define le32_to_cpu(val)                 (val)
-# define cpu_to_le64(val)                 (val)
-# define le64_to_cpu(val)                 (val)
-
-#elif __BYTE_ORDER == __BIG_ENDIAN
-
-# define cpu_to_le16(val)                 __swab16(val)
-# define le16_to_cpu(val)                 __swab16(val)
-# define cpu_to_le32(val)                 __swab32(val)
-# define le32_to_cpu(val)                 __swab32(val)
-# define cpu_to_le64(val)                 __swab64(val)
-# define le64_to_cpu(val)                 __swab64(val)
-
-#else
-# error "nuxi/pdp-endian archs are not supported"
-#endif
 
 #define STAT_FIELD_H(Field, Type)	\
 inline Type misc_device_##Field(char *device);
 
 STAT_FIELD_H(mode, mode_t);
 STAT_FIELD_H(rdev, dev_t);
-STAT_FIELD_H(size, off64_t);
-STAT_FIELD_H(blocks, blkcnt64_t);
+STAT_FIELD_H(size, off_t);
+STAT_FIELD_H(blocks, blkcnt_t);
 
-/* these are to access bitfield in endian safe manner */
 __u16 mask16 (int from, int count);
 __u32 mask32 (int from, int count);
 __u64 mask64 (int from, int count);
 
-
 int reiserfs_bin_search (void * key, void * base, __u32 num, int width,
-			 __u32 *ppos, comparison_fn_t comp_func);
+			 __u32 *ppos, __compar_fn_t comp_func);
 
 struct block_handler {
     __u32 blocknr;
@@ -168,10 +155,12 @@ int blockdev_list_compare (const void * block1, const void * block2);
     return tmp;
 
 
-#ifndef MAJOR
-#define MAJOR(rdev)      ((rdev)>>8)
-#define MINOR(rdev)      ((rdev) & 0xff)
-#endif /* MAJOR */
+#ifndef major
+#define major(rdev)      ((rdev)>>8)
+#define minor(rdev)      ((rdev) & 0xff)
+#endif /* major */
+
+
 
 #ifndef SCSI_DISK_MAJOR
 #define SCSI_DISK_MAJOR(maj) ((maj) == SCSI_DISK0_MAJOR || \
@@ -195,5 +184,6 @@ int blockdev_list_compare (const void * block1, const void * block2);
 			     (maj) == IDE4_MAJOR || (maj) == IDE5_MAJOR)
 #endif /* IDE9_MAJOR */
 #endif /* IDE_DISK_MAJOR */
+
 
 #endif /* REISERFS_MISC_H */

@@ -5,24 +5,19 @@
 
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <asm/types.h>
-#include <sys/vfs.h>
-#include <errno.h>
-#include <time.h>
-#include <asm/types.h>
-#include <assert.h>
+#ifndef HAVE_CONFIG_H
+#  include "config.h"
+#endif
 
 #include "io.h"
 #include "misc.h"
 #include "reiserfs_lib.h"
 
-#include "../include/config.h"
+#include <string.h>
+#include <errno.h>
+#include <time.h>
+#include <assert.h>
+
 #include "../version.h"
 
 /* main.c */
@@ -210,9 +205,11 @@ void do_clean_attributes (reiserfs_filsys_t * fs);
 int bad_pair (reiserfs_filsys_t *, struct buffer_head * bh, int i);
 int bad_leaf_2 (reiserfs_filsys_t *, struct buffer_head * bh);
 
+#if 0
 extern int should_be_relocated (struct key * key);
 extern void to_be_relocated (struct key * key);
 extern void clear_relocated_list(void);
+#endif
 
 /* ustree.c */
 void reiserfsck_paste_into_item (struct path * path, const char * body, int size);
@@ -231,10 +228,6 @@ typedef int do_after_read_t (reiserfs_filsys_t *, struct buffer_head **, int h);
 typedef int do_on_full_path_t (reiserfs_filsys_t *, struct buffer_head **, int);
 void pass_through_tree (reiserfs_filsys_t *, do_after_read_t, do_on_full_path_t, int depth);
 
-//int comp_keys_3 (void * key1, void * key2);
-//int comp_dir_entries (void * key1, void * key2);
-
-
 /* bitmap.c */
 int reiserfsck_reiserfs_new_blocknrs (reiserfs_filsys_t * fs,
 				      unsigned long * pblocknrs,
@@ -250,7 +243,6 @@ int is_block_uninsertable (unsigned long block);
 
 /* objectid.c */
 int comp_ids(const void *p1, const void *p2);
-int is_objectid_used (reiserfs_filsys_t *, __u32 objectid);
 
 typedef struct id_map {
     void **index;

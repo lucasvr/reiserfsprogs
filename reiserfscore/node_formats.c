@@ -202,9 +202,9 @@ int is_tree_node (struct buffer_head * bh, int level)
 
 static int is_desc_block (char * buf, unsigned long buf_size)
 {
+    struct reiserfs_journal_desc *desc = (struct reiserfs_journal_desc *)buf;
     if (!memcmp(buf + buf_size - 12, JOURNAL_DESC_MAGIC, 8) &&
-	//get_jdesc_len (desc) > 0)
-	le32_to_cpu(*((__u32*)(buf + 4))) > 0)
+	le32_to_cpu (desc->j2_len) > 0)
 	return 1;
     return 0;
 }
@@ -495,7 +495,7 @@ static int is_bad_indirect (reiserfs_filsys_t * fs, struct item_head * ih, char 
     for (i = 0; i < I_UNFM_NUM (ih); i ++) {
 	if (!ind [i])
 	    continue;
-	if (check_unfm_func && check_unfm_func (fs, le32_to_cpu(ind [i])))
+	if (check_unfm_func && check_unfm_func (fs, d32_get (ind, i)))
 	    return 1;
     }
 

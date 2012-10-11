@@ -3,7 +3,14 @@
  * reiserfsprogs/README
  */
 
+#define _GNU_SOURCE
+
 #include "tune.h"
+
+#include <getopt.h>
+#include <stdarg.h>
+#include <string.h>
+#include <errno.h>
 
 char *program_name;
 
@@ -222,15 +229,15 @@ static void callback_new_badblocks(reiserfs_filsys_t *fs,
 	tmp_ih = get_ih(badblock_path);
 	ind_item = (__u32 *)get_item(badblock_path);
 
-	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++, ind_item++) {
+	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++) {
 		if (reiserfs_bitmap_test_bit(fs->fs_badblocks_bm, 
-					     le32_to_cpu(*ind_item)))
+					     d32_get (ind_item, i)))
 		{
 			message("Block %u is marked as bad already.", 
-				le32_to_cpu(*ind_item));
+				d32_get (ind_item, i));
 			
 			reiserfs_bitmap_clear_bit(fs->fs_badblocks_bm, 
-						  le32_to_cpu(*ind_item));
+						  d32_get (ind_item, i));
 		}
 	}
 	
@@ -247,9 +254,9 @@ static void callback_clear_badblocks(reiserfs_filsys_t *fs,
 	tmp_ih = get_ih(badblock_path);
 	ind_item = (__u32 *)get_item(badblock_path);
 
-	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++, ind_item++) {
+	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++) {
 		reiserfs_bitmap_clear_bit(fs->fs_bitmap2, 
-					  le32_to_cpu(*ind_item));
+					  d32_get(ind_item, i));
 	}
 	
 	pathrelse (badblock_path);
@@ -514,7 +521,11 @@ int main (int argc, char **argv)
     if (get_jp_journal_magic(sb_jp(fs->fs_ondisk_sb)) != NEED_TUNE && 
 	!(Options & OPT_SKIP_J)) 
     {
-	if (reiserfs_open_journal (fs, jdevice_name, O_RDWR | O_LARGEFILE)) {
+	if (reiserfs_open_journal (fs, jdevice_name, O_RDWR 
+#if defined(O_LARGEFILE)
+				   | O_LARGEFILE
+#endif
+				   )) {
 	    message ("Failed to open the journal device (%s).", jdevice_name);
 	    return 1;
 	}

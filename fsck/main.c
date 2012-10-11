@@ -7,6 +7,7 @@
 #include <getopt.h>
 #include <sys/resource.h>
 #include <sys/mman.h>
+#include <signal.h>
 
 extern int screen_width;
 extern int screen_savebuffer_len;
@@ -334,7 +335,7 @@ void warn_what_will_be_done (char * file_name, struct fsck_data * data)
 {
     FILE * warn_to;
 
-    warn_to = (data->progress ?: stderr);
+    warn_to = (data->progress ? data->progress : stderr);
 
     if (data->mode == FSCK_REBUILD)
 	reiserfs_warning (warn_to, REBUILD_WARNING, file_name);
@@ -412,7 +413,7 @@ void warn_what_will_be_done (char * file_name, struct fsck_data * data)
 
     reiserfs_warning (warn_to, "Will put log info to '%s'\n", 
 	(data->log == stdout) ? "stdout" : 
-				(data->log_file_name ? : "fsck.run"));
+	(data->log_file_name ? data->log_file_name : "fsck.run"));
     
     if (!(data->options & OPT_YES) && !user_confirmed (warn_to, "\nDo you want to "
 	"run this program?[N/Yes] (note need to type Yes if you do):", "Yes\n"))
@@ -801,11 +802,6 @@ static void prepare_fs_for_check(reiserfs_filsys_t * fs) {
 	
 	fsck_progress ("Filesystem seems mounted read-only. Skipping journal "
 	    "replay.\n");
-
-	if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
-	    fsck_progress ("--fix-fixable ignored\n");
-	    fsck_mode (fs) = FSCK_CHECK;
-	}
     } else if (!fsck_skip_journal (fs)) {
 	if (reiserfs_journal_params_check(fs)) {
 	    reiserfs_close (fs);
@@ -1115,7 +1111,7 @@ static void check_fs (reiserfs_filsys_t * fs)
     reiserfs_close (fs);
     close_rollback_file ();
     
-    clear_relocated_list();    
+    //clear_relocated_list();    
     
     time (&t);
     fsck_progress ("###########\n"
@@ -1190,10 +1186,10 @@ int main (int argc, char * argv [])
 {
     char * file_name;
     struct fsck_data * data;
-    struct rlimit rlim = {0xffffffff, 0xffffffff};
+    struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
     char *width;
     int retval;
-    int errno;
+    int error;
     
     width = getenv("COLUMNS");
     if ( width )
@@ -1257,14 +1253,14 @@ int main (int argc, char * argv [])
     	if (open_devices_for_rollback (file_name, data) == -1)
     	    exit(EXIT_OPER);
     } else {
-	fs = reiserfs_open (file_name, O_RDONLY, &errno, data, 
+	fs = reiserfs_open (file_name, O_RDONLY, &error, data, 
 	    data->mode != FSCK_SB);
 
 	if (data->mode != FSCK_SB) {
 	    if (no_reiserfs_found (fs)) {
-		if (errno) {
+		if (error) {
 		    die ("Failed to open the device '%s': %s\n\n", 
-			 file_name, strerror(errno));
+			 file_name, strerror(error));
 		} else {
 		    die ("Failed to open the filesystem.\n\n"
 			 "If the partition table has not been changed, and the partition is\n"

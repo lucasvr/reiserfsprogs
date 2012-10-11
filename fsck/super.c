@@ -4,8 +4,6 @@
  */
 
 #include "fsck.h"
-#include <stdlib.h>
-#include <errno.h>
 
 #if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
 #    include <uuid/uuid.h>
@@ -190,7 +188,7 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
 
     char * answer = 0;
     size_t n = 0;
-    struct stat64 stat_buf;
+    struct stat stat_buf;
     int retval, exit_code = EXIT_OK;
 
 #if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
@@ -574,7 +572,7 @@ void rebuild_sb (reiserfs_filsys_t * fs, char * filename, struct fsck_data * dat
 	/* Check that specified non-standard journal device exists. */
 	    
 	journal_dev_name = fsck_data (fs)->journal_dev_name;	    
-	retval = stat64(journal_dev_name, &stat_buf);
+	retval = stat(journal_dev_name, &stat_buf);
 	    
 	if (retval == -1)
 	    reiserfs_exit (EXIT_USER, "rebuild_sb: error while detecting the "

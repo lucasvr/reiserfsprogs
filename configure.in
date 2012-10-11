@@ -1,9 +1,13 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_INIT(version.h)
+AC_CANONICAL_HOST
+AC_PREREQ(2.50)
 
 AH_TEMPLATE([HAVE_LIBUUID], [Define for enable libuuid using.])
+AH_TEMPLATE([ENABLE_DEBUG], [Define for enable debug info.])
 
-AM_INIT_AUTOMAKE(reiserfsprogs, 3.6.13)
+AM_INIT_AUTOMAKE(reiserfsprogs, 3.6.18)
+AM_MAINTAINER_MODE
 
 dnl We install in /sbin, the utils are to be available on boot
 dnl AC_PREFIX(/)
@@ -13,16 +17,14 @@ AM_CONFIG_HEADER(include/config.h)
 AC_SUBST(sbindir)
 
 PRESET_CFLAGS=$CFLAGS
-AC_PROG_CC
-if test "x" = "x$PRESET_CFLAGS"; then
-    CFLAGS="${RPM_OPT_FLAGS} $CFLAGS -Wall"
-fi
 
 dnl Checks for programs.
+AC_PROG_CC
+AC_PROG_AWK 
+AC_PROG_INSTALL
+AC_PROG_LN_S
+AC_PROG_MAKE_SET
 AC_PROG_RANLIB
-dnl AC_PROG_AWK
-dnl AC_PROG_INSTALL
-dnl AC_PROG_LN_S
 
 dnl Checks for libraries.
 
@@ -34,6 +36,7 @@ AC_SUBST(UUID_LIBS)
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS(fcntl.h limits.h malloc.h sys/ioctl.h unistd.h uuid/uuid.h)
+AC_HEADER_MAJOR
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -41,12 +44,69 @@ AC_C_INLINE
 AC_TYPE_SIZE_T
 AC_STRUCT_ST_RDEV
 
+AC_ARG_ENABLE(debug, [  --enable-debug          enable extra checks], 
+	      enable_debug=yes,
+	      enable_debug=no
+)
+
+dnl Check for the compiler pic option.
+AC_CACHE_CHECK([whether -fPIC works], [pic], [
+	saved_CPPFLAGS="$CPPFLAGS"
+	CPPFLAGS="-fPIC -DPIC"
+	AC_TRY_COMPILE(, , [pic=yes], [pic=no])
+	CPPFLAGS="$saved_CPPFLAGS"
+])
+
+# Checking for compiler warning options
+AC_CACHE_CHECK([whether -Wuninitialized works], [uninitialized], [
+	saved_CPPFLAGS="$CPPFLAGS"
+	CPPFLAGS="-O1 -Wuninitialized"
+	AC_TRY_COMPILE(, , [uninitialized=yes], [uninitialized=no])
+	CPPFLAGS="$saved_CPPFLAGS"
+])
+
+AC_CACHE_CHECK([whether -Wno-unused-parameter works], [no_unused_parameter], [
+	saved_CPPFLAGS="$CPPFLAGS"
+	CPPFLAGS="-Wno-unused-parameter"
+	AC_TRY_COMPILE(, , [no_unused_parameter=yes], [no_unused_parameter=no])
+	CPPFLAGS="$saved_CPPFLAGS"
+		])
+
+AC_CACHE_CHECK([whether -Wredundant-decls works], [redundant_decls], [
+	saved_CPPFLAGS="$CPPFLAGS"
+	CPPFLAGS="-Wredundant-decls"
+	AC_TRY_COMPILE(, , [redundant_decls=yes], [redundant_decls=no])
+	CPPFLAGS="$saved_CPPFLAGS"
+])
+
+# Check for large file
+AC_SYS_LARGEFILE
+
+if test -z "${ac_cv_sys_file_offset_bits}"; then
+	AC_MSG_WARN(Can't detect right _FILE_OFFSET_BITS. Will be forced to 64bit.)
+	ac_cv_sys_file_offset_bits=64
+fi
+
+AC_CHECK_SIZEOF(off_t, 64, [ 
+	#include <stdio.h>
+	#include <sys/types.h>
+	#include <unistd.h> 
+])
+
+AC_CHECK_SIZEOF(blkcnt_t, 64, [ 
+	#include <stdio.h>
+	#include <sys/types.h>
+	#include <unistd.h> 
+])
+
 dnl Checks for library functions.
 AC_PROG_GCC_TRADITIONAL
 AC_FUNC_MEMCMP
 AC_FUNC_STRFTIME
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS(strerror strstr strtol)
+AC_CHECK_FUNCS(strerror strstr strtol register_printf_function statfs getmntent\
+	       hasmntopt memset time uname)
+
 
 dnl Never enable this. It is for debugging only
 AC_ARG_ENABLE(io-failure-emulation,
@@ -57,78 +117,70 @@ AC_ARG_ENABLE(io-failure-emulation,
   fi
 ])
 
-AC_DEFUN(AC_PREPARE_CREDITS,
-[
+credits="./CREDITS"
+AC_MSG_CHECKING(for $credits)
+if test -r $credits ; then
+    AC_MSG_RESULT(yes)
+else
+    AC_MSG_ERROR(Missing file $credits)
+fi
 
-AC_MSG_CHECKING(for CREDITS)
+$AWK ['
+BEGIN  {in_header = 1; start = 2; count = 0}
 
-AC_TRY_RUN([
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
-
-int main (void) {
-    FILE *fin, *fout;
-    char *line = NULL;
-    unsigned int len = 0;
-    int start, count;
-    
-    if ((fin = fopen("CREDITS", "r")) == NULL) {
-	fprintf(stderr, "Error occured while openning the file 'CREDITS': "
-	    "%s.\n", strerror(errno));
-
-	return 1;
-    }
-
-    if ((fout = fopen("include/credits.h", "w")) == NULL) {
-	fprintf(stderr, "Error occured while openning the file 'credits.h': "
-	    "%s.\n", strerror(errno));
-	
-	return 1;
-    }
-     
-    /* Replicate the header. */
-    while (getline(&line, &len, fin) != -1) {
-	fprintf(fout, line);
-	
-	if (!strcmp(line, "\n"))
-	    break;
-    }
-    
-    fprintf(fout, "char *credits[] = {\n");
-    
-    start = 2; count = 0;
-    
-    while (getline(&line, &len, fin) != -1) {
-	if (!strcmp(line, "\n") || strlen(line) < 1) {
+{
+    if (in_header) {
+	print $0
+	if ($0 == "") {
+	    in_header = 0;
+	    printf "char *credits[] = {\n"
+	}
+    } else {
+	if (($0 == "") || (length($0) < 1)) {
 	    start = 1;
 	    count++;
 	} else {
 	    if (!start)
-		fprintf(fout, "\\t\\\\\\n");
+		printf "\t\\\n"
 	    else if (start == 1)
-		fprintf(fout, ",\n\n");
-	    
-	    line[strlen(line) - 1] = 0;
-	    fprintf(fout, "\t\"%s\\\n\"", line);
+		printf ",\n\n"
+	    printf "\t\"" $0 "\\n\""
 	    start = 0;
 	}
     }
-    
-    fprintf(fout, "\n};\n");
-    fprintf(fout, "#define CREDITS_COUNT %d\n", count);
-    
-    free(line);
-    fclose(fin);
-    fclose(fout);
-    
-    return 0;
 }
-], AC_MSG_RESULT(yes), AC_MSG_RESULT(no) ; exit,
-   [echo $ac_n "cross compiling; assumed OK... $ac_c"]
-)])
+END    { print "\n};\n#define CREDITS_COUNT "  count }
+']  $credits > include/credits.h
 
-AC_PREPARE_CREDITS()
+if test x$enable_debug = xyes; then
+	if test "x" = "x$PRESET_CFLAGS"; then
+		CFLAGS="-g -Wall"
+	fi
+	
+	if test x$no_unused_parameter = xyes; then
+		CFLAGS="$CFLAGS -Wno-unused-parameter"
+	else
+		CFLAGS="$CFLAGS -Wno-unused"
+	fi
+	
+	if test x$redundant_decls = xyes; then
+		CFLAGS="$CFLAGS -Wredundant-decls"
+	fi
+	
+	if test x$uninitialized = xyes; then
+		CFLAGS="$CFLAGS -Wuninitialized -O1"
+	else
+		CFLAGS="$CFLAGS -O2"
+	fi
+else
+	if test "x" = "x$PRESET_CFLAGS"; then
+		CFLAGS="-g -Wall -O2"
+	fi
+fi
+
+if test x$pic = xyes; then
+	CFLAGS="$CFLAGS -fPIC -DPIC"
+fi
 
 AC_OUTPUT(
     include/Makefile 

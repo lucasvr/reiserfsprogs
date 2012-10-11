@@ -3,18 +3,15 @@
  * reiserfsprogs/README
  */
 
-#define _GNU_SOURCE
+#ifndef HAVE_CONFIG_H
+#  include "config.h"
+#endif
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <asm/types.h>
-#include <errno.h>
-#include <stdio.h>
-#include <mntent.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdlib.h>
+#include "io.h"
+#include "misc.h"
+#include "reiserfs_lib.h"
+
+#include "../version.h"
 
 #if __GLIBC__ >= 2
 #include <sys/mount.h>
@@ -22,13 +19,10 @@
 #include <linux/fs.h>
 #endif
 
+#include <errno.h>
+#include <string.h>
 
-#include "io.h"
-#include "misc.h"
-#include "reiserfs_lib.h"
-#include "../include/config.h"
-#include "../version.h"
-
+#include <mntent.h>
 
 #define print_usage_and_exit() {\
  fprintf (stderr, "Usage: %s  [-s[+|-]#[G|M|K]] [-fqvV] device\n\n", argv[0]);\

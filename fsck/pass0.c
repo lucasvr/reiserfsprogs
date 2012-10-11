@@ -263,7 +263,10 @@ static int verify_directory_item (reiserfs_filsys_t * fs, struct buffer_head * b
  
     if ( (get_ih_entry_count (ih) > (get_ih_item_len(ih) / (DEH_SIZE + min_entry_size))) ||
           (get_ih_entry_count (ih) == 0))
+    {
         set_ih_entry_count (ih, (int)get_ih_item_len(ih) / (DEH_SIZE + min_entry_size));
+        mark_buffer_dirty (bh);
+    }
 
     if (get_ih_entry_count (ih) == 0) {
 	delete_item (fs, bh, item_num);
@@ -561,7 +564,8 @@ static int is_wrong_short_key (struct key * key) {
     if (get_key_dirid (key) == 0 || get_key_objectid (key) == 0 || get_key_objectid (key) == 1 ||
 	get_key_dirid (key) == ~(__u32)0 || get_key_objectid (key) == ~(__u32)0 ||
 	get_key_dirid (key) == get_key_objectid (key) ||
-	(get_key_dirid (key) == 1 && get_key_objectid (key) != 2) ||
+	/* the alloc=packing_groups used to allow dirid = 1
+	(get_key_dirid (key) == 1 && get_key_objectid (key) != 2) || */
 	(get_key_dirid (key) != 1 && get_key_objectid (key) == 2) )
 	return 1;
 
@@ -1285,7 +1289,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 */
 	ind_item = (__u32 *)B_I_PITEM (bh, ih);
 	for (j = 0; j < (int)I_UNFM_NUM (ih); j ++) {
-	    unfm_ptr = le32_to_cpu (ind_item [j]);
+	    unfm_ptr = d32_get (ind_item, j);
 	    if (!unfm_ptr)
 		continue;
 #if 0
@@ -1309,7 +1313,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 		fsck_log ("pass0: %d-th pointer (%lu) in item %k (leaf block %lu) is wrong\n",
 			  j, unfm_ptr, &ih->ih_key, bh->b_blocknr);
 		*/
-		ind_item [j] = 0;
+		d32_put(ind_item, j, 0);
 		dirty = 1;
 		continue;
 	    }
@@ -1436,10 +1440,10 @@ static int is_bad_indirect (struct item_head * ih, char * item, int dev, int blo
     for (i = 0; i < I_UNFM_NUM (ih); i ++) {
 	__u32 * ind = (__u32 *)item;
 
-	if (le32_to_cpu (ind[i]) >= blocks) {
+	if (d32_get (ind, i) >= blocks) {
 	    bad ++;
 	    fsck_log ("is_bad_indirect: %d-th pointer of item %H looks bad (%lu)\n",
-		      i, ih, le32_to_cpu (ind [i]));
+		      i, ih, d32_get (ind, i));
 	    continue;
 	}
     }

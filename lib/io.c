@@ -3,23 +3,11 @@
  * reiserfsprogs/README
  */
 
-#define _FILE_OFFSET_BITS 64
-#define _GNU_SOURCE
+#include "io.h"
 
-#include <stdio.h>
-#include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#include <stdlib.h> 
 #include <asm/types.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-
-
-#include "io.h"
-#include "misc.h"
-#include "config.h"
 
 void check_memory_msg (void) {
     fprintf(stderr, 
@@ -485,7 +473,7 @@ static int f_read(struct buffer_head * bh)
     buffer_reads++ ;
 
     offset = (unsigned long long)bh->b_size * bh->b_blocknr;
-    if (lseek64 (bh->b_dev, offset, SEEK_SET) < 0)
+    if (lseek (bh->b_dev, offset, SEEK_SET) < 0)
 	return -1;
 
     bytes = read (bh->b_dev, bh->b_data, bh->b_size);
@@ -545,12 +533,12 @@ static int rollback_blocksize;
 
 void init_rollback_file (char * rollback_file, int *blocksize, FILE * log) {
     char * string;
-    struct stat64 buf;
+    struct stat buf;
     
     if (rollback_file == NULL)
         return;
         
-    stat64(rollback_file, &buf);
+    stat(rollback_file, &buf);
     
     s_rollback_file = fopen (rollback_file, "w+");    
     if (s_rollback_file == NULL) {
@@ -589,12 +577,12 @@ static void erase_rollback_file (char * rollback_file) {
 
 int open_rollback_file (char * rollback_file, FILE * log) {
     char string [28];
-    struct stat64 buf;
+    struct stat buf;
     
     if (rollback_file == NULL)
         return -1;
     
-    if (stat64(rollback_file, &buf)) {
+    if (stat(rollback_file, &buf)) {
 	fprintf (stderr, "Cannot stat rollback file (%s)\n", rollback_file);
 	return -1;
     }
@@ -656,17 +644,17 @@ void close_rollback_file () {
 }
 
 void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * progress) {
-    loff_t offset;
+    long long int offset;
     
-    struct stat64 buf;
+    struct stat buf;
     int descriptor;
     ssize_t retval;
     int count_failed = 0;
     int count_rollbacked = 0;
     
-    dev_t b_dev;
-    dev_t n_dev = 0;
-    dev_t n_journal_dev = 0;
+    int b_dev;
+    int n_dev = 0;
+    int n_journal_dev = 0;
     unsigned long total, done = 0;
 
     if (fd_device == 0) {
@@ -675,14 +663,14 @@ void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * progress) {
     }
         
     if (fd_journal_device) {
-        if (!fstat64 (fd_journal_device, &buf)) {
+        if (!fstat (fd_journal_device, &buf)) {
             n_journal_dev = buf.st_rdev;
         } else {
             fprintf(stderr, "rollback: specified journal device cannot be stated\n");
         }
     }
     
-    if (!fstat64 (fd_device, &buf)) {
+    if (!fstat (fd_device, &buf)) {
         n_dev = buf.st_rdev;
     } else {
         fprintf(stderr, "rollback: specified device cannot be stated, exit\n");
@@ -731,7 +719,7 @@ void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * progress) {
             continue;
         }
         
-        if (lseek64 (descriptor, offset, SEEK_SET) == (loff_t)-1) {
+        if (lseek (descriptor, offset, SEEK_SET) == (loff_t)-1) {
             fprintf(stderr, "device cannot be lseeked, skip block\n");
             count_failed ++;
             continue;
@@ -739,7 +727,7 @@ void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * progress) {
         
         if (write (descriptor, rollback_data, rollback_blocksize) == -1) {
             fprintf (stderr, "rollback: write %d bytes returned error "
-		"(block=%lld, dev=%lld): %s\n", rollback_blocksize, 
+		"(block=%lld, dev=%d): %s\n", rollback_blocksize, 
 		offset/rollback_blocksize, b_dev, strerror (errno));
             count_failed ++;
         } else {
@@ -802,19 +790,19 @@ int bwrite (struct buffer_head * bh)
     size = bh->b_size;
     offset = (loff_t)size * (loff_t)bh->b_blocknr;
 
-    if (lseek64 (bh->b_dev, offset, SEEK_SET) == (loff_t)-1){
+    if (lseek (bh->b_dev, offset, SEEK_SET) == (loff_t)-1){
 	fprintf (stderr, "bwrite: lseek to position %llu (block=%lu, dev=%d): %s\n",
 	    offset, bh->b_blocknr, bh->b_dev, strerror(errno));
 	exit(8); /* File system errors left uncorrected */
     }
 
     if (s_rollback_file != NULL && bh->b_size == (unsigned long)rollback_blocksize) {
-        struct stat64 buf;
+        struct stat buf;
         __u32 position;
 	struct block_handler block_h;
         
         /*log previous content into the log*/
-        if (!fstat64 (bh->b_dev, &buf)) {
+        if (!fstat (bh->b_dev, &buf)) {
 	    block_h.blocknr = bh->b_blocknr;
 	    block_h.device = buf.st_rdev;
 	    if (reiserfs_bin_search(&block_h, rollback_blocks_array, 
@@ -844,7 +832,7 @@ int bwrite (struct buffer_head * bh)
                     exit(8);
                 }
 		
-                if (lseek64 (bh->b_dev, offset, SEEK_SET) == (loff_t)-1) {
+                if (lseek (bh->b_dev, offset, SEEK_SET) == (loff_t)-1) {
                     fprintf (stderr, "bwrite: lseek to position %llu (block=%lu, "
 			"dev=%d): %s\n", offset, bh->b_blocknr, bh->b_dev, 
 			strerror(errno));

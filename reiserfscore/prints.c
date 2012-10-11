@@ -3,6 +3,8 @@
  * reiserfsprogs/README
  */
 
+#define _GNU_SOURCE
+
 #include "includes.h"
 #include <stdarg.h>
 #include <limits.h>
@@ -392,9 +394,9 @@ void print_indirect_item (FILE * fp, struct buffer_head * bh, int item_num)
     reiserfs_warning (fp, "%d pointer%s\n[", I_UNFM_NUM (ih),
                       I_UNFM_NUM (ih) != 1 ? "s" : "" );
     for (j = 0; j < I_UNFM_NUM (ih); j ++) {
-	if (sequence_finished (prev, &num, unp[j])) {
+	if (sequence_finished (prev, &num, d32_get(unp, j))) {
 	    print_sequence (fp, prev, num);
-	    start_new_sequence (&prev, &num, unp[j]);
+	    start_new_sequence (&prev, &num, d32_get(unp, j));
 	}
     }
     print_sequence (fp, prev, num);

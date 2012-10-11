@@ -3,9 +3,8 @@
  *  reiserfsprogs/README
  */
 
-#ifndef REISERFS_LIB_H
-#define REISERFS_LIB_H
-
+#ifndef REISERFSPROGS_LIB_H
+#define REISERFSPROGS_LIB_H
 
 #define BADBLOCK_DIRID	1
 #define BADBLOCK_OBJID  (__u32)-1
@@ -118,9 +117,6 @@ int reiserfs_find_entry (reiserfs_filsys_t *, struct key * dir, char * name,
 int reiserfs_add_entry (reiserfs_filsys_t *, struct key * dir, char * name, int name_len,
 			struct key * key, __u16 fsck_need);
 
-
-/*int reiserfs_bin_search (void * key, void * base, int num, int width,
-			 int *ppos, comparison_fn_t comp_func);*/
 struct key * uget_lkey (struct path * path);
 struct key * uget_rkey (struct path * path);
 int reiserfs_search_by_key_3 (reiserfs_filsys_t *, struct key * key,
@@ -407,6 +403,4 @@ int can_we_format_it (char * device_name, int force);
 	}\
 
 
-#endif /* REISERFS_LIB_H */
-
-
+#endif /* REISERFSPROGS_LIB_H */

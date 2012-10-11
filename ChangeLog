@@ -1,3 +1,46 @@
+2004-08-03
+	3.6.18 release.
+2004-06-18
+	Make the oid map code endian safe.
+2004-05-27
+	Syncing host & journal devices after replaing every transaction.
+2004-05-26
+	Do not left uninitialized fields in item headers before insertion.
+2004-05-25
+	Fixes in unaligned access to unformatted block pointers.
+2004-05-24
+	Make reiserfsck to handle suse's block allocator changes correctly.
+2004-05-04
+	3.6.17 release.
+2004-04-30
+	a few minor bugs were fixed:
+	- mark changed leaves as dirty;
+	- overflow at the huge hole insertion.
+2004-04-05
+	man pages were rewritten.
+2004-03-22
+	move 'unpack' program to 'debugreiserfs -u'.
+2004-03-18
+	3.6.14 & 3.6.15-pre1 releases.
+2004-03-16
+	reiserfsprogs
+		a few bugs were fixed:
+		in the journal replay code;
+		in the balancing code when removing items from broken leaves;
+		in the mount entry detection code with mtab handling.
+2004-03-04
+	reiserfsprogs
+		a fix for the cross compiling when generating include/credits.h
+2004-02-27
+	reiserfsprogs
+		a bug in the spec file was fixed.
+2004-02-26
+	reiserfsck
+		a bug with setting the file size limit was fixed.
+2004-02-17
+	reiserfsprogs
+		make bynaries to be 'position independent' when dynamically
+		linked to libc.
 2004-02-17
 	3.6.13 release.
 2004-02-13
