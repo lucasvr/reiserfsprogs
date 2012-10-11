@@ -534,7 +534,9 @@ static int do_rollback = 0;
 static char * rollback_data;
 static int rollback_blocksize;
 
-void init_rollback_file (char * rollback_file, int *blocksize, FILE * log) {
+void init_rollback_file (char * rollback_file, unsigned int *blocksize,
+			 FILE * log)
+{
     char * string;
     struct stat buf;
     

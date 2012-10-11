@@ -1111,8 +1111,8 @@ struct disk_child {
 struct path_element  {
     struct buffer_head * pe_buffer; /* Pointer to the buffer at the path in
 				       the tree. */
-    int pe_position;  /* Position in the tree node which is placed in the
-			 buffer above. */
+    unsigned int pe_position;  /* Position in the tree node which is placed
+				  in the buffer above. */
 };
 
 
@@ -1512,7 +1512,7 @@ struct buffer_info {
 void padd_item (char * item, int total_length, int length);
 int B_IS_IN_TREE(struct buffer_head *);
 struct key * get_rkey (struct path * p_s_chk_path, reiserfs_filsys_t *);
-int bin_search (void * p_v_key, void * p_v_base, int p_n_num, int p_n_width, int * p_n_pos);
+int bin_search (void * p_v_key, void * p_v_base, int p_n_num, int p_n_width, unsigned int * p_n_pos);
 int search_by_key (reiserfs_filsys_t *, struct key *, struct path *, int);
 int search_by_entry_key (reiserfs_filsys_t *, struct key *, struct path *);
 int search_for_position_by_key (reiserfs_filsys_t *, struct key *, struct path *);

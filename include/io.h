@@ -72,7 +72,8 @@ struct buffer_head * reiserfs_bread (int dev, unsigned long block, int size, int
 int bwrite (struct buffer_head * bh);
 void brelse (struct buffer_head * bh);
 void bforget (struct buffer_head * bh);
-void init_rollback_file (char * rollback_file, int *bloksize, FILE * log);
+void init_rollback_file (char * rollback_file, unsigned int *blocksize,
+			 FILE * log);
 int open_rollback_file (char * rollback_file, FILE * log);
 void close_rollback_file ();
 void do_fsck_rollback (int fd_device, int fd_journal_device, FILE * log); 

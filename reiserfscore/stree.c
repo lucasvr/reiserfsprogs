@@ -138,7 +138,7 @@ int comp_keys (const void * p1, const void * p2)
  there are no possible items, and we have not found it. With each examination we
  cut the number of possible items it could be by one more than half rounded down,
  or we find it. */
-inline	int bin_search (
+int bin_search (
               void    * p_v_key,    /* Key to search for.                   */
 	      void    * p_v_base,   /* First item in the array.             */
 	      int       p_n_num,    /* Number of items in the array.        */
@@ -150,7 +150,8 @@ inline	int bin_search (
 				       of item headers in a node, p_n_width
 				       is actually the item header size not
 				       the item size.                      */
-	      int     * p_n_pos     /* Number of the searched for element. */
+	      unsigned int     * p_n_pos     /* Number of the searched
+						for element. */
             ) {
     int   n_rbound, n_lbound, n_j;
 

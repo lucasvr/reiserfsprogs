@@ -464,7 +464,9 @@ static int reiserfs_search_by_key_x (reiserfs_filsys_t * fs, struct key * key,
 	}
 	retval = reiserfs_bin_search (key, B_N_PKEY (bh, 0), B_NR_ITEMS (bh),
 				      is_leaf_node (bh) ? IH_SIZE : KEY_SIZE,
-				      &(curr->pe_position), key_length == 4 ? comp_keys : comp_keys_3);
+				      &curr->pe_position,
+				      key_length == 4 ?
+					comp_keys : comp_keys_3);
 	if (retval == POSITION_FOUND) {
 	    /* key found, return if this is leaf level */
 	    if (is_leaf_node (bh)) {
