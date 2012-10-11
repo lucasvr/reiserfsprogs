@@ -782,8 +782,8 @@ static int the_end (reiserfs_filsys_t * fs)
     fsck_progress ("Syncing..");
     fs->fs_dirt = 1;
     clean_after_dma_check(fs->fs_dev, &dma_info);
-    reiserfs_close (fs);
     fsck_progress ("finished\n");
+    reiserfs_close (fs);
 
     return ret;
 }
@@ -935,12 +935,12 @@ static void clean_attributes (reiserfs_filsys_t * fs) {
     do_clean_attributes (fs);
 
     clean_after_dma_check(fs->fs_dev, &dma_info);
-    reiserfs_close (fs);
-    close_rollback_file ();
 
     fsck_progress ("###########\n"
 		   "reiserfsck finished at %s"
 		   "###########\n", ctime (&t));
+    reiserfs_close (fs);
+    close_rollback_file ();
 
     exit (EXIT_FIXED);
 
@@ -1171,8 +1171,6 @@ static void check_fs (reiserfs_filsys_t * fs)
         
     id_map_free(proper_id_map (fs));
     clean_after_dma_check(fs->fs_dev, &dma_info);
-    reiserfs_close (fs);
-    close_rollback_file ();
     
     //clear_relocated_list();    
     
@@ -1181,6 +1179,8 @@ static void check_fs (reiserfs_filsys_t * fs)
 		   "reiserfsck finished at %s"
 		   "###########\n", ctime (&t));
 
+    reiserfs_close (fs);
+    close_rollback_file ();
     exit(retval);
 }
 
