@@ -1,3 +1,9 @@
+2012-10-16
+	3.6.22 release.
+	- Fix signedness issues for large file systems
+	- fix use after free with fsck_progress
+	- configure: use AC_MSG_NOTICE rather than `echo`
+	- install standard {fsck,mkfs}.reiserfs symlinks
 2009-01-09
 	3.6.21 release.
 2009-01-09
