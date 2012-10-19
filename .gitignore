@@ -1,3 +1,6 @@
+*~
+*.[ao]
+
 INSTALL
 Makefile.in
 aclocal.m4
@@ -19,3 +22,10 @@ config.status
 include/config.h
 include/credits.h
 include/stamp-h1
+
+reiserfsprogs-*.tar.*
+/debugreiserfs/debugreiserfs
+/fsck/reiserfsck
+/mkreiserfs/mkreiserfs
+/resize_reiserfs/resize_reiserfs
+/tune/reiserfstune
