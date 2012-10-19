@@ -98,12 +98,11 @@ fi
 
 dnl Never enable this. It is for debugging only
 AC_ARG_ENABLE(io-failure-emulation,
-[  --enable-io-failure-emulation      Never use that. It is for debugging only],
-[ if test "$enableval" = "yes" ; then
-    echo -e "\nCarefull! IO failure emulation is ON\n"
-    AC_DEFINE(IO_FAILURE_EMULATION, 1, [gets set when configure --enable-io-failure-emulation])
-  fi
-])
+	[AS_HELP_STRING([--enable-io-failure-emulation], [Never use this. It is for debugging only])])
+if test "$enable_io_failure_emulation" = "yes" ; then
+	AC_MSG_WARN([Careful! IO failure emulation is ON])
+	AC_DEFINE(IO_FAILURE_EMULATION, 1, [gets set when configure --enable-io-failure-emulation])
+fi
 
 if test "x$ac_cv_wno_unused_parameter_flag" = xyes; then
 	CFLAGS="$CFLAGS -Wno-unused-parameter"
