@@ -7,7 +7,7 @@ ufile.c check_tree.c info.c super.c fsck.h
 man_MANS = reiserfsck.8
 EXTRA_DIST = $(man_MANS)
 
-reiserfsck_LDADD = $(top_srcdir)/reiserfscore/libcore.a $(top_srcdir)/lib/libmisc.a
+reiserfsck_LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/libmisc.a
 
 install-exec-hook:
 	$(LN_S) reiserfsck $(DESTDIR)$(sbindir)/fsck.reiserfs

@@ -4,5 +4,5 @@ resize_reiserfs_SOURCES = fe.c resize_reiserfs.c do_shrink.c resize.h
 man_MANS = resize_reiserfs.8
 EXTRA_DIST = $(man_MANS)
 
-LDADD = $(top_srcdir)/reiserfscore/libcore.a $(top_srcdir)/lib/libmisc.a
+LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/libmisc.a
 

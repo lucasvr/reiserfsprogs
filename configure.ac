@@ -118,6 +118,8 @@ if test "x$ac_cv_wuninitialized_flag" = xyes; then
 	CFLAGS="$CFLAGS -Wuninitialized"
 fi
 
+CPPFLAGS="-I\$(top_srcdir)/include $CPPFLAGS"
+
 AC_OUTPUT(
     include/Makefile 
     mkreiserfs/Makefile 

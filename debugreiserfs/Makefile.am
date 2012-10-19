@@ -4,4 +4,4 @@ debugreiserfs_SOURCES = debugreiserfs.c pack.c unpack.c stat.c corruption.c scan
 man_MANS = debugreiserfs.8
 EXTRA_DIST = $(man_MANS)
 
-LDADD = $(top_srcdir)/reiserfscore/libcore.a $(top_srcdir)/lib/libmisc.a
+LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/libmisc.a
