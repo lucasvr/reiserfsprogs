@@ -50,14 +50,6 @@ AC_ARG_ENABLE(debug, [  --enable-debug          enable extra checks],
 	      enable_debug=no
 )
 
-dnl Check for the compiler pic option.
-AC_CACHE_CHECK([whether -fPIC works], [pic], [
-	saved_CPPFLAGS="$CPPFLAGS"
-	CPPFLAGS="-fPIC -DPIC"
-	AC_TRY_COMPILE(, , [pic=yes], [pic=no])
-	CPPFLAGS="$saved_CPPFLAGS"
-])
-
 # Checking for compiler warning options
 AC_CACHE_CHECK([whether -Wuninitialized works], [uninitialized], [
 	saved_CPPFLAGS="$CPPFLAGS"
@@ -147,10 +139,6 @@ else
 	if test "x" = "x$PRESET_CFLAGS"; then
 		CFLAGS="-g -Wall -O2"
 	fi
-fi
-
-if test x$pic = xyes; then
-	CFLAGS="$CFLAGS -fPIC -DPIC"
 fi
 
 AC_OUTPUT(
