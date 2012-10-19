@@ -6,7 +6,7 @@ AC_PREREQ(2.50)
 AH_TEMPLATE([HAVE_LIBUUID], [Define for enable libuuid using.])
 AH_TEMPLATE([ENABLE_DEBUG], [Define for enable debug info.])
 
-AM_INIT_AUTOMAKE(reiserfsprogs, 3.6.21)
+AM_INIT_AUTOMAKE(reiserfsprogs, 3.6.22)
 AM_MAINTAINER_MODE
 
 dnl We install in /sbin, the utils are to be available on boot
