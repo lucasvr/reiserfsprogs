@@ -1,12 +1,13 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT(version.h)
+AC_INIT([reiserfsprogs], [3.6.22], [reiserfs-devel@vger.kernel.org])
 AC_CANONICAL_HOST
 AC_PREREQ(2.50)
 
 AH_TEMPLATE([HAVE_LIBUUID], [Define for enable libuuid using.])
 AH_TEMPLATE([ENABLE_DEBUG], [Define for enable debug info.])
 
-AM_INIT_AUTOMAKE(reiserfsprogs, 3.6.22)
+AM_INIT_AUTOMAKE([1.11.1 dist-xz silent-rules])
+AM_SILENT_RULES([yes])
 AM_MAINTAINER_MODE
 
 dnl We install in /sbin, the utils are to be available on boot
