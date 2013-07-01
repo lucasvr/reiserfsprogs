@@ -7,3 +7,5 @@ EXTRA_DIST = $(man_MANS)
 
 LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/libmisc.a
 
+install-exec-hook:
+	$(LN_S) reiserfstune $(DESTDIR)$(sbindir)/tunefs.reiserfs

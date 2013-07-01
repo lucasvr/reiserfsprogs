@@ -5,3 +5,6 @@ man_MANS = debugreiserfs.8
 EXTRA_DIST = $(man_MANS)
 
 LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/libmisc.a
+
+install-exec-hook:
+	$(LN_S) debugreiserfs $(DESTDIR)$(sbindir)/debugfs.reiserfs
