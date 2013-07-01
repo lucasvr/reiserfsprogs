@@ -11,3 +11,5 @@ reiserfsck_LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/li
 
 install-exec-hook:
 	$(LN_S) reiserfsck $(DESTDIR)$(sbindir)/fsck.reiserfs
+	$(INSTALL) -m 755 -d $(DESTDIR)$(mandir)/man8
+	$(LN_S) reiserfsck.8 $(DESTDIR)$(mandir)/man8/fsck.reiserfs.8

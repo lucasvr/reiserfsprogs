@@ -9,3 +9,5 @@ LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/libmisc.a
 
 install-exec-hook:
 	$(LN_S) reiserfstune $(DESTDIR)$(sbindir)/tunefs.reiserfs
+	$(INSTALL) -m 755 -d $(DESTDIR)$(mandir)/man8
+	$(LN_S) reiserfstune.8 $(DESTDIR)$(mandir)/man8/tunefs.reiserfs.8

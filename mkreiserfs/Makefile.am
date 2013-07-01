@@ -8,3 +8,5 @@ LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/libmisc.a
 
 install-exec-hook:
 	$(LN_S) mkreiserfs $(DESTDIR)$(sbindir)/mkfs.reiserfs
+	$(INSTALL) -m 755 -d $(DESTDIR)$(mandir)/man8
+	$(LN_S) mkreiserfs.8 $(DESTDIR)$(mandir)/man8/mkfs.reiserfs.8
