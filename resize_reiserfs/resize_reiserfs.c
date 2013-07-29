@@ -68,10 +68,10 @@ static void sb_report(struct reiserfs_super_block * sb1,
 {
     printf(
 	"ReiserFS report:\n"
-	"blocksize             %d\n"
-	"block count           %d (%d)\n"
-	"free blocks           %d (%d)\n"
-	"bitmap block count    %d (%d)\n", 
+	"blocksize             %u\n"
+	"block count           %u (%u)\n"
+	"free blocks           %u (%u)\n"
+	"bitmap block count    %u (%u)\n", 
 	get_sb_block_size(sb1),
 	get_sb_block_count(sb1), get_sb_block_count(sb2),
 	get_sb_free_blocks(sb1), get_sb_free_blocks(sb2),
@@ -167,7 +167,7 @@ static int resizer_check_fs_size(reiserfs_filsys_t *fs, long long int new_size) 
 	
 	if(!valid_offset(fs->fs_dev, offset)) {
 	    reiserfs_warning (stderr, "%s is of %lu blocks size only with "
-			      "reiserfs of %d blocks\nsize on it. You are "
+			      "reiserfs of %u blocks\nsize on it. You are "
 			      "trying to expand reiserfs up to %lu blocks "
 			      "size.\nYou probably forgot to expand your "
 			      "partition size.\n\n", fs->fs_file_name,
