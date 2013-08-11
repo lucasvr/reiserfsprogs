@@ -1151,11 +1151,6 @@ void copy_short_key(void *to, void *from)
 	memcpy(to, from, SHORT_KEY_SIZE);
 }
 
-void copy_item_head(void *p_v_to, void *p_v_from)
-{
-	memcpy(p_v_to, p_v_from, IH_SIZE);
-}
-
 /* inserts new or old stat data of a directory (unreachable, nlinks == 0) */
 int create_dir_sd(reiserfs_filsys_t *fs,
 		  struct reiserfs_path *path, struct reiserfs_key *key,

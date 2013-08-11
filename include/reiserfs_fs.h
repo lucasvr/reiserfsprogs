@@ -34,12 +34,6 @@
 
 typedef unsigned int blocknr_t;
 
-#ifndef NO_EXTERN_INLINE
-# define extern_inline extern inline
-#else
-# define extern_inline
-#endif
-
 #ifndef get_unaligned
 #define get_unaligned(ptr)				\
 ({							\
@@ -668,29 +662,6 @@ void set_ih_key_format(struct item_head *ih, __u16 val);
 #define IH_Checked     2
 #define IH_Writable    3
 
-/* Bad item flag is set temporary by recover_leaf */
-/*
-extern_inline __u16 mark_ih_bad( struct item_head *ih )
-{
-    set_ih_flags(ih, get_ih_flags(ih) | IH_Bad );
-    return get_ih_flags(ih);
-}
-
-extern_inline __u16 ih_bad( struct item_head *ih )
-{
-    __u16 tmp = get_ih_flags(ih);
-    return test_bit(IH_Bad, &tmp );
-}
-
-extern_inline __u16 unmark_item_bad( struct item_head *ih )
-{
-    __u16 tmp = get_ih_flags(ih);
-    clear_bit( IH_Bad, &tmp );
-    set_ih_flags( ih, tmp );
-    return tmp;
-}
-*/
-
 /* Unreachable bit is set on tree rebuilding and is cleared in semantic pass */
 #define clean_ih_flags(ih) set_ih_flags (ih, 0)
 
@@ -1141,11 +1112,6 @@ struct reiserfs_path var = {ILLEGAL_PATH_ELEMENT_OFFSET, }
 #define REGULAR_FILE_FOUND	    14
 #define DIRECTORY_FOUND		    15
 
-struct unfm_nodeinfo {
-	__u32 unfm_nodenum;
-	__u16 unfm_freespace;
-};
-
 /* Size of pointer to the unformatted node. */
 #define UNFM_P_SIZE (sizeof(__u32))
 
@@ -1452,9 +1418,7 @@ int are_items_mergeable (struct item_head * left, struct item_head * right, int 
 
 
 /* fix_nodes.c */
-void *reiserfs_kmalloc (size_t size, int flags, reiserfs_filsys_t * s);
-void reiserfs_kfree (/*const*/ void * vp, size_t size, reiserfs_filsys_t * s);
-int fix_nodes (/*struct reiserfs_transaction_handle *th,*/ int n_op_mode, struct tree_balance * p_s_tb,
+int fix_nodes (/*struct reiserfs_transaction_handle *th,*/ int n_op_mode, struct tree_balance * p_s_tb, 
                /*int n_pos_in_item,*/ struct item_head * p_s_ins_ih);
 void unfix_nodes (/*struct reiserfs_transaction_handle *th,*/ struct tree_balance *);
 void free_buffers_in_tb (struct tree_balance * p_s_tb);

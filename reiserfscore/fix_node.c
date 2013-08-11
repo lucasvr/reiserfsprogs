@@ -2283,29 +2283,6 @@ static int get_neighbors(struct tree_balance *p_s_tb, int n_h)
 	return CARRY_ON;
 }
 
-#if 0
-void * reiserfs_kmalloc (size_t size, int flags, struct super_block * s)
-{
-	void * vp;
-
-	vp = getmem (size);
-	return vp;
-}
-
-void reiserfs_kfree (/*const */void * vp, size_t size, struct super_block * s)
-{
-	freemem (vp);
-
-	kfree (vp);
-  
-	s->u.reiserfs_sb.s_kmallocs -= size;
-	if (s->u.reiserfs_sb.s_kmallocs < 0)
-		reiserfs_warning("vs-8302: reiserfs_kfree: allocated memory %d\n",
-				 s->u.reiserfs_sb.s_kmallocs);
-
-#endif
-
-
 static int get_mem_for_virtual_node(struct tree_balance *tb)
 {
 	tb->vn_buf = getmem(tb->tb_fs->fs_blocksize);
