@@ -68,7 +68,7 @@ static void stat_data_in_tree(struct buffer_head *bh, struct item_head *ih)
 	}
 #endif
 
-	zero_nlink(ih, B_I_PITEM(bh, ih));
+	zero_nlink(ih, ih_item_body(bh, ih));
 }
 
 static char *still_bad_unfm_ptr_to_string(int val)
@@ -97,7 +97,7 @@ static void indirect_in_tree(struct buffer_head *bh, struct item_head *ih)
 	__u32 unfm_ptr;
 	int ret;
 
-	unp = (__u32 *) B_I_PITEM(bh, ih);
+	unp = (__u32 *) ih_item_body(bh, ih);
 
 	for (i = 0; i < I_UNFM_NUM(ih); i++) {
 		unfm_ptr = d32_get(unp, i);
@@ -168,8 +168,8 @@ int balance_condition_fails(struct buffer_head *left, struct buffer_head *right)
 {
 	if (B_FREE_SPACE(left) >= B_CHILD_SIZE(right) -
 	    (are_items_mergeable
-	     (B_N_PITEM_HEAD(left, B_NR_ITEMS(left) - 1),
-	      B_N_PITEM_HEAD(right, 0), left->b_size) ? IH_SIZE : 0))
+	     (item_head(left, B_NR_ITEMS(left) - 1),
+	      item_head(right, 0), left->b_size) ? IH_SIZE : 0))
 		return 1;
 	return 0;
 }
@@ -219,7 +219,7 @@ int balance_condition_2_fails(struct buffer_head *new,
 
 	if (B_FREE_SPACE(new) >= used_space -
 	    (are_items_mergeable
-	     (B_N_PITEM_HEAD(new, B_NR_ITEMS(new) - 1),
+	     (item_head(new, B_NR_ITEMS(new) - 1),
 	      (struct item_head *)right_dkey, new->b_size) ? IH_SIZE : 0))
 		return 1;
 
@@ -230,7 +230,7 @@ static void get_max_buffer_key(struct buffer_head *bh, struct reiserfs_key *key)
 {
 	struct item_head *ih;
 
-	ih = B_N_PITEM_HEAD(bh, B_NR_ITEMS(bh) - 1);
+	ih = item_head(bh, B_NR_ITEMS(bh) - 1);
 	copy_key(key, &(ih->ih_key));
 
 	if (is_direntry_key(key)) {
@@ -276,7 +276,7 @@ static void try_to_insert_pointer_to_leaf(struct buffer_head *new_bh)
 		return;
 	}
 
-	first_bh_key = B_N_PKEY(new_bh, 0);
+	first_bh_key = leaf_key(new_bh, 0);
 
 	/* try to find place in the tree for the first key of the coming node */
 	ret_value = reiserfs_search_by_key_4(fs, first_bh_key, &path);
@@ -287,7 +287,7 @@ static void try_to_insert_pointer_to_leaf(struct buffer_head *new_bh)
 	get_max_buffer_key(new_bh, &last_bh_key);
 
 	bh = PATH_PLAST_BUFFER(&path);
-	if (comp_keys(B_N_PKEY(bh, 0), &last_bh_key) ==
+	if (comp_keys(leaf_key(bh, 0), &last_bh_key) ==
 	    1 /* first is greater */ ) {
 		/* new buffer falls before the leftmost leaf */
 		if (balance_condition_fails(new_bh, bh))
@@ -344,7 +344,7 @@ static void pass1_correct_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 	__u32 unfm_ptr;
 	int dirty = 0;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	for (i = 0; i < B_NR_ITEMS(bh); i++, ih++) {
 		if (is_direntry_ih(ih)) {
 			struct reiserfs_de_head *deh;
@@ -419,7 +419,7 @@ static void pass1_correct_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 			continue;
 
 		/* correct indirect items */
-		ind_item = (__u32 *) B_I_PITEM(bh, ih);
+		ind_item = (__u32 *) ih_item_body(bh, ih);
 
 		for (j = 0; j < I_UNFM_NUM(ih); j++) {
 			unfm_ptr = d32_get(ind_item, j);

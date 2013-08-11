@@ -38,7 +38,7 @@ static void leaf_copy_dir_entries(reiserfs_filsys_t *fs,
 	int copy_records_len;	/* length of all records in item to be copied */
 	char *records;
 
-	ih = B_N_PITEM_HEAD(source, item_num);
+	ih = item_head(source, item_num);
 
 	/* length of all record to be copied and first byte of the last of them */
 	deh = B_I_DEH(source, ih);
@@ -65,11 +65,11 @@ static void leaf_copy_dir_entries(reiserfs_filsys_t *fs,
 	/* if there are no items in dest or the first/last item in dest is not item of the same directory */
 	if ((item_num_in_dest == -1) ||
 	    (last_first == FIRST_TO_LAST
-	     && are_items_mergeable(B_N_PITEM_HEAD(dest, item_num_in_dest), ih,
+	     && are_items_mergeable(item_head(dest, item_num_in_dest), ih,
 				    dest->b_size) == 0)
 	    || (last_first == LAST_TO_FIRST
 		&& are_items_mergeable(ih,
-				       B_N_PITEM_HEAD(dest, item_num_in_dest),
+				       item_head(dest, item_num_in_dest),
 				       dest->b_size) == 0)) {
 		/* create new item in dest */
 		struct item_head new_ih;
@@ -119,7 +119,7 @@ static void leaf_copy_dir_entries(reiserfs_filsys_t *fs,
 	leaf_paste_entries(dest_bi->bi_bh, item_num_in_dest,
 			   (last_first ==
 			    FIRST_TO_LAST) ?
-			   get_ih_entry_count(B_N_PITEM_HEAD
+			   get_ih_entry_count(item_head
 					      (dest, item_num_in_dest)) : 0,
 			   copy_count, deh + from, records,
 			   DEH_SIZE * copy_count + copy_records_len);
@@ -145,8 +145,8 @@ static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
 		/* if ( DEST is empty or first item of SOURCE and last item of DEST are the items of different objects
 		   or of different types ) then there is no need to treat this item differently from the other items
 		   that we copy, so we return */
-		ih = B_N_PITEM_HEAD(src, 0);
-		dih = B_N_PITEM_HEAD(dest, dest_nr_item - 1);
+		ih = item_head(src, 0);
+		dih = item_head(dest, dest_nr_item - 1);
 		if (!dest_nr_item
 		    || (are_items_mergeable(dih, ih, src->b_size) == 0))
 			/* there is nothing to merge */
@@ -171,7 +171,7 @@ static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
 		   item of dest buffer. Both are of the same file */
 		leaf_paste_in_buffer(fs, dest_bi, dest_nr_item - 1,
 				     get_ih_item_len(dih), bytes_or_entries,
-				     B_I_PITEM(src, ih), 0);
+				     ih_item_body(src, ih), 0);
 
 		if (I_IS_INDIRECT_ITEM(dih)) {
 			if (bytes_or_entries == get_ih_item_len(ih))
@@ -188,8 +188,8 @@ static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
 	   are the items of different object or of different types )
 	 */
 	src_nr_item = B_NR_ITEMS(src);
-	ih = B_N_PITEM_HEAD(src, src_nr_item - 1);
-	dih = B_N_PITEM_HEAD(dest, 0);
+	ih = item_head(src, src_nr_item - 1);
+	dih = item_head(dest, 0);
 
 	if (!dest_nr_item || are_items_mergeable(ih, dih, src->b_size) == 0)
 		return 0;
@@ -242,7 +242,7 @@ static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
 	}
 
 	leaf_paste_in_buffer(fs, dest_bi, 0, 0, bytes_or_entries,
-			     B_I_PITEM(src,
+			     ih_item_body(src,
 				       ih) + get_ih_item_len(ih) -
 			     bytes_or_entries, 0);
 	return 1;
@@ -277,13 +277,13 @@ static void leaf_copy_items_entirely(reiserfs_filsys_t *fs,
 	dest_before = (last_first == LAST_TO_FIRST) ? 0 : nr;
 
 	/* location of head of first new item */
-	ih = B_N_PITEM_HEAD(dest, dest_before);
+	ih = item_head(dest, dest_before);
 
 	/* prepare space for headers */
 	memmove(ih + cpy_num, ih, (nr - dest_before) * IH_SIZE);
 
 	/* copy item headers */
-	memcpy(ih, B_N_PITEM_HEAD(src, first), cpy_num * IH_SIZE);
+	memcpy(ih, item_head(src, first), cpy_num * IH_SIZE);
 
 	set_blkh_free_space(blkh,
 			    get_blkh_free_space(blkh) - IH_SIZE * cpy_num);
@@ -307,7 +307,7 @@ static void leaf_copy_items_entirely(reiserfs_filsys_t *fs,
 
 	/* copy items */
 	memcpy(dest->b_data + last_inserted_loc,
-	       B_N_PITEM(src, (first + cpy_num - 1)), j - last_inserted_loc);
+	       item_body(src, (first + cpy_num - 1)), j - last_inserted_loc);
 
 	/* sizes, item number */
 	set_blkh_nr_items(blkh, get_blkh_nr_items(blkh) + cpy_num);
@@ -339,7 +339,7 @@ static void leaf_item_bottle(reiserfs_filsys_t *fs,
 
 	if (last_first == FIRST_TO_LAST) {
 		/* if ( if item in position item_num in buffer SOURCE is directory item ) */
-		if (I_IS_DIRECTORY_ITEM(ih = B_N_PITEM_HEAD(src, item_num)))
+		if (I_IS_DIRECTORY_ITEM(ih = item_head(src, item_num)))
 			leaf_copy_dir_entries(fs, dest_bi, src, FIRST_TO_LAST,
 					      item_num, 0, cpy_bytes);
 		else {
@@ -359,12 +359,12 @@ static void leaf_item_bottle(reiserfs_filsys_t *fs,
 			set_ih_key_format(&n_ih, get_ih_key_format(ih));
 			set_ih_flags(&n_ih, get_ih_flags(ih));
 			leaf_insert_into_buf(fs, dest_bi, B_NR_ITEMS(dest),
-					     &n_ih, B_N_PITEM(src, item_num),
+					     &n_ih, item_body(src, item_num),
 					     0);
 		}
 	} else {
 		/*  if ( if item in position item_num in buffer SOURCE is directory item ) */
-		if (I_IS_DIRECTORY_ITEM(ih = B_N_PITEM_HEAD(src, item_num)))
+		if (I_IS_DIRECTORY_ITEM(ih = item_head(src, item_num)))
 			leaf_copy_dir_entries(fs, dest_bi, src, LAST_TO_FIRST,
 					      item_num,
 					      get_ih_entry_count(ih) -
@@ -411,7 +411,7 @@ static void leaf_item_bottle(reiserfs_filsys_t *fs,
 			set_ih_key_format(&n_ih, get_ih_key_format(ih));
 			set_ih_flags(&n_ih, get_ih_flags(ih));
 			leaf_insert_into_buf(fs, dest_bi, 0, &n_ih,
-					     B_N_PITEM(src,
+					     item_body(src,
 						       item_num) +
 					     get_ih_item_len(ih) - cpy_bytes,
 					     0);
@@ -681,7 +681,7 @@ void leaf_delete_items(reiserfs_filsys_t *fs,
 						   del_num - 1);
 
 			if (I_IS_DIRECTORY_ITEM
-			    (ih = B_N_PITEM_HEAD(bh, B_NR_ITEMS(bh) - 1)))
+			    (ih = item_head(bh, B_NR_ITEMS(bh) - 1)))
 				/* the last item is directory  */
 				/* len = numbers of directory entries in this item */
 				len = get_ih_entry_count(ih);
@@ -717,7 +717,7 @@ void leaf_insert_into_buf(reiserfs_filsys_t *s,
 	nr = get_blkh_nr_items(blkh);
 
 	/* get item new item must be inserted before */
-	ih = B_N_PITEM_HEAD(bh, before);
+	ih = item_head(bh, before);
 
 	/* prepare space for the body of new item */
 	last_loc = nr ? get_ih_location(&ih[nr - before - 1]) : bh->b_size;
@@ -793,7 +793,7 @@ void leaf_paste_in_buffer(reiserfs_filsys_t *fs,
 	nr = get_blkh_nr_items(blkh);
 
 	/* item to be appended */
-	ih = B_N_PITEM_HEAD(bh, affected_item_num);
+	ih = item_head(bh, affected_item_num);
 
 	last_loc = get_ih_location(&ih[nr - affected_item_num - 1]);
 	unmoved_loc = affected_item_num ? get_ih_location(ih - 1) : bh->b_size;
@@ -877,7 +877,7 @@ static int leaf_cut_entries(struct buffer_head *bh,
 	int entry_count;
 
 	/* first byte of item */
-	item = B_I_PITEM(bh, ih);
+	item = ih_item_body(bh, ih);
 
 	/* entry head array */
 	deh = B_I_DEH(bh, ih);
@@ -959,7 +959,7 @@ void leaf_cut_from_buffer(reiserfs_filsys_t *fs,
 	nr = get_blkh_nr_items(blkh);
 
 	/* item head of truncated item */
-	ih = B_N_PITEM_HEAD(bh, cut_item_num);
+	ih = item_head(bh, cut_item_num);
 
 	if (I_IS_DIRECTORY_ITEM(ih)) {
 		/* first cut entry () */
@@ -1063,7 +1063,7 @@ static void leaf_delete_items_entirely(reiserfs_filsys_t *fs,
 		return;
 	}
 
-	ih = B_N_PITEM_HEAD(bh, first);
+	ih = item_head(bh, first);
 
 	/* location of unmovable item */
 	j = (first == 0) ? bh->b_size : get_ih_location(ih - 1);
@@ -1122,10 +1122,10 @@ void leaf_paste_entries(struct buffer_head *bh,
 	if (new_entry_count == 0)
 		return;
 
-	ih = B_N_PITEM_HEAD(bh, item_num);
+	ih = item_head(bh, item_num);
 
 	/* first byte of dest item */
-	item = B_I_PITEM(bh, ih);
+	item = ih_item_body(bh, ih);
 
 	/* entry head array */
 	deh = B_I_DEH(bh, ih);
@@ -1148,7 +1148,7 @@ void leaf_paste_entries(struct buffer_head *bh,
 				 get_deh_location(deh + i) + paste_size);
 
 	old_entry_num = get_ih_entry_count(ih);
-	//I_ENTRY_COUNT(ih) += new_entry_count;
+	//ih_entry_count(ih) += new_entry_count;
 	set_ih_entry_count(ih, old_entry_num + new_entry_count);
 
 	/* prepare space for pasted records */

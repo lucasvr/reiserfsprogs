@@ -100,7 +100,7 @@ static void pack_direct(struct packed_item *pi, struct buffer_head *bh,
 
 	if (get_pi_mask(pi) & SAFE_LINK)
 		set_key_dirid(&ih->ih_key,
-			      d32_get((__u32 *) B_I_PITEM(bh, ih), 0));
+			      d32_get((__u32 *) ih_item_body(bh, ih), 0));
 
 	/* send key components which are to be sent */
 	pack_ih(pi, ih);
@@ -138,7 +138,7 @@ static void pack_indirect(struct packed_item *pi, struct buffer_head *bh,
 	if (get_ih_entry_count(ih))
 		set_pi_mask(pi, get_pi_mask(pi) | IH_FREE_SPACE);
 
-	ind_item = (__u32 *) B_I_PITEM(bh, ih);
+	ind_item = (__u32 *) ih_item_body(bh, ih);
 	if (!should_pack_indirect(ind_item, I_UNFM_NUM(ih)))
 		set_pi_mask(pi, get_pi_mask(pi) | WHOLE_INDIRECT);
 
@@ -251,7 +251,7 @@ static void pack_stat_data(struct packed_item *pi, struct buffer_head *bh,
 		 */
 		struct stat_data_v1 *sd_v1;
 
-		sd_v1 = (struct stat_data_v1 *)B_I_PITEM(bh, ih);
+		sd_v1 = (struct stat_data_v1 *)ih_item_body(bh, ih);
 		if (sd_v1->sd_first_direct_byte != 0xffffffff)	/* ok if -1 */
 			set_pi_mask(pi,
 				    get_pi_mask(pi) |
@@ -279,7 +279,7 @@ static void pack_stat_data(struct packed_item *pi, struct buffer_head *bh,
 		__u32 nlink32, size32;
 		__u64 size64;
 
-		sd = (struct stat_data *)B_I_PITEM(bh, ih);
+		sd = (struct stat_data *)ih_item_body(bh, ih);
 		if (sd_v2_nlink(sd) > 0xffff) {
 			set_pi_mask(pi, get_pi_mask(pi) | NLINK_BITS_32);
 			nlink32 = sd->sd_nlink;
@@ -356,10 +356,10 @@ static int can_pack_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 	int i;
 	struct item_head *ih;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	for (i = 0; i < get_blkh_nr_items(B_BLK_HEAD(bh)); i++, ih++) {
 		if (is_it_bad_item
-		    (fs, ih, B_I_PITEM(bh, ih), 0 /*check_unfm_ptr */ ,
+		    (fs, ih, ih_item_body(bh, ih), 0 /*check_unfm_ptr */ ,
 		     1 /*bad dir */ ))
 			return 0;
 	}
@@ -394,7 +394,7 @@ static void pack_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 	v16 = get_blkh_nr_items(B_BLK_HEAD(bh));
 	fwrite_le16(&v16);
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 
 	for (i = 0; i < v16; i++, ih++) {
 #if 0

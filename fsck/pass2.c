@@ -157,9 +157,9 @@ void save_item(struct si **head, struct item_head *ih, char *item,
 struct si *save_and_delete_file_item(struct si *si, struct reiserfs_path *path)
 {
 	struct buffer_head *bh = PATH_PLAST_BUFFER(path);
-	struct item_head *ih = PATH_PITEM_HEAD(path);
+	struct item_head *ih = tp_item_head(path);
 
-	save_item(&si, ih, B_I_PITEM(bh, ih), bh->b_blocknr);
+	save_item(&si, ih, ih_item_body(bh, ih), bh->b_blocknr);
 
 	/* delete item temporary - do not free unformatted nodes */
 	reiserfsck_delete_item(path, 1 /*temporary */ );
@@ -194,7 +194,7 @@ int should_relocate(struct item_head *ih)
 			break;
 		}
 
-		path_ih = get_ih(&path);
+		path_ih = tp_item_head(&path);
 		if (not_of_one_file(&key, &(path_ih->ih_key))) {
 			/* there are no more item with this key */
 			pathrelse(&path);
@@ -219,7 +219,7 @@ int should_relocate(struct item_head *ih)
 
 		/* ok, item found, but make sure that it is not a directory one */
 		if ((is_stat_data_ih(path_ih)
-		     && !not_a_directory(get_item(&path)))
+		     && !not_a_directory(tp_item_body(&path)))
 		    || (is_direntry_ih(path_ih))) {
 			/* item of directory found. so, we have to relocate the file */
 			pathrelse(&path);
@@ -245,12 +245,12 @@ static void overwrite_stat_data(struct item_head *new_ih,
 	__u16 new_mode, old_mode;
 
 	get_sd_mode(new_ih, new_item, &new_mode);
-	get_sd_mode(get_ih(path), get_item(path), &old_mode);
+	get_sd_mode(tp_item_head(path), tp_item_body(path), &old_mode);
 
 	if (S_ISREG(new_mode) && !S_ISREG(old_mode)) {
 		/* in tree we have not regular file - overwrite its stat data
 		   with stat data of regular file */
-		memcpy(get_item(path), new_item, get_ih_item_len(get_ih(path)));
+		memcpy(tp_item_body(path), new_item, get_ih_item_len(tp_item_head(path)));
 		mark_buffer_dirty(get_bh(path));
 		return;
 	}
@@ -263,13 +263,13 @@ static void overwrite_stat_data(struct item_head *new_ih,
 
 	/* if coming stat data has newer mtime - use that */
 	if (stat_data_v1(new_ih)) {
-		if (st_mtime_v1(new_item) > st_mtime_v1(get_item(path))) {
-			memcpy(get_item(path), new_item, SD_V1_SIZE);
+		if (st_mtime_v1(new_item) > st_mtime_v1(tp_item_body(path))) {
+			memcpy(tp_item_body(path), new_item, SD_V1_SIZE);
 			mark_buffer_dirty(get_bh(path));
 		}
 	} else {
-		if (st_mtime_v2(new_item) > st_mtime_v2(get_item(path))) {
-			memcpy(get_item(path), new_item, SD_SIZE);
+		if (st_mtime_v2(new_item) > st_mtime_v2(tp_item_body(path))) {
+			memcpy(tp_item_body(path), new_item, SD_SIZE);
 			mark_buffer_dirty(get_bh(path));
 		}
 	}
@@ -305,7 +305,7 @@ static void put_sd_into_tree(struct item_head *new_ih, char *new_item)
 	if (reiserfs_search_by_key_4(fs, &(new_ih->ih_key), &path) ==
 	    ITEM_FOUND) {
 		/* this stat data is found */
-		if (get_ih_key_format(get_ih(&path)) !=
+		if (get_ih_key_format(tp_item_head(&path)) !=
 		    get_ih_key_format(new_ih)) {
 			/* in tree stat data and a new one are of different
 			   formats */
@@ -317,13 +317,13 @@ static void put_sd_into_tree(struct item_head *new_ih, char *new_item)
 				   is of V2 */
 				fsck_log
 				    ("found newer in the tree, mode (%M), insersion was skipped.\n",
-				     st_mode(get_item(&path)));
+				     st_mode(tp_item_body(&path)));
 				pathrelse(&path);
 			} else {
 				/* the stat data in the tree is sd_v1 */
 				fsck_log
 				    ("older sd, mode (%M), is replaced with it.\n",
-				     st_mode(get_item(&path)));
+				     st_mode(tp_item_body(&path)));
 				reiserfsck_delete_item(&path,
 						       0 /*not temporary */ );
 
@@ -402,15 +402,15 @@ static void put_stat_data_items(struct buffer_head *bh)
 	int i;
 	struct item_head *ih;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	for (i = 0; i < B_NR_ITEMS(bh); i++, ih++) {
 
 		/* this check instead of saved_items */
 		if (!is_stat_data_ih(ih)
-		    || is_bad_item(bh, ih, B_I_PITEM(bh, ih))) {
+		    || is_bad_item(bh, ih, ih_item_body(bh, ih))) {
 			continue;
 		}
-		insert_item_separately(ih, B_I_PITEM(bh, ih),
+		insert_item_separately(ih, ih_item_body(bh, ih),
 				       0 /*was in tree */ );
 	}
 }
@@ -420,14 +420,14 @@ static void put_not_stat_data_items(struct buffer_head *bh)
 	int i;
 	struct item_head *ih;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	for (i = 0; i < B_NR_ITEMS(bh); i++, ih++) {
 
 		if (is_stat_data_ih(ih)
-		    || is_bad_item(bh, ih, B_I_PITEM(bh, ih))) {
+		    || is_bad_item(bh, ih, ih_item_body(bh, ih))) {
 			continue;
 		}
-		insert_item_separately(ih, B_I_PITEM(bh, ih),
+		insert_item_separately(ih, ih_item_body(bh, ih),
 				       0 /*was in tree */ );
 	}
 }

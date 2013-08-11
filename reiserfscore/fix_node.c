@@ -160,7 +160,7 @@ static void create_virtual_node(struct tree_balance *tb, int h)
 	vn->vn_free_ptr += vn->vn_nr_item * sizeof(struct virtual_item);
 
 	/* first item in the node */
-	ih = B_N_PITEM_HEAD(Sh, 0);
+	ih = item_head(Sh, 0);
 
 	/* define the mergeability for 0-th item (if it is not being deleted) */
 	if (is_left_mergeable(tb->tb_fs, tb->tb_path) == 1
@@ -246,7 +246,7 @@ static void create_virtual_node(struct tree_balance *tb, int h)
 
 	/* set right merge flag we take right delimiting key and check whether it is a mergeable item */
 	if (tb->CFR[0]) {
-		ih = (struct item_head *)B_N_PDELIM_KEY(tb->CFR[0],
+		ih = (struct item_head *)internal_key(tb->CFR[0],
 							tb->rkey[0]);
 		if (is_right_mergeable(tb->tb_fs, tb->tb_path) == 1
 		    && (vn->vn_mode != M_DELETE
@@ -911,7 +911,7 @@ static struct buffer_head *get_left_neighbor(reiserfs_filsys_t *s,
 	struct reiserfs_path path_to_left_neighbor;
 	struct buffer_head *bh;
 
-	copy_key(&key, B_N_PKEY(PATH_PLAST_BUFFER(path), 0));
+	copy_key(&key, leaf_key(PATH_PLAST_BUFFER(path), 0));
 	decrement_key(&key);
 
 	init_path(&path_to_left_neighbor);
@@ -960,14 +960,14 @@ int is_left_mergeable(reiserfs_filsys_t *s, struct reiserfs_path *path)
 	struct buffer_head *bh;
 	int retval;
 
-	right = B_N_PITEM_HEAD(PATH_PLAST_BUFFER(path), 0);
+	right = item_head(PATH_PLAST_BUFFER(path), 0);
 
 	bh = get_left_neighbor(s, path);
 	if (bh == 0) {
 		return 0;
 	}
 	retval =
-	    are_items_mergeable(B_N_PITEM_HEAD(bh, B_NR_ITEMS(bh) - 1), right,
+	    are_items_mergeable(item_head(bh, B_NR_ITEMS(bh) - 1), right,
 				bh->b_size);
 	brelse(bh);
 	return retval;
@@ -980,14 +980,14 @@ int is_right_mergeable(reiserfs_filsys_t *s, struct reiserfs_path *path)
 	int retval;
 
 	left =
-	    B_N_PITEM_HEAD(PATH_PLAST_BUFFER(path),
+	    item_head(PATH_PLAST_BUFFER(path),
 			   B_NR_ITEMS(PATH_PLAST_BUFFER(path)) - 1);
 
 	bh = get_right_neighbor(s, path);
 	if (bh == 0) {
 		return 0;
 	}
-	retval = are_items_mergeable(left, B_N_PITEM_HEAD(bh, 0), bh->b_size);
+	retval = are_items_mergeable(left, item_head(bh, 0), bh->b_size);
 	brelse(bh);
 	return retval;
 }
@@ -1055,10 +1055,10 @@ static int are_leaves_removable(struct tree_balance *tb, int lfree, int rfree)
 		/* there was only one item and it will be deleted */
 		struct item_head *ih;
 
-		ih = B_N_PITEM_HEAD(S0, 0);
+		ih = item_head(S0, 0);
 		if (tb->CFR[0]
 		    && !not_of_one_file(&(ih->ih_key),
-					B_N_PDELIM_KEY(tb->CFR[0],
+					internal_key(tb->CFR[0],
 						       tb->rkey[0])))
 			if (I_IS_DIRECTORY_ITEM(ih)) {
 				/* we can delete any directory item in fsck (if it is unreachable) */
@@ -1078,7 +1078,7 @@ static int are_leaves_removable(struct tree_balance *tb, int lfree, int rfree)
 							    ("vs-8135: are_leaves_removable: "
 							     "empty node in the tree");
 						last =
-						    B_N_PITEM_HEAD(left,
+						    item_head(left,
 								   B_NR_ITEMS
 								   (left) - 1);
 						if (!comp_short_keys
@@ -1382,7 +1382,7 @@ static int get_far_parent(struct tree_balance *p_s_tb,
 
 	/* Form key to get parent of the left/right neighbor. */
 	copy_key(&s_lr_father_key,
-		 B_N_PDELIM_KEY(*pp_s_com_father,
+		 internal_key(*pp_s_com_father,
 				(c_lr_par ==
 				 LEFT_PARENTS) ? (p_s_tb->lkey[n_h - 1] =
 						  n_position -
@@ -1505,7 +1505,7 @@ static inline int can_node_be_removed(int mode, int lfree, int sfree, int rfree,
 
 	if (tb->CFR[h])
 		r_ih =
-		    (struct item_head *)B_N_PDELIM_KEY(tb->CFR[h], tb->rkey[h]);
+		    (struct item_head *)internal_key(tb->CFR[h], tb->rkey[h]);
 
 	if (lfree + rfree + sfree < (int)(MAX_CHILD_SIZE(Sh->b_size) + levbytes
 					  /* shifting may merge items which might save space */

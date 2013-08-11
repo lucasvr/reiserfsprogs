@@ -40,7 +40,7 @@ void reiserfsck_insert_item(struct reiserfs_path *path, struct item_head *ih,
 
 static void free_unformatted_nodes(struct item_head *ih, struct buffer_head *bh)
 {
-	__u32 *punfm = (__u32 *) B_I_PITEM(bh, ih);
+	__u32 *punfm = (__u32 *) ih_item_body(bh, ih);
 	unsigned int i;
 
 	for (i = 0; i < I_UNFM_NUM(ih); i++) {
@@ -64,7 +64,7 @@ static void free_unformatted_nodes(struct item_head *ih, struct buffer_head *bh)
 void reiserfsck_delete_item(struct reiserfs_path *path, int temporary)
 {
 	struct tree_balance tb;
-	struct item_head *ih = PATH_PITEM_HEAD(path);
+	struct item_head *ih = tp_item_head(path);
 
 	if (is_indirect_ih(ih) && !temporary)
 		free_unformatted_nodes(ih, PATH_PLAST_BUFFER(path));
@@ -87,10 +87,10 @@ void reiserfsck_cut_from_item(struct reiserfs_path *path, int cut_size)
 	if (cut_size >= 0)
 		die("reiserfsck_cut_from_item: cut size == %d", cut_size);
 
-	if (is_indirect_ih(ih = PATH_PITEM_HEAD(path))) {
+	if (is_indirect_ih(ih = tp_item_head(path))) {
 		struct buffer_head *bh = PATH_PLAST_BUFFER(path);
 		__u32 unfm_ptr =
-		    d32_get((__u32 *) B_I_PITEM(bh, ih), I_UNFM_NUM(ih) - 1);
+		    d32_get((__u32 *) ih_item_body(bh, ih), I_UNFM_NUM(ih) - 1);
 		if (unfm_ptr != 0) {
 			struct buffer_head *to_be_forgotten;
 
@@ -143,7 +143,7 @@ struct reiserfs_key *uget_rkey (struct reiserfs_path *path)
 	
 	// Return delimiting key if position in the parent is not the last one.
 	if (pos != B_NR_ITEMS (bh))
-	    return B_N_PDELIM_KEY(bh, pos);
+	    return internal_key(bh, pos);
     }
 
     // there is no right delimiting key

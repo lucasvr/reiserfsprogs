@@ -362,7 +362,7 @@ static int bad_stat_data(reiserfs_filsys_t *fs,
 	return 0;
 /* Check this on semantic_check pass.
 
-    sd = (struct stat_data *)B_I_PITEM(bh,ih);
+    sd = (struct stat_data *)ih_item_body(bh,ih);
     get_sd_nlink (ih, sd, &links);
     if (S_ISDIR(sd->sd_mode)) {
         if (links < 2) {
@@ -403,7 +403,7 @@ static int bad_badblocks_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 			      struct item_head *ih)
 {
 	__u32 i;
-	__u32 *ind = (__u32 *) B_I_PITEM(bh, ih);
+	__u32 *ind = (__u32 *) ih_item_body(bh, ih);
 
 	if (get_ih_item_len(ih) % 4) {
 		fsck_log("%s: block %lu: item (%H) has bad length\n",
@@ -477,7 +477,7 @@ static int bad_badblocks_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 static int bad_indirect_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 			     struct item_head *ih)
 {
-	__u32 *ind = (__u32 *) B_I_PITEM(bh, ih);
+	__u32 *ind = (__u32 *) ih_item_body(bh, ih);
 	unsigned int i;
 
 	if (get_ih_item_len(ih) % 4) {
@@ -585,7 +585,7 @@ static int bad_directory_item(reiserfs_filsys_t *fs,
 	}
 
 	/* check name hashing */
-	prev_name = B_I_PITEM(bh, ih) + get_ih_item_len(ih);
+	prev_name = ih_item_body(bh, ih) + get_ih_item_len(ih);
 	prev_off = 0;
 
 	for (i = 0; i < count; i++, deh++) {
@@ -648,7 +648,7 @@ static int bad_item(reiserfs_filsys_t *fs, struct buffer_head *bh, int num)
 	struct item_head *ih;
 	int format;
 
-	ih = B_N_PITEM_HEAD(bh, num);
+	ih = item_head(bh, num);
 
 	if ((get_ih_flags(ih)) != 0) {
 		if (fsck_mode(fs) != FSCK_FIX_FIXABLE) {
@@ -755,7 +755,7 @@ int bad_pair(reiserfs_filsys_t *fs, struct buffer_head *bh, int pos)
 {
 	struct item_head *ih;
 
-	ih = B_N_PITEM_HEAD(bh, pos);
+	ih = item_head(bh, pos);
 
 	if (comp_keys(&((ih - 1)->ih_key), &ih->ih_key) != -1) {
 		if (fsck_mode(fs) != FSCK_REBUILD)
@@ -841,15 +841,15 @@ static int bad_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 		if (bad_item(fs, bh, i)) {
 			fsck_log
 			    ("bad_leaf: block %lu, item %d: The corrupted item found "
-			     "(%H)\n", bh->b_blocknr, i, B_N_PITEM_HEAD(bh, i));
+			     "(%H)\n", bh->b_blocknr, i, item_head(bh, i));
 		}
 
 		if (i && bad_pair(fs, bh, i)) {
 			fsck_log
 			    ("bad_leaf: block %lu, items %d and %d: The wrong order "
 			     "of items: %k, %k\n", bh->b_blocknr, i - 1, i,
-			     &B_N_PITEM_HEAD(bh, i - 1)->ih_key,
-			     &B_N_PITEM_HEAD(bh, i)->ih_key);
+			     &item_head(bh, i - 1)->ih_key,
+			     &item_head(bh, i)->ih_key);
 		}
 	}
 	return 0;
@@ -863,13 +863,13 @@ static int bad_internal(reiserfs_filsys_t *fs, struct buffer_head *bh)
 	for (i = 0; i <= B_NR_ITEMS(bh); i++) {
 		if (i != B_NR_ITEMS(bh) && i != B_NR_ITEMS(bh) - 1)
 			/* make sure that keys are in increasing order */
-			if (comp_keys(B_N_PDELIM_KEY(bh, i),
-				      B_N_PDELIM_KEY(bh, i + 1)) != -1) {
+			if (comp_keys(internal_key(bh, i),
+				      internal_key(bh, i + 1)) != -1) {
 				fsck_log
 				    ("%s: vpf-10320: block %lu, items %d and %d: The "
 				     "wrong order of items: %k, %k\n",
 				     __FUNCTION__, bh->b_blocknr, i, i + 1,
-				     B_N_PDELIM_KEY(bh, i), B_N_PDELIM_KEY(bh,
+				     internal_key(bh, i), internal_key(bh,
 									   i +
 									   1));
 
@@ -931,7 +931,7 @@ int internal_remove(struct buffer_head *bh, int pos)
 	delete = (char *)B_N_CHILD(bh, pos + 2);
 	memmove(delete - DC_SIZE, delete, bh->b_size - (delete - bh->b_data));
 
-	delete = (char *)B_N_PDELIM_KEY(bh, pos + 1);
+	delete = (char *)internal_key(bh, pos + 1);
 	memmove(delete - KEY_SIZE, delete, bh->b_size - (delete - bh->b_data));
 
 	nr = B_NR_ITEMS(bh) - 1;
@@ -956,7 +956,7 @@ int leaf_fix_key_oid(struct buffer_head *bh, int pos, __u32 oid)
 	if (B_NR_ITEMS(bh) < pos)
 		return -1;
 
-	ih = B_N_PITEM_HEAD(bh, pos);
+	ih = item_head(bh, pos);
 	set_key_objectid(&ih->ih_key, oid);
 
 	mark_buffer_dirty(bh);
@@ -1027,7 +1027,7 @@ static struct reiserfs_key *lkey(struct buffer_head **path, int h)
 	while (h > 0) {
 		pos = get_pos(path[h - 1], path[h]->b_blocknr);
 		if (pos)
-			return B_N_PDELIM_KEY(path[h - 1], pos - 1);
+			return internal_key(path[h - 1], pos - 1);
 		h--;
 	}
 	return 0;
@@ -1041,7 +1041,7 @@ static struct reiserfs_key *rkey(struct buffer_head **path, int h)
 	while (h > 0) {
 		pos = get_pos(path[h - 1], path[h]->b_blocknr);
 		if (pos != B_NR_ITEMS(path[h - 1]))
-			return B_N_PDELIM_KEY(path[h - 1], pos);
+			return internal_key(path[h - 1], pos);
 		h--;
 	}
 	return 0;
@@ -1067,19 +1067,19 @@ static int bad_path(reiserfs_filsys_t *fs, struct buffer_head **path, int h1)
 		pos = get_pos(path[h - 1], path[h]->b_blocknr);
 
 	dk = lkey(path, h);
-	if (dk && comp_keys(dk, B_N_PKEY(path[h], 0))) {
+	if (dk && comp_keys(dk, leaf_key(path[h], 0))) {
 		/* left delimiting key must be equal to the key of 0-th item in the
 		   node */
 		fsck_log
 		    ("bad_path: The left delimiting key %k of the node (%lu) must "
 		     "be equal to the first element's key %k within the node.\n",
-		     dk, path[h]->b_blocknr, B_N_PKEY(path[h], 0));
+		     dk, path[h]->b_blocknr, leaf_key(path[h], 0));
 		one_more_corruption(fs, FATAL);
 		return 1;
 	}
 
 	dk = rkey(path, h);
-	if (dk && comp_keys(dk, B_N_PKEY(path[h],
+	if (dk && comp_keys(dk, leaf_key(path[h],
 					 get_blkh_nr_items(B_BLK_HEAD(path[h]))
 					 - 1)) != 1) {
 		/* right delimiting key must be gt the key of the last item in the node */
@@ -1088,7 +1088,7 @@ static int bad_path(reiserfs_filsys_t *fs, struct buffer_head **path, int h1)
 		     "be greater than the last (%d) element's key %k within the node.\n",
 		     dk, path[h]->b_blocknr,
 		     get_blkh_nr_items(B_BLK_HEAD(path[h])) - 1,
-		     B_N_PKEY(path[h],
+		     leaf_key(path[h],
 			      get_blkh_nr_items(B_BLK_HEAD(path[h])) - 1));
 		one_more_corruption(fs, FATAL);
 		return 1;
@@ -1199,9 +1199,9 @@ static int clean_attributes_handler(reiserfs_filsys_t *fs,
 		return 0;
 
 	for (i = 0; i < B_NR_ITEMS(bh); i++) {
-		if (is_stat_data_ih(B_N_PITEM_HEAD(bh, i)) &&
-		    get_ih_item_len(B_N_PITEM_HEAD(bh, i)) == SD_SIZE) {
-			set_sd_v2_sd_attrs((struct stat_data *)B_N_PITEM(bh, i),
+		if (is_stat_data_ih(item_head(bh, i)) &&
+		    get_ih_item_len(item_head(bh, i)) == SD_SIZE) {
+			set_sd_v2_sd_attrs((struct stat_data *)item_body(bh, i),
 					   0);
 			mark_buffer_dirty(bh);
 		}

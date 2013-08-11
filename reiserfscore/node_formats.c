@@ -842,7 +842,7 @@ void for_every_item(struct buffer_head *bh, item_head_action_t action,
 	struct item_head *ih;
 	item_action_t iaction;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	for (i = 0; i < get_blkh_nr_items(B_BLK_HEAD(bh)); i++, ih++) {
 		if (action)
 			action(ih);

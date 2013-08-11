@@ -28,7 +28,7 @@ void pass_4_check_unaccessed_items(void)
 		if (!fsck_quiet(fs))
 			print_how_fast(items++, 0, 50, 0);
 
-		for (i = get_item_pos(&path), ih = get_ih(&path);
+		for (i = get_item_pos(&path), ih = tp_item_head(&path);
 		     i < B_NR_ITEMS(bh); i++, ih++) {
 			if (!is_item_reachable(ih)) {
 				PATH_LAST_POSITION(&path) = i;

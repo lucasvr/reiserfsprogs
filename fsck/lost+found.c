@@ -64,7 +64,7 @@ static __u64 _look_for_lost(reiserfs_filsys_t *fs, int link_lost_dirs)
 		if (!fsck_quiet(fs))
 			print_how_fast(leaves++, 0, 50, 0);
 
-		for (ih = get_ih(&path);
+		for (ih = tp_item_head(&path);
 		     item_pos < get_blkh_nr_items(B_BLK_HEAD(bh));
 		     item_pos++, ih++, PATH_LAST_POSITION(&path)++) {
 			if (is_item_reachable(ih))
@@ -100,11 +100,11 @@ static __u64 _look_for_lost(reiserfs_filsys_t *fs, int link_lost_dirs)
 			}
 
 			/* stat data marked "not having name" found */
-			if (is_stat_data_ih(get_ih(&path)))
+			if (is_stat_data_ih(tp_item_head(&path)))
 				fix_obviously_wrong_sd_mode(&path);
 
 			is_it_dir =
-			    ((not_a_directory(B_I_PITEM(bh, ih))) ? 0 : 1);
+			    ((not_a_directory(ih_item_body(bh, ih))) ? 0 : 1);
 
 			if (is_it_dir) {
 				struct reiserfs_key tmp_key;
@@ -117,7 +117,7 @@ static __u64 _look_for_lost(reiserfs_filsys_t *fs, int link_lost_dirs)
 						    0xffffffff, TYPE_DIRENTRY);
 				reiserfs_search_by_key_4(fs, &tmp_key,
 							 &tmp_path);
-				tmp_ih = get_ih(&tmp_path);
+				tmp_ih = tp_item_head(&tmp_path);
 				tmp_ih--;
 				if (not_of_one_file(&tmp_key, tmp_ih))
 					reiserfs_panic("not directory found");
@@ -227,11 +227,11 @@ static __u64 _look_for_lost(reiserfs_filsys_t *fs, int link_lost_dirs)
 						     &obj_key);
 
 					/* check_regular_file does not mark stat data reachable */
-					mark_item_reachable(get_ih(&path),
+					mark_item_reachable(tp_item_head(&path),
 							    get_bh(&path));
 
 					rebuild_check_regular_file(&path,
-								   get_item
+								   tp_item_body
 								   (&path),
 								   0
 								   /*reloc_ih */
@@ -399,8 +399,8 @@ void pass_3a_look_for_lost(reiserfs_filsys_t *fs)
 		reiserfs_panic
 		    ("look_for_lost: The StatData of the 'lost+found' directory %K could not be found",
 		     &lost_found_dir_key);
-	ih = get_ih(&path);
-	sd = get_item(&path);
+	ih = tp_item_head(&path);
+	sd = tp_item_body(&path);
 	get_sd_size(ih, sd, &sd_size);
 	size += sd_size;
 	blocks = dir_size2st_blocks(size);

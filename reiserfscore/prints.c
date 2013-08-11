@@ -365,8 +365,8 @@ void print_indirect_item(FILE * fp, struct buffer_head *bh, int item_num)
 	__u32 *unp, prev = INT_MAX;
 	int num = 0;
 
-	ih = B_N_PITEM_HEAD(bh, item_num);
-	unp = (__u32 *) B_I_PITEM(bh, ih);
+	ih = item_head(bh, item_num);
+	unp = (__u32 *) ih_item_body(bh, ih);
 
 	if (get_ih_item_len(ih) % UNFM_P_SIZE)
 		reiserfs_warning(fp, "print_indirect_item: invalid item len");
@@ -400,7 +400,7 @@ static int print_stat_data(FILE * fp, struct buffer_head *bh,
 	   macro. Stat data's key looks identical in both formats */
 	if (get_ih_key_format(ih) == KEY_FORMAT_1) {
 		struct stat_data_v1 *sd_v1 =
-		    (struct stat_data_v1 *)B_I_PITEM(bh, ih);
+		    (struct stat_data_v1 *)ih_item_body(bh, ih);
 		reiserfs_warning(fp,
 				 "(OLD SD), mode %M, size %u, nlink %u, uid %u, FDB %u, mtime %s blocks %u",
 				 sd_v1_mode(sd_v1), sd_v1_size(sd_v1),
@@ -414,7 +414,7 @@ static int print_stat_data(FILE * fp, struct buffer_head *bh,
 					 timestamp(sd_v1_ctime(sd_v1)),
 					 timestamp(sd_v1_atime(sd_v1)));
 	} else {
-		struct stat_data *sd = (struct stat_data *)B_I_PITEM(bh, ih);
+		struct stat_data *sd = (struct stat_data *)ih_item_body(bh, ih);
 		reiserfs_warning(fp,
 				 "(NEW SD), mode %M, size %Lu, nlink %u, mtime %s blocks %u, uid %u",
 				 sd_v2_mode(sd), sd_v2_size(sd),
@@ -438,14 +438,14 @@ void reiserfs_print_item(FILE * fp, struct buffer_head *bh,
 	reiserfs_warning(fp, "block %lu, item %d: %H\n",
 			 bh->b_blocknr,
 			 (ih -
-			  B_N_PITEM_HEAD(bh, 0)) / sizeof(struct item_head),
+			  item_head(bh, 0)) / sizeof(struct item_head),
 			 ih);
 	if (is_stat_data_ih(ih)) {
 		print_stat_data(fp, bh, ih, 0 /*all times */ );
 		return;
 	}
 	if (is_indirect_ih(ih)) {
-		print_indirect_item(fp, bh, ih - B_N_PITEM_HEAD(bh, 0));
+		print_indirect_item(fp, bh, ih - item_head(bh, 0));
 		return;
 	}
 	if (is_direct_ih(ih)) {
@@ -487,7 +487,7 @@ static int print_internal(FILE * fp, struct buffer_head *bh, int first,
 	dc = B_N_CHILD(bh, from);
 	reiserfs_warning(fp, "PTR %d: %y ", from, dc);
 
-	for (i = from, key = B_N_PDELIM_KEY(bh, from), dc++; i < to;
+	for (i = from, key = internal_key(bh, from), dc++; i < to;
 	     i++, key++, dc++) {
 		reiserfs_warning(fp, "KEY %d: %20k PTR %d: %20y ", i, key,
 				 i + 1, dc);
@@ -510,7 +510,7 @@ static int print_leaf(FILE * fp, reiserfs_filsys_t *fs, struct buffer_head *bh,
 	if (!is_tree_node(bh, DISK_LEAF_NODE_LEVEL))
 		return 1;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	real_nr = leaf_count_ih(bh->b_data, bh->b_size);
 	nr = get_blkh_nr_items((struct block_head *)bh->b_data);
 
@@ -566,11 +566,11 @@ static int print_leaf(FILE * fp, reiserfs_filsys_t *fs, struct buffer_head *bh,
 			if (is_symlink || print_mode & PRINT_DIRECT_ITEMS) {
 				reiserfs_warning(fp, "\"");
 				while (j < get_ih_item_len(&ih[i])) {
-					if (B_I_PITEM(bh, ih + i)[j] == 10)
+					if (ih_item_body(bh, ih + i)[j] == 10)
 						reiserfs_warning(fp, "\\n");
 					else
 						reiserfs_warning(fp, "%c",
-								 B_I_PITEM(bh,
+								 ih_item_body(bh,
 									   ih +
 									   i)
 								 [j]);

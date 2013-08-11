@@ -214,7 +214,7 @@ struct reiserfs_key *get_lkey(struct reiserfs_path *p_s_chk_path,
 			return &MAX_KEY;
 		/* Return delimiting key if position in the parent is not equal to zero. */
 		if (n_position)
-			return B_N_PDELIM_KEY(p_s_parent, n_position - 1);
+			return internal_key(p_s_parent, n_position - 1);
 	}
 	/* Return MIN_KEY if we are in the root of the buffer tree. */
 	if (PATH_OFFSET_PBUFFER(p_s_chk_path, FIRST_PATH_ELEMENT_OFFSET)->
@@ -252,7 +252,7 @@ struct reiserfs_key *get_rkey(struct reiserfs_path *p_s_chk_path,
 			return &MIN_KEY;
 		/* Return delimiting key if position in the parent is not the last one. */
 		if (n_position != B_NR_ITEMS(p_s_parent))
-			return B_N_PDELIM_KEY(p_s_parent, n_position);
+			return internal_key(p_s_parent, n_position);
 	}
 	/* Return MAX_KEY if we are in the root of the buffer tree. */
 	if (PATH_OFFSET_PBUFFER(p_s_chk_path, FIRST_PATH_ELEMENT_OFFSET)->
@@ -379,7 +379,7 @@ int search_by_key(reiserfs_filsys_t *fs, struct reiserfs_key *p_s_key,	/* Key to
 
 		/* ok, we have acquired next formatted node in the tree */
 		n_retval =
-		    bin_search(p_s_key, B_N_PITEM_HEAD(p_s_bh, 0),
+		    bin_search(p_s_key, item_head(p_s_bh, 0),
 			       B_NR_ITEMS(p_s_bh),
 			       is_leaf_node(p_s_bh) ? IH_SIZE : KEY_SIZE,
 			       &(p_s_last_element->pe_position));

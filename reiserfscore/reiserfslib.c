@@ -470,7 +470,7 @@ static int reiserfs_search_by_key_x(reiserfs_filsys_t *fs,
 			return ITEM_NOT_FOUND;
 		}
 		retval =
-		    reiserfs_bin_search(key, B_N_PKEY(bh, 0), B_NR_ITEMS(bh),
+		    reiserfs_bin_search(key, leaf_key(bh, 0), B_NR_ITEMS(bh),
 					is_leaf_node(bh) ? IH_SIZE : KEY_SIZE,
 					&curr->pe_position,
 					key_length ==
@@ -517,7 +517,7 @@ int usearch_by_position(reiserfs_filsys_t *s, struct reiserfs_key *key,
 	struct reiserfs_key *next_key;
 
 	if (reiserfs_search_by_key_3(s, key, path) == ITEM_FOUND) {
-		ih = get_ih(path);
+		ih = tp_item_head(path);
 
 		if (!is_direct_ih(ih) && !is_indirect_ih(ih))
 			return DIRECTORY_FOUND;
@@ -527,7 +527,7 @@ int usearch_by_position(reiserfs_filsys_t *s, struct reiserfs_key *key,
 	}
 
 	bh = get_bh(path);
-	ih = get_ih(path);
+	ih = tp_item_head(path);
 
 	if (PATH_LAST_POSITION(path) == 0) {
 		/* previous item does not exist, that means we are in leftmost leaf of
@@ -550,7 +550,7 @@ int usearch_by_position(reiserfs_filsys_t *s, struct reiserfs_key *key,
 		PATH_LAST_POSITION(path)++;
 		if (PATH_LAST_POSITION(path) < B_NR_ITEMS(bh))
 			/* next key is in the same node */
-			next_key = B_N_PKEY(bh, PATH_LAST_POSITION(path));
+			next_key = leaf_key(bh, PATH_LAST_POSITION(path));
 		else
 			next_key = uget_rkey(path);
 		if (next_key == 0 || not_of_one_file(next_key, key)) {
@@ -638,7 +638,7 @@ struct reiserfs_key *uget_lkey(struct reiserfs_path *path)
 
 		/* Return delimiting key if position in the parent is not equal to zero. */
 		if (pos)
-			return B_N_PDELIM_KEY(bh, pos - 1);
+			return internal_key(bh, pos - 1);
 	}
 
 	/* there is no left delimiting key */
@@ -675,7 +675,7 @@ struct reiserfs_key *uget_rkey(struct reiserfs_path *path)
 
 		/* Return delimiting key if position in the parent is not the last one. */
 		if (pos != B_NR_ITEMS(bh))
-			return B_N_PDELIM_KEY(bh, pos);
+			return internal_key(bh, pos);
 	}
 
 	/* there is no right delimiting key */
@@ -685,7 +685,7 @@ struct reiserfs_key *uget_rkey(struct reiserfs_path *path)
 struct reiserfs_key *reiserfs_next_key(struct reiserfs_path *path)
 {
 	if (get_item_pos(path) < B_NR_ITEMS(get_bh(path)) - 1)
-		return B_N_PKEY(get_bh(path), get_item_pos(path) + 1);
+		return leaf_key(get_bh(path), get_item_pos(path) + 1);
 
 	return uget_rkey(path);
 }
@@ -708,7 +708,7 @@ int reiserfs_search_by_entry_key(reiserfs_filsys_t *fs,
 
 	bh = get_bh(path);
 	item_pos = get_item_pos(path);
-	ih = get_ih(path);
+	ih = tp_item_head(path);
 
 	if (item_pos == 0) {
 		/* key is less than the smallest key in the tree */
@@ -817,7 +817,7 @@ int reiserfs_remove_entry(reiserfs_filsys_t *fs, struct reiserfs_key *key)
 		return 1;
 	}
 
-	ih = get_ih(&path);
+	ih = tp_item_head(&path);
 	if (get_ih_entry_count(ih) == 1) {
 		init_tb_struct(&tb, fs, &path,
 			       -(IH_SIZE + get_ih_item_len(ih)));
@@ -903,7 +903,7 @@ int reiserfs_locate_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
 	}
 
 	do {
-		ih = get_ih(path);
+		ih = tp_item_head(path);
 		deh = B_I_DEH(get_bh(path), ih) + path->pos_in_item;
 		for (i = path->pos_in_item; i < get_ih_entry_count(ih);
 		     i++, deh++) {
@@ -978,7 +978,7 @@ int reiserfs_find_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
 	}
 
 	do {
-		ih = get_ih(&path);
+		ih = tp_item_head(&path);
 		deh = B_I_DEH(get_bh(&path), ih) + path.pos_in_item;
 		for (i = path.pos_in_item; i < get_ih_entry_count(ih);
 		     i++, deh++) {
@@ -1210,14 +1210,14 @@ void make_sure_root_dir_exists(reiserfs_filsys_t *fs,
 		root_dir_format =
 		    create_dir_sd(fs, &path, &root_dir_key, modify_item);
 	} else {
-		struct item_head *ih = get_ih(&path);
+		struct item_head *ih = tp_item_head(&path);
 
 		if (!is_stat_data_ih(ih))
 			reiserfs_panic("It must be root's stat data %k\n",
 				       &ih->ih_key);
 
 		root_dir_format =
-		    (get_ih_item_len(get_ih(&path)) ==
+		    (get_ih_item_len(tp_item_head(&path)) ==
 		     SD_SIZE) ? KEY_FORMAT_2 : KEY_FORMAT_1;
 		pathrelse(&path);
 	}
@@ -1371,7 +1371,7 @@ void badblock_list(reiserfs_filsys_t *fs, badblock_func_t action, void *data)
 			break;
 		}
 
-		rd_key = get_ih(&badblock_path)->ih_key;
+		rd_key = tp_item_head(&badblock_path)->ih_key;
 
 		if (get_key_dirid(&rd_key) != BADBLOCK_DIRID ||
 		    get_key_objectid(&rd_key) != BADBLOCK_OBJID ||
@@ -1399,12 +1399,12 @@ static void callback_badblock_rm(reiserfs_filsys_t *fs,
 	struct tree_balance tb;
 	struct item_head *tmp_ih;
 
-	tmp_ih = get_ih(badblock_path);
-	memset(get_item(badblock_path), 0, get_ih_item_len(tmp_ih));
+	tmp_ih = tp_item_head(badblock_path);
+	memset(tp_item_body(badblock_path), 0, get_ih_item_len(tmp_ih));
 
 	init_tb_struct(&tb, fs, badblock_path,
 		       -(IH_SIZE +
-			 get_ih_item_len(PATH_PITEM_HEAD(badblock_path))));
+			 get_ih_item_len(tp_item_head(badblock_path))));
 
 	if (fix_nodes(M_DELETE, &tb, 0) != CARRY_ON)
 		die("%s: fix_nodes failed", __FUNCTION__);
@@ -1423,8 +1423,8 @@ void mark_badblock(reiserfs_filsys_t *fs,
 	if (!fs->fs_badblocks_bm)
 		create_badblock_bitmap(fs, NULL);
 
-	tmp_ih = get_ih(badblock_path);
-	ind_item = (__u32 *) get_item(badblock_path);
+	tmp_ih = tp_item_head(badblock_path);
+	ind_item = (__u32 *) tp_item_body(badblock_path);
 
 	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++) {
 		reiserfs_bitmap_set_bit(fs->fs_badblocks_bm,

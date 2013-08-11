@@ -57,7 +57,7 @@ static void store_item(struct saved_name *name, struct buffer_head *bh,
 	new = obstack_alloc(&item_store, sizeof(struct saved_item));
 	new->si_ih = *ih;
 	new->si_block = bh->b_blocknr;
-	new->si_item_num = ih - B_N_PITEM_HEAD(bh, 0);
+	new->si_item_num = ih - item_head(bh, 0);
 	new->si_next = 0;
 	new->si_entry_pos = pos;
 
@@ -174,12 +174,12 @@ static void scan_for_name(struct buffer_head *bh)
 	int min_entry_size = 1;
 	int ih_entry_count = 0;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	i_num = leaf_item_number_estimate(bh);
 	for (i = 0; i < i_num; i++, ih++) {
 		if (!is_direntry_ih(ih))
 			continue;
-		if (is_it_bad_item(fs, ih, B_I_PITEM(bh, ih), 0, 1))
+		if (is_it_bad_item(fs, ih, ih_item_body(bh, ih), 0, 1))
 			continue;
 
 		deh = B_I_DEH(bh, ih);
@@ -340,7 +340,7 @@ static void scan_items(struct buffer_head *bh, struct reiserfs_key *key)
 	struct saved_name *name_in_store;
 	void *res;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	i_num = leaf_item_number_estimate(bh);
 	for (i = 0; i < i_num; i++, ih++) {
 		if (key) {
@@ -567,8 +567,8 @@ static void map_one_item(struct saved_item *item)
 		return;
 	}
 
-	ih = B_N_PITEM_HEAD(bh, item->si_item_num);
-	data = B_I_PITEM(bh, ih);
+	ih = item_head(bh, item->si_item_num);
+	data = ih_item_body(bh, ih);
 	if (memcmp(&item->si_ih, ih, sizeof(*ih)))
 		reiserfs_panic("wrong item");
 
@@ -731,7 +731,7 @@ static void print_items(FILE * fp, reiserfs_filsys_t *fs)
 			reiserfs_warning(fp, "bread failed\n");
 			continue;
 		}
-		ih = B_N_PITEM_HEAD(bh, item.si_item_num);
+		ih = item_head(bh, item.si_item_num);
 		reiserfs_print_item(stdout, bh, ih);
 		brelse(bh);
 	}
@@ -861,7 +861,7 @@ static void locate_file(reiserfs_filsys_t *fs, struct reiserfs_key *key)
 
 			si.si_block = get_bh(&path)->b_blocknr;
 			si.si_item_num = get_item_pos(&path);
-			si.si_ih = *get_ih(&path);
+			si.si_ih = *tp_item_head(&path);
 			map_one_item(&si);
 		}
 
@@ -924,7 +924,7 @@ static void look_for_name(reiserfs_filsys_t *fs)
 					 get_item_pos(&path), path.pos_in_item);
 			deh =
 			    B_I_DEH(get_bh(&path),
-				    get_ih(&path)) + path.pos_in_item;
+				    tp_item_head(&path)) + path.pos_in_item;
 			set_key_dirid(&fkey, get_deh_dirid(deh));
 			set_key_objectid(&fkey, get_deh_objectid(deh));
 
@@ -956,7 +956,7 @@ static void scan_for_key(struct buffer_head *bh, struct reiserfs_key *key)
 	int min_entry_size = 1;
 	int ih_entry_count = 0;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	i_num = leaf_item_number_estimate(bh);
 	for (i = 0; i < i_num; i++, ih++) {
 		if ((get_key_dirid(&ih->ih_key) == get_key_dirid(key) ||

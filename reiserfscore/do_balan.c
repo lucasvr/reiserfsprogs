@@ -58,7 +58,7 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 	int n;
 	struct item_head *ih;
 
-	ih = B_N_PITEM_HEAD(tbS0, item_pos);
+	ih = item_head(tbS0, item_pos);
 
 	/* Delete or truncate the item */
 
@@ -241,7 +241,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 	/* for indirect item pos_in_item is measured in unformatted node
 	   pointers. Recalculate to bytes */
 	if (flag != M_INSERT
-	    && I_IS_INDIRECT_ITEM(B_N_PITEM_HEAD(tbS0, item_pos)))
+	    && I_IS_INDIRECT_ITEM(item_head(tbS0, item_pos)))
 		pos_in_item *= UNFM_P_SIZE;
 
 	if (tb->lnum[0] > 0) {
@@ -327,7 +327,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 				    && tb->lbytes != -1) {
 					/* we must shift the part of the appended item */
 					if (I_IS_DIRECTORY_ITEM
-					    (B_N_PITEM_HEAD(tbS0, item_pos))) {
+					    (item_head(tbS0, item_pos))) {
 						/* directory item */
 						if (tb->lbytes > pos_in_item) {
 							/* new directory entry falls into L[0] */
@@ -349,7 +349,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							if (ret_val
 							    && !item_pos) {
 								pasted =
-								    B_N_PITEM_HEAD
+								    item_head
 								    (tb->L[0],
 								     B_NR_ITEMS
 								     (tb->
@@ -438,7 +438,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 									    lnum
 									    [0],
 									    get_ih_item_len
-									    (B_N_PITEM_HEAD
+									    (item_head
 									     (tbS0,
 									      item_pos)));
 							/* Append to body of item in L[0] */
@@ -453,7 +453,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							     n + item_pos -
 							     ret_val,
 							     get_ih_item_len
-							     (B_N_PITEM_HEAD
+							     (item_head
 							      (tb->L[0],
 							       n + item_pos -
 							       ret_val)), l_n,
@@ -464,10 +464,10 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 							/* 0-th item in S0 can be only of DIRECT type when l_n != 0 */
 							//B_N_PKEY (tbS0, 0)->k_offset += l_n;z
-							key = B_N_PKEY(tbS0, 0);
+							key = leaf_key(tbS0, 0);
 							temp_n =
 							    is_indirect_ih
-							    (B_N_PITEM_HEAD
+							    (item_head
 							     (tb->L[0],
 							      n + item_pos -
 							      ret_val))
@@ -484,9 +484,9 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 								   (key) +
 								   temp_n);
 
-							//B_N_PDELIM_KEY(tb->CFL[0],tb->lkey[0])->k_offset += l_n;
+							//internal_key(tb->CFL[0],tb->lkey[0])->k_offset += l_n;
 							key =
-							    B_N_PDELIM_KEY(tb->
+							    internal_key(tb->
 									   CFL
 									   [0],
 									   tb->
@@ -531,7 +531,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 					if (!item_pos && is_left_mergeable(tb->tb_fs, tb->tb_path) == 1) {	/* if we paste into first item of S[0] and it is left mergable */
 						/* then increment pos_in_item by the size of the last item in L[0] */
 						pasted =
-						    B_N_PITEM_HEAD(tb->L[0],
+						    item_head(tb->L[0],
 								   n - 1);
 						if (I_IS_DIRECTORY_ITEM(pasted))
 							pos_in_item +=
@@ -562,7 +562,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 					/* if appended item is directory, paste entry */
 					pasted =
-					    B_N_PITEM_HEAD(tb->L[0],
+					    item_head(tb->L[0],
 							   n + item_pos -
 							   ret_val);
 					if (I_IS_DIRECTORY_ITEM(pasted))
@@ -720,13 +720,13 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 				    && tb->rbytes != -1) {
 					/* we must shift the part of the appended item */
 					if (I_IS_DIRECTORY_ITEM
-					    (B_N_PITEM_HEAD(tbS0, item_pos))) {
+					    (item_head(tbS0, item_pos))) {
 						/* we append to directory item */
 						int entry_count;
 
 						entry_count =
 						    get_ih_entry_count
-						    (B_N_PITEM_HEAD
+						    (item_head
 						     (tbS0, item_pos));
 						if (entry_count - tb->rbytes <
 						    pos_in_item) {
@@ -835,7 +835,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							    n_rem;
 
 							if (is_indirect_key
-							    (B_N_PKEY
+							    (leaf_key
 							     (tb->R[0], 0)))
 								temp_rem =
 								    (n_rem /
@@ -844,9 +844,9 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 								    tb->tb_fs->
 								    fs_blocksize;
 
-							//B_N_PKEY(tb->R[0],0)->k_offset += n_rem;
+							//leaf_key(tb->R[0],0)->k_offset += n_rem;
 							key =
-							    B_N_PKEY(tb->R[0],
+							    leaf_key(tb->R[0],
 								     0);
 							set_offset(key_format
 								   (key), key,
@@ -854,9 +854,9 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 								   (key) +
 								   temp_rem);
 
-							//B_N_PDELIM_KEY(tb->CFR[0],tb->rkey[0])->k_offset += n_rem;
+							//internal_key(tb->CFR[0],tb->rkey[0])->k_offset += n_rem;
 							key =
-							    B_N_PDELIM_KEY(tb->
+							    internal_key(tb->
 									   CFR
 									   [0],
 									   tb->
@@ -902,10 +902,10 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 								     r_zeros_number);
 
 						if (I_IS_INDIRECT_ITEM
-						    (B_N_PITEM_HEAD
+						    (item_head
 						     (tb->R[0], 0))) {
 							set_ih_free_space
-							    (B_N_PITEM_HEAD
+							    (item_head
 							     (tb->R[0], 0), 0);
 						}
 
@@ -944,7 +944,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 					/* paste new entry, if item is directory item */
 					pasted =
-					    B_N_PITEM_HEAD(tb->R[0],
+					    item_head(tb->R[0],
 							   item_pos - n +
 							   tb->rnum[0]);
 					if (I_IS_DIRECTORY_ITEM(pasted)
@@ -1006,8 +1006,8 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 			if (!tb->CFR[0])
 				reiserfs_panic(tb->tb_fs,
 					       "vs-12195: balance_leaf: CFR not initialized");
-			copy_key(B_N_PDELIM_KEY(tb->CFL[0], tb->lkey[0]),
-				 B_N_PDELIM_KEY(tb->CFR[0], tb->rkey[0]));
+			copy_key(internal_key(tb->CFL[0], tb->lkey[0]),
+				 internal_key(tb->CFR[0], tb->rkey[0]));
 			mark_buffer_dirty(tb->CFL[0]);
 		}
 
@@ -1131,7 +1131,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 					if (I_IS_DIRECTORY_ITEM
 					    (aux_ih =
-					     B_N_PITEM_HEAD(tbS0, item_pos))) {
+					     item_head(tbS0, item_pos))) {
 						/* we append to directory item */
 
 						int entry_count;
@@ -1248,7 +1248,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 								     r_body,
 								     r_zeros_number);
 						tmp =
-						    B_N_PITEM_HEAD(S_new[i], 0);
+						    item_head(S_new[i], 0);
 						if (I_IS_INDIRECT_ITEM(tmp)) {
 /*			
 			    if (n_rem)
@@ -1280,7 +1280,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 								    ih_key) +
 								   n_rem);
 
-						//B_N_PKEY(S_new[i],0)->k_offset += n_rem;
+						//leaf_key(S_new[i],0)->k_offset += n_rem;
 //
 
 						tb->insert_size[0] = n_rem;
@@ -1308,7 +1308,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							     zeros_number);
 
 					pasted =
-					    B_N_PITEM_HEAD(S_new[i],
+					    item_head(S_new[i],
 							   item_pos - n +
 							   snum[i]);
 					if (I_IS_DIRECTORY_ITEM(pasted)) {
@@ -1348,7 +1348,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 						      "UNKNOWN"), flag);
 		}
 
-		memcpy(insert_key + i, B_N_PKEY(S_new[i], 0), KEY_SIZE);
+		memcpy(insert_key + i, leaf_key(S_new[i], 0), KEY_SIZE);
 		insert_ptr[i] = S_new[i];
 	}
 
@@ -1377,7 +1377,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 		case M_PASTE:{	/* append item in S[0] */
 				struct item_head *pasted;
 
-				pasted = B_N_PITEM_HEAD(tbS0, item_pos);
+				pasted = item_head(tbS0, item_pos);
 				/* when directory, may be new entry already pasted */
 				if (I_IS_DIRECTORY_ITEM(pasted)) {
 					if (pos_in_item >= 0
@@ -1511,11 +1511,11 @@ void replace_key(reiserfs_filsys_t *fs,
 	if (dest) {
 		if (is_leaf_node(src))
 			/* source buffer contains leaf node */
-			memcpy(B_N_PDELIM_KEY(dest, n_dest),
-			       B_N_PITEM_HEAD(src, n_src), KEY_SIZE);
+			memcpy(internal_key(dest, n_dest),
+			       item_head(src, n_src), KEY_SIZE);
 		else
-			memcpy(B_N_PDELIM_KEY(dest, n_dest),
-			       B_N_PDELIM_KEY(src, n_src), KEY_SIZE);
+			memcpy(internal_key(dest, n_dest),
+			       internal_key(src, n_src), KEY_SIZE);
 
 		mark_buffer_dirty(dest);
 	}
@@ -1631,12 +1631,12 @@ void do_balance(struct tree_balance *tb,	/* tree_balance structure              
 		    /*item_pos */  == -1) {
 			/* get delimiting key from buffer in tree */
 			copy_key(&insert_key[0].ih_key,
-				 B_N_PKEY(PATH_PLAST_BUFFER(tb->tb_path), 0));
+				 leaf_key(PATH_PLAST_BUFFER(tb->tb_path), 0));
 			/*insert_ptr[0]->b_item_order = 0; */
 		} else {
 			/* get delimiting key from new buffer */
 			copy_key(&insert_key[0].ih_key,
-				 B_N_PKEY((struct buffer_head *)body, 0));
+				 leaf_key((struct buffer_head *)body, 0));
 			/*insert_ptr[0]->b_item_order = item_pos; */
 		}
 

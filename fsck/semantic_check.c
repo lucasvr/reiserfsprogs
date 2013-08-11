@@ -102,7 +102,7 @@ static int check_check_regular_file(struct reiserfs_path *path, void *sd,
 	int retval = OK;
 	__u32 tmp_position;
 
-	ih = get_ih(path);
+	ih = tp_item_head(path);
 
 	if (new_ih) {
 		/* this objectid is used already */
@@ -119,8 +119,8 @@ static int check_check_regular_file(struct reiserfs_path *path, void *sd,
 			    ("check_check_regular_file: Could not find a StatData of "
 			     "the relocated file %K", &new_ih->ih_key);
 		/* stat data is marked unreachable again due to relocation, fix that */
-		ih = get_ih(path);
-		sd = get_item(path);
+		ih = tp_item_head(path);
+		sd = tp_item_body(path);
 	}
 
 	if (get_ih_item_len(ih) == SD_SIZE)
@@ -208,8 +208,8 @@ static int check_check_regular_file(struct reiserfs_path *path, void *sd,
 				}
 
 				bh = get_bh(path);
-				ih = get_ih(path);
-				sd = get_item(path);
+				ih = tp_item_head(path);
+				sd = tp_item_body(path);
 				set_sd_size(ih, sd, &real_size);
 				set_sd_blocks(ih, sd, &blocks);
 				set_sd_mode(ih, sd, &mode);
@@ -252,7 +252,7 @@ start_again:
 	/* leaf containing directory item */
 	bh = PATH_PLAST_BUFFER(&path);
 	*pos_in_item = path.pos_in_item;
-	*ih = *get_ih(&path);
+	*ih = *tp_item_head(&path);
 	deh = B_I_DEH(bh, ih);
 
 	/* position was not found for '.' or there is no '..' */
@@ -362,7 +362,7 @@ start_again:
 
 	/* copy directory item to the temporary buffer */
 	dir_item = getmem(get_ih_item_len(ih));
-	memcpy(dir_item, B_I_PITEM(bh, ih), get_ih_item_len(ih));
+	memcpy(dir_item, ih_item_body(bh, ih), get_ih_item_len(ih));
 
 	/* next item key */
 	if (PATH_LAST_POSITION(&path) == (B_NR_ITEMS(bh) - 1) &&
@@ -374,7 +374,7 @@ start_again:
 	}
 
 	if (fsck_mode(fs) == FSCK_REBUILD)
-		mark_item_reachable(get_ih(&path), bh);
+		mark_item_reachable(tp_item_head(&path), bh);
 	pathrelse(&path);
 
 	return dir_item;
@@ -424,8 +424,8 @@ static int check_semantic_pass(struct reiserfs_key *key,
 	}
 
 	/* stat data has been found */
-	ih = get_ih(&path);
-	sd = get_item(&path);
+	ih = tp_item_head(&path);
+	sd = tp_item_body(&path);
 
 	get_sd_nlink(ih, sd, &nlink);
 
@@ -522,7 +522,7 @@ static int check_semantic_pass(struct reiserfs_key *key,
 	get_sd_mode(ih, sd, &mode);
 
 	dir_format =
-	    (get_ih_item_len(get_ih(&path)) ==
+	    (get_ih_item_len(tp_item_head(&path)) ==
 	     SD_SIZE) ? KEY_FORMAT_2 : KEY_FORMAT_1;
 
 	/* release path pointing to stat data */
@@ -673,7 +673,7 @@ static int check_semantic_pass(struct reiserfs_key *key,
 
 					tmp_deh =
 					    B_I_DEH(get_bh(&path),
-						    get_ih(&path)) +
+						    tp_item_head(&path)) +
 					    path.pos_in_item;
 					fsck_log
 					    ("The directory %K pointing to %K (\"%.*s\") updated to point "
@@ -735,8 +735,8 @@ static int check_semantic_pass(struct reiserfs_key *key,
 			}
 
 			bh = get_bh(&path);
-			ih = get_ih(&path);
-			sd = get_item(&path);
+			ih = tp_item_head(&path);
+			sd = tp_item_body(&path);
 
 			set_sd_size(ih, sd, &dir_size);
 			set_sd_blocks(ih, sd, &blocks);
@@ -770,7 +770,7 @@ int check_safe_links()
 			break;
 		}
 
-		tmp_ih = get_ih(&safe_link_path);
+		tmp_ih = tp_item_head(&safe_link_path);
 
 		if (get_key_dirid(&tmp_ih->ih_key) != (__u32) - 1 ||
 		    get_key_objectid(&tmp_ih->ih_key) == (__u32) - 1) {
@@ -784,7 +784,7 @@ int check_safe_links()
 				       get_ih_item_len(tmp_ih));
 
 		set_key_dirid(&key,
-			      d32_get((__u32 *) get_item(&safe_link_path), 0));
+			      d32_get((__u32 *) tp_item_body(&safe_link_path), 0));
 		set_key_objectid(&key, get_key_objectid(&tmp_ih->ih_key));
 		if ((rkey = reiserfs_next_key(&safe_link_path)) == NULL)
 			set_key_dirid(&safe_link_key, 0);
@@ -803,7 +803,7 @@ int check_safe_links()
 				    ("Invalid safe link %k: cannot find the pointed object (%K) - "
 				     "safe link was deleted\n", &tmp_ih->ih_key,
 				     &key);
-				d32_put((__u32 *) get_item(&safe_link_path), 0,
+				d32_put((__u32 *) tp_item_body(&safe_link_path), 0,
 					0);
 				pathrelse(&path);
 				reiserfsck_delete_item(&safe_link_path, 0);
@@ -811,7 +811,7 @@ int check_safe_links()
 			}
 		} else if (get_offset(&tmp_ih->ih_key) == 0x1) {
 			/* Truncate */
-			if (!not_a_directory(get_item(&path))) {
+			if (!not_a_directory(tp_item_body(&path))) {
 				/*truncate on directory should not happen */
 				/*sware on check, delete on fix-fixable */
 				if (fsck_mode(fs) == FSCK_CHECK) {
@@ -826,7 +826,7 @@ int check_safe_links()
 					     "a directory (%K) - safe link was deleted\n",
 					     &tmp_ih->ih_key, &key);
 					d32_put((__u32 *)
-						get_item(&safe_link_path), 0,
+						tp_item_body(&safe_link_path), 0,
 						0);
 					pathrelse(&path);
 					reiserfsck_delete_item(&safe_link_path,

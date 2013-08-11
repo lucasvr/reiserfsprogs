@@ -134,7 +134,7 @@ static void internal_insert_childs(reiserfs_filsys_t *fs,
 
 	/* prepare space for 'count' items  */
 	from = ((to == -1) ? 0 : to);
-	key = B_N_PDELIM_KEY(cur, from);
+	key = internal_key(cur, from);
 
 	memmove(key + count, key,
 		(nr - from /*to */ ) * KEY_SIZE + (nr + 1 + count) * DC_SIZE);
@@ -190,7 +190,7 @@ static void internal_delete_pointers_items(reiserfs_filsys_t *fs,
 	dc = B_N_CHILD(cur, first_p);
 
 	memmove(dc, dc + del_num, (nr + 1 - first_p - del_num) * DC_SIZE);
-	key = B_N_PDELIM_KEY(cur, first_i);
+	key = internal_key(cur, first_i);
 	memmove(key, key + del_num,
 		(nr - first_i - del_num) * KEY_SIZE + (nr + 1 -
 						       del_num) * DC_SIZE);
@@ -269,13 +269,13 @@ static void internal_copy_pointers_items(reiserfs_filsys_t *fs,
 	memcpy(dc, B_N_CHILD(src, src_order), DC_SIZE * cpy_num);
 
 	/* prepare space for cpy_num - 1 item headers */
-	key = B_N_PDELIM_KEY(dest, dest_order);
+	key = internal_key(dest, dest_order);
 	memmove(key + cpy_num - 1, key,
 		KEY_SIZE * (nr_dest - dest_order) + DC_SIZE * (nr_dest +
 							       cpy_num));
 
 	/* insert headers */
-	memcpy(key, B_N_PDELIM_KEY(src, src_order), KEY_SIZE * (cpy_num - 1));
+	memcpy(key, internal_key(src, src_order), KEY_SIZE * (cpy_num - 1));
 
 	/* sizes, item number */
 	set_blkh_nr_items(blkh, get_blkh_nr_items(blkh) + cpy_num - 1);
@@ -345,12 +345,12 @@ static void internal_insert_key(reiserfs_filsys_t *fs, struct buffer_info *dest_
 	nr = get_blkh_nr_items(blkh);
 
 	/* prepare space for inserting key */
-	key = B_N_PDELIM_KEY(dest, dest_position_before);
+	key = internal_key(dest, dest_position_before);
 	memmove(key + 1, key,
 		(nr - dest_position_before) * KEY_SIZE + (nr + 1) * DC_SIZE);
 
 	/* insert key */
-	memcpy(key, B_N_PDELIM_KEY(src, src_position), KEY_SIZE);
+	memcpy(key, internal_key(src, src_position), KEY_SIZE);
 
 	/* Change dirt, free space, item number fields. */
 	set_blkh_nr_items(blkh, get_blkh_nr_items(blkh) + 1);
@@ -585,7 +585,7 @@ void replace_lkey(struct tree_balance *tb, int h, struct item_head *key)
 	if (B_NR_ITEMS(PATH_H_PBUFFER(tb->tb_path, h)) == 0)
 		return;
 
-	memcpy(B_N_PDELIM_KEY(tb->CFL[h], tb->lkey[h]), key, KEY_SIZE);
+	memcpy(internal_key(tb->CFL[h], tb->lkey[h]), key, KEY_SIZE);
 
 	mark_buffer_dirty(tb->CFL[h]);
 }
@@ -593,7 +593,7 @@ void replace_lkey(struct tree_balance *tb, int h, struct item_head *key)
 /* Replace delimiting key of buffers S[h] and R[h] by the given key.*/
 void replace_rkey(struct tree_balance *tb, int h, struct item_head *key)
 {
-	memcpy(B_N_PDELIM_KEY(tb->CFR[h], tb->rkey[h]), key, KEY_SIZE);
+	memcpy(internal_key(tb->CFR[h], tb->rkey[h]), key, KEY_SIZE);
 
 	mark_buffer_dirty(tb->CFR[h]);
 }
@@ -842,7 +842,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			/* new items don't fall into S_new */
 			/*  store the delimiting key for the next level */
 			/* new_insert_key = (n - snum)'th key in S[h] */
-			memcpy(&new_insert_key, B_N_PDELIM_KEY(tbSh, n - snum),
+			memcpy(&new_insert_key, internal_key(tbSh, n - snum),
 			       KEY_SIZE);
 			/* last parameter is del_par */
 			internal_move_pointers_items(tb->tb_fs, &dest_bi,
@@ -853,7 +853,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			/*  store the delimiting key for the next level */
 			/* new_insert_key = (n + insert_item - snum)'th key in S[h] */
 			memcpy(&new_insert_key,
-			       B_N_PDELIM_KEY(tbSh, n + insert_num - snum),
+			       internal_key(tbSh, n + insert_num - snum),
 			       KEY_SIZE);
 			/* last parameter is del_par */
 			internal_move_pointers_items(tb->tb_fs, &dest_bi,
@@ -930,7 +930,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			/* insert_child (tb->S[h], tb->S[h-1], child_pos, insert_num, B_N_ITEM_HEAD(tb->S[0],0), insert_ptr); */
 			internal_insert_childs(tb->tb_fs, &bi, child_pos,
 					       insert_num,
-					       B_N_PITEM_HEAD(PATH_PLAST_BUFFER
+					       item_head(PATH_PLAST_BUFFER
 							      (tb->tb_path), 0),
 					       insert_ptr);
 		} else

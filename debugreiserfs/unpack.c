@@ -163,7 +163,7 @@ static void unpack_stat_data(struct packed_item *pi, struct buffer_head *bh,
 		 */
 		struct stat_data_v1 *sd;
 
-		sd = (struct stat_data_v1 *)B_I_PITEM(bh, ih);
+		sd = (struct stat_data_v1 *)ih_item_body(bh, ih);
 		memset(sd, 0, sizeof(sd));
 
 		fread16(&sd->sd_mode);
@@ -185,7 +185,7 @@ static void unpack_stat_data(struct packed_item *pi, struct buffer_head *bh,
 		 */
 		struct stat_data *sd;
 
-		sd = (struct stat_data *)B_I_PITEM(bh, ih);
+		sd = (struct stat_data *)ih_item_body(bh, ih);
 		memset(sd, 0, sizeof(sd));
 
 		fread16(&sd->sd_mode);
@@ -229,7 +229,7 @@ static void unpack_indirect(struct packed_item *pi, struct buffer_head *bh,
 		set_ih_entry_count(ih, 0);
 	}
 
-	ind_item = (__u32 *) B_I_PITEM(bh, ih);
+	ind_item = (__u32 *) ih_item_body(bh, ih);
 
 	if (get_pi_mask(pi) & SAFE_LINK) {
 		d32_put(ind_item, 0, get_key_dirid(&ih->ih_key));
@@ -263,7 +263,7 @@ static void unpack_indirect(struct packed_item *pi, struct buffer_head *bh,
 static void unpack_direct(struct packed_item *pi, struct buffer_head *bh,
 			  struct item_head *ih)
 {
-	__u32 *d_item = (__u32 *) B_I_PITEM(bh, ih);
+	__u32 *d_item = (__u32 *) ih_item_body(bh, ih);
 
 	if (!(get_pi_mask(pi) & IH_FREE_SPACE))
 		/* ih_free_space was not packed - set default */
@@ -305,7 +305,7 @@ static void unpack_leaf(int dev, hashf_t hash_func, __u16 blocksize)
 	set_blkh_level(B_BLK_HEAD(bh), DISK_LEAF_NODE_LEVEL);
 	set_blkh_free_space(B_BLK_HEAD(bh), MAX_FREE_SPACE(bh->b_size));
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	for (i = 0; i < get_blkh_nr_items(B_BLK_HEAD(bh)); i++, ih++) {
 #if 0
 		fread32(&v32);

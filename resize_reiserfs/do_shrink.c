@@ -119,7 +119,7 @@ static unsigned long move_formatted_block(reiserfs_filsys_t *fs,
 		leaf_node_cnt++;
 
 		for (i = 0; i < B_NR_ITEMS(bh); i++) {
-			ih = B_N_PITEM_HEAD(bh, i);
+			ih = item_head(bh, i);
 
 			/* skip the bad blocks. */
 			if (get_key_objectid(&ih->ih_key) == BADBLOCK_OBJID &&
@@ -129,7 +129,7 @@ static unsigned long move_formatted_block(reiserfs_filsys_t *fs,
 			if (is_indirect_ih(ih)) {
 				__u32 *indirect;
 
-				indirect = (__u32 *) B_I_PITEM(bh, ih);
+				indirect = (__u32 *) ih_item_body(bh, ih);
 				for (j = 0; j < I_UNFM_NUM(ih); j++) {
 					unsigned long unfm_block;
 

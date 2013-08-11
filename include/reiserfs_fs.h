@@ -972,7 +972,7 @@ struct reiserfs_de_head {
 #define dir_size2st_blocks(size) ((size + 511) / 512)
 
 /* array of the entry headers */
-#define B_I_DEH(bh,ih) ((struct reiserfs_de_head *)(B_I_PITEM(bh,ih)))
+#define B_I_DEH(bh,ih) ((struct reiserfs_de_head *)(ih_item_body(bh,ih)))
 
 #define REISERFS_MAX_NAME_LEN(block_size) (block_size - BLKH_SIZE - IH_SIZE - DEH_SIZE)
 	/* -SD_SIZE when entry will contain stat data */
@@ -1095,7 +1095,7 @@ struct reiserfs_path var = {ILLEGAL_PATH_ELEMENT_OFFSET, }
 #define PATH_PLAST_BUFFER(p_s_path) (PATH_OFFSET_PBUFFER((p_s_path), (p_s_path)->path_length))
 #define PATH_LAST_POSITION(p_s_path) (PATH_OFFSET_POSITION((p_s_path), (p_s_path)->path_length))
 
-#define PATH_PITEM_HEAD(p_s_path)    B_N_PITEM_HEAD(PATH_PLAST_BUFFER(p_s_path),PATH_LAST_POSITION(p_s_path))
+#define tp_item_head(p_s_path)    item_head(PATH_PLAST_BUFFER(p_s_path),PATH_LAST_POSITION(p_s_path))
 
 /* in do_balance leaf has h == 0 in contrast with path structure,
    where root has level == 0. That is why we need these defines */
@@ -1107,9 +1107,8 @@ struct reiserfs_path var = {ILLEGAL_PATH_ELEMENT_OFFSET, }
 #define PATH_H_PATH_OFFSET(p_s_path, n_h) ((p_s_path)->path_length - (n_h))
 
 #define get_bh(path) PATH_PLAST_BUFFER(path)
-#define get_ih(path) PATH_PITEM_HEAD(path)
 #define get_item_pos(path) PATH_LAST_POSITION(path)
-#define get_item(path) ((void *)B_N_PITEM(PATH_PLAST_BUFFER(path), PATH_LAST_POSITION (path)))
+#define tp_item_body(path) ((void *)item_body(PATH_PLAST_BUFFER(path), PATH_LAST_POSITION (path)))
 #define item_moved(ih,path) comp_items(ih, path)
 #define path_changed(ih,path) comp_items (ih, path)
 
@@ -1403,27 +1402,27 @@ struct buffer_info {
 
 
 /* get the item header */
-#define B_N_PITEM_HEAD(bh,item_num) ( (struct item_head * )((bh)->b_data + BLKH_SIZE) + (item_num) )
+#define item_head(bh,item_num) ( (struct item_head * )((bh)->b_data + BLKH_SIZE) + (item_num) )
 
 /* get key */
-#define B_N_PDELIM_KEY(bh,item_num) ( (struct reiserfs_key *)((bh)->b_data + BLKH_SIZE) + (item_num) )
+#define internal_key(bh,item_num) ( (struct reiserfs_key *)((bh)->b_data + BLKH_SIZE) + (item_num) )
 
 /* get the key */
-#define B_N_PKEY(bh,item_num) ( &(B_N_PITEM_HEAD(bh,item_num)->ih_key) )
+#define leaf_key(bh,item_num) ( &(item_head(bh,item_num)->ih_key) )
 
 /* get item body */
-#define B_N_PITEM(bh,item_num) ( (bh)->b_data + get_ih_location (B_N_PITEM_HEAD((bh),(item_num))))
+#define item_body(bh,item_num) ( (bh)->b_data + get_ih_location (item_head((bh),(item_num))))
 
 /* get the stat data by the buffer header and the item order */
 #define B_N_STAT_DATA(bh,nr) \
-( (struct stat_data *)((bh)->b_data+get_ih_location(B_N_PITEM_HEAD((bh),(nr))) ) )
+( (struct stat_data *)((bh)->b_data+get_ih_location(item_head((bh),(nr))) ) )
 
  /* following defines use reiserfs buffer header and item header */
  /* get item body */
-#define B_I_PITEM(bh,ih) ( (bh)->b_data + get_ih_location(ih))
+#define ih_item_body(bh,ih) ( (bh)->b_data + get_ih_location(ih))
 
 /* get stat-data */
-#define B_I_STAT_DATA(bh, ih) ( (struct stat_data * )B_I_PITEM(bh,ih) )
+#define B_I_STAT_DATA(bh, ih) ( (struct stat_data * )ih_item_body(bh,ih) )
 
 #define MAX_DIRECT_ITEM_LEN(size) ((size) - BLKH_SIZE - 2*IH_SIZE - SD_SIZE - UNFM_P_SIZE)
 #define MAX_INDIRECT_ITEM_LEN(size) MAX_ITEM_LEN(size)

@@ -245,8 +245,8 @@ static int verify_directory_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 	char *direntries;
 #endif
 
-	ih = B_N_PITEM_HEAD(bh, item_num);
-	item = B_I_PITEM(bh, ih);
+	ih = item_head(bh, item_num);
+	item = ih_item_body(bh, ih);
 	deh = (struct reiserfs_de_head *)item;
 
 	if ((get_ih_entry_count(ih) >
@@ -690,12 +690,12 @@ static void pass0_correct_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 
 	/* Delete all safe links. */
 	for (i = get_blkh_nr_items(B_BLK_HEAD(bh)) - 1; i >= 0; i--) {
-		if (get_key_dirid(&B_N_PITEM_HEAD(bh, i)->ih_key) == ~(__u32) 0) {
+		if (get_key_dirid(&item_head(bh, i)->ih_key) == ~(__u32) 0) {
 			delete_item(fs, bh, i);
 		}
-		if (get_key_dirid(&B_N_PITEM_HEAD(bh, i)->ih_key) ==
+		if (get_key_dirid(&item_head(bh, i)->ih_key) ==
 		    BADBLOCK_DIRID
-		    && get_key_objectid(&B_N_PITEM_HEAD(bh, i)->ih_key) ==
+		    && get_key_objectid(&item_head(bh, i)->ih_key) ==
 		    BADBLOCK_OBJID) {
 			delete_item(fs, bh, i);
 		}
@@ -706,7 +706,7 @@ static void pass0_correct_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 
 start_again:
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	for (i = 0; i < (nr_items = get_blkh_nr_items(B_BLK_HEAD(bh)));
 	     i++, ih++) {
 
@@ -1484,7 +1484,7 @@ start_again:
 
 			file_format = get_ih_key_format(ih);
 
-			get_sd_mode(ih, B_N_PITEM(bh, i), &mode);
+			get_sd_mode(ih, item_body(bh, i), &mode);
 			symlnk = (S_ISLNK(mode) ? 1 : 0);
 			;	/*correct_stat_data (fs, bh, i); */
 		} else if (!is_direntry_ih(ih) &&
@@ -1506,8 +1506,8 @@ start_again:
 		    && !not_of_one_file(&ih->ih_key, &(ih - 1)->ih_key)) {
 			__u16 mode;
 
-			get_sd_mode(ih - 1, B_I_PITEM(bh, ih - 1), &mode);
-			if (not_a_directory(B_I_PITEM(bh, ih - 1))
+			get_sd_mode(ih - 1, ih_item_body(bh, ih - 1), &mode);
+			if (not_a_directory(ih_item_body(bh, ih - 1))
 			    && is_direntry_ih(ih)) {
 				/* make SD mode SD of dir */
 				fsck_log
@@ -1516,10 +1516,10 @@ start_again:
 				mode &= ~S_IFMT;
 				mode |= S_IFDIR;
 				fsck_log("(%M)\n", mode);
-				set_sd_mode(ih - 1, B_I_PITEM(bh, ih - 1),
+				set_sd_mode(ih - 1, ih_item_body(bh, ih - 1),
 					    &mode);
 				dirty = 1;
-			} else if (!not_a_directory(B_I_PITEM(bh, ih - 1))
+			} else if (!not_a_directory(ih_item_body(bh, ih - 1))
 				   && !is_direntry_ih(ih)) {
 				/* make SD mode SD of regular file */
 				fsck_log
@@ -1528,11 +1528,11 @@ start_again:
 				mode &= ~S_IFMT;
 				mode |= S_IFREG;
 				fsck_log("(%M)\n", mode);
-				set_sd_mode(ih - 1, B_I_PITEM(bh, ih - 1),
+				set_sd_mode(ih - 1, ih_item_body(bh, ih - 1),
 					    &mode);
 				dirty = 1;
 			}
-			if (not_a_regfile(B_I_PITEM(bh, ih - 1))
+			if (not_a_regfile(ih_item_body(bh, ih - 1))
 			    && is_indirect_ih(ih)) {
 				fsck_log
 				    ("pass0: block %lu, item %d: The file %K has the wrong mode (%M), corrected to ",
@@ -1540,7 +1540,7 @@ start_again:
 				mode &= ~S_IFMT;
 				mode |= S_IFREG;
 				fsck_log("(%M)\n", mode);
-				set_sd_mode(ih - 1, B_I_PITEM(bh, ih - 1),
+				set_sd_mode(ih - 1, ih_item_body(bh, ih - 1),
 					    &mode);
 				dirty = 1;
 			}
@@ -1607,7 +1607,7 @@ start_again:
 	    }
 	}
 */
-		ind_item = (__u32 *) B_I_PITEM(bh, ih);
+		ind_item = (__u32 *) ih_item_body(bh, ih);
 		for (j = 0; j < (int)I_UNFM_NUM(ih); j++) {
 			unfm_ptr = d32_get(ind_item, j);
 			if (!unfm_ptr)
@@ -1645,7 +1645,7 @@ start_again:
 	}
 
 	/* mark all objectids in use */
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	for (i = 0; i < get_blkh_nr_items(B_BLK_HEAD(bh)); i++, ih++) {
 		struct reiserfs_de_head *deh;
 
@@ -1816,8 +1816,8 @@ int is_leaf_bad(struct buffer_head *bh)
 
 	assert(is_leaf_node(bh));
 
-	for (i = 0, ih = B_N_PITEM_HEAD(bh, 0); i < B_NR_ITEMS(bh); i++, ih++) {
-		if (is_bad_item(bh, ih, B_I_PITEM(bh, ih))) {
+	for (i = 0, ih = item_head(bh, 0); i < B_NR_ITEMS(bh); i++, ih++) {
+		if (is_bad_item(bh, ih, ih_item_body(bh, ih))) {
 			fsck_log
 			    ("is_leaf_bad: block %lu, item %d: The corrupted item found (%H)\n",
 			     bh->b_blocknr, i, ih);

@@ -108,11 +108,11 @@ static void print_disk_tree(reiserfs_filsys_t *fs, unsigned long block_nr)
 		print_block(stdout, fs, bh,
 			    data(fs)->options & PRINT_TREE_DETAILS, -1, -1);
 
-		ih = B_N_PITEM_HEAD(bh, 0);
+		ih = item_head(bh, 0);
 		count = leaf_item_number_estimate(bh);
 		for (i = 0; i < count; i++, ih++) {
 			if (is_indirect_ih(ih)) {
-				__u32 *ind_item = (__u32 *) B_I_PITEM(bh, ih);
+				__u32 *ind_item = (__u32 *) ih_item_body(bh, ih);
 
 				for (j = 0; j < (int)I_UNFM_NUM(ih); j++) {
 					if (d32_get(ind_item, j)) {
@@ -574,8 +574,8 @@ static void callback_badblock_print(reiserfs_filsys_t *fs,
 	__u32 *ind_item;
 	__u32 i;
 
-	tmp_ih = get_ih(badblock_path);
-	ind_item = (__u32 *) get_item(badblock_path);
+	tmp_ih = tp_item_head(badblock_path);
+	ind_item = (__u32 *) tp_item_body(badblock_path);
 
 	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++)
 		fprintf(fd, "%u\n", d32_get(ind_item, i));

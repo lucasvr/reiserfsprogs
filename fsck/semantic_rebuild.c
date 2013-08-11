@@ -349,10 +349,10 @@ void relocate_dir(struct item_head *ih, int change_ih)
 			break;
 		}
 
-		if (is_stat_data_ih(get_ih(&path)))
+		if (is_stat_data_ih(tp_item_head(&path)))
 			fix_obviously_wrong_sd_mode(&path);
 
-		path_ih = get_ih(&path);
+		path_ih = tp_item_head(&path);
 		if (not_of_one_file(&key, &(path_ih->ih_key))) {
 			/* there are no more item with this key */
 			pathrelse(&path);
@@ -361,7 +361,7 @@ void relocate_dir(struct item_head *ih, int change_ih)
 
 		/* ok, item found, but make sure that it is not a directory one */
 		if ((is_stat_data_ih(path_ih)
-		     && not_a_directory(get_item(&path)))
+		     && not_a_directory(tp_item_body(&path)))
 		    || is_direct_ih(path_ih) || is_indirect_ih(path_ih)) {
 			/* item of not a directory found. Leave it in the
 			   tree. FIXME: should not happen */
@@ -427,7 +427,7 @@ int rebuild_check_regular_file(struct reiserfs_path *path, void *sd,
 	retval = OK;
 
 	/* stat data of a file */
-	ih = get_ih(path);
+	ih = tp_item_head(path);
 	bh = get_bh(path);
 
 	if (new_ih) {
@@ -444,10 +444,10 @@ int rebuild_check_regular_file(struct reiserfs_path *path, void *sd,
 			    ("%s: Could not find the StatData of the relocated file %k",
 			     __FUNCTION__, &(new_ih->ih_key));
 		/* stat data is marked unreachable again due to relocation, fix that */
-		ih = get_ih(path);
+		ih = tp_item_head(path);
 		bh = get_bh(path);
 		mark_item_reachable(ih, bh);
-		sd = get_item(path);
+		sd = tp_item_body(path);
 
 	}
 
@@ -526,8 +526,8 @@ int rebuild_check_regular_file(struct reiserfs_path *path, void *sd,
 			     __FUNCTION__, &sd_ih.ih_key);
 
 		bh = get_bh(path);
-		ih = get_ih(path);
-		sd = get_item(path);
+		ih = tp_item_head(path);
+		sd = tp_item_body(path);
 		set_sd_size(ih, sd, &real_size);
 		set_sd_blocks(ih, sd, &blocks);
 		set_sd_mode(ih, sd, &mode);
@@ -570,7 +570,7 @@ static char *get_next_directory_item(struct reiserfs_key *key,	/* on return this
 	/* leaf containing directory item */
 	bh = PATH_PLAST_BUFFER(&path);
 	*pos_in_item = path.pos_in_item;
-	*ih = *get_ih(&path);
+	*ih = *tp_item_head(&path);
 	deh = B_I_DEH(bh, ih);
 
 	/* make sure, that ".." exists as well */
@@ -634,7 +634,7 @@ static char *get_next_directory_item(struct reiserfs_key *key,	/* on return this
 
 	/* copy directory item to the temporary buffer */
 	dir_item = getmem(get_ih_item_len(ih));
-	memcpy(dir_item, B_I_PITEM(bh, ih), get_ih_item_len(ih));
+	memcpy(dir_item, ih_item_body(bh, ih), get_ih_item_len(ih));
 
 	/* next item key */
 	if (PATH_LAST_POSITION(&path) == (B_NR_ITEMS(bh) - 1) &&
@@ -646,7 +646,7 @@ static char *get_next_directory_item(struct reiserfs_key *key,	/* on return this
 	}
 
 	if (fsck_mode(fs) == FSCK_REBUILD)
-		mark_item_reachable(get_ih(&path), bh);
+		mark_item_reachable(tp_item_head(&path), bh);
 	pathrelse(&path);
 
 	return dir_item;
@@ -677,38 +677,38 @@ int fix_obviously_wrong_sd_mode(struct reiserfs_path *path)
 
 	next_key = reiserfs_next_key(path);
 
-	if (!next_key || not_of_one_file(next_key, &get_ih(path)->ih_key))
+	if (!next_key || not_of_one_file(next_key, &tp_item_head(path)->ih_key))
 		return 0;
 
 	/* next item exists and of the same file. Fix the SD mode */
 
-	if (not_a_directory(get_item(path)) && is_direntry_key(next_key)) {
+	if (not_a_directory(tp_item_body(path)) && is_direntry_key(next_key)) {
 		/* make SD mode SD of dir */
-		get_sd_mode(get_ih(path), get_item(path), &mode);
+		get_sd_mode(tp_item_head(path), tp_item_body(path), &mode);
 		fsck_log("The directory %K had wrong mode %M",
-			 &get_ih(path)->ih_key, mode);
+			 &tp_item_head(path)->ih_key, mode);
 
 		if (fsck_mode(fs) != FSCK_CHECK) {
 			mode &= ~S_IFMT;
 			mode |= S_IFDIR;
 			fsck_log(" - corrected to %M\n", mode);
-			set_sd_mode(get_ih(path), get_item(path), &mode);
+			set_sd_mode(tp_item_head(path), tp_item_body(path), &mode);
 			mark_buffer_dirty(get_bh(path));
 		} else {
 			fsck_log("\n");
 			retval = 1;
 		}
-	} else if (!not_a_directory(get_item(path))
+	} else if (!not_a_directory(tp_item_body(path))
 		   && !is_direntry_key(next_key)) {
 		/* make SD mode SD of regular file */
-		get_sd_mode(get_ih(path), get_item(path), &mode);
-		fsck_log("The file %K had wrong mode %M", &get_ih(path)->ih_key,
+		get_sd_mode(tp_item_head(path), tp_item_body(path), &mode);
+		fsck_log("The file %K had wrong mode %M", &tp_item_head(path)->ih_key,
 			 mode);
 		if (fsck_mode(fs) != FSCK_CHECK) {
 			mode &= ~S_IFMT;
 			mode |= S_IFREG;
 			fsck_log(" - corrected to %M\n", mode);
-			set_sd_mode(get_ih(path), get_item(path), &mode);
+			set_sd_mode(tp_item_head(path), tp_item_body(path), &mode);
 			mark_buffer_dirty(get_bh(path));
 		} else {
 			fsck_log("\n");
@@ -769,8 +769,8 @@ start_again:			/* when directory was relocated */
 
 	/* stat data has been found */
 	bh = get_bh(&path);
-	ih = get_ih(&path);
-	sd = get_item(&path);
+	ih = tp_item_head(&path);
+	sd = tp_item_body(&path);
 
 	/* */
 	get_sd_nlink(ih, sd, &nlink);
@@ -877,7 +877,7 @@ start_again:			/* when directory was relocated */
 */
 
 	dir_format =
-	    (get_ih_item_len(get_ih(&path)) ==
+	    (get_ih_item_len(tp_item_head(&path)) ==
 	     SD_SIZE) ? KEY_FORMAT_2 : KEY_FORMAT_1;
 	/* save stat data's size and st_blocks */
 	get_sd_size(ih, sd, &saved_size);
@@ -1005,7 +1005,7 @@ start_again:			/* when directory was relocated */
 
 					tmp_deh =
 					    B_I_DEH(get_bh(&path),
-						    get_ih(&path)) +
+						    tp_item_head(&path)) +
 					    path.pos_in_item;
 					fsck_log
 					    ("The entry %K (\"%.*s\") in directory %K updated to point to ",
@@ -1060,8 +1060,8 @@ start_again:			/* when directory was relocated */
 			     key);
 
 		bh = get_bh(&path);
-		ih = get_ih(&path);
-		sd = get_item(&path);
+		ih = tp_item_head(&path);
+		sd = tp_item_body(&path);
 
 		set_sd_size(ih, sd, &dir_size);
 		set_sd_blocks(ih, sd, &blocks);
@@ -1164,7 +1164,7 @@ static void make_sure_lost_found_exists(reiserfs_filsys_t *fs)
 		lost_found_dir_format =
 		    create_dir_sd(fs, &path, &lost_found_dir_key, modify_item);
 	else {
-		struct item_head *ih = get_ih(&path);
+		struct item_head *ih = tp_item_head(&path);
 
 		if (!is_stat_data_ih(ih))
 			reiserfs_panic("It must be lost+found's stat data %k\n",
@@ -1172,7 +1172,7 @@ static void make_sure_lost_found_exists(reiserfs_filsys_t *fs)
 
 		fix_obviously_wrong_sd_mode(&path);
 
-		if (not_a_directory(get_item(&path))) {
+		if (not_a_directory(tp_item_body(&path))) {
 			fsck_progress
 			    ("\"/lost+found\" exists, but it is not a directory, \
 		lost files will not be linked\n");
@@ -1182,7 +1182,7 @@ static void make_sure_lost_found_exists(reiserfs_filsys_t *fs)
 		}
 
 		lost_found_dir_format =
-		    (get_ih_item_len(get_ih(&path)) ==
+		    (get_ih_item_len(tp_item_head(&path)) ==
 		     SD_SIZE) ? KEY_FORMAT_2 : KEY_FORMAT_1;
 
 		pathrelse(&path);
@@ -1209,8 +1209,8 @@ static void make_sure_lost_found_exists(reiserfs_filsys_t *fs)
 			     __FUNCTION__);
 
 		bh = get_bh(&path);
-		ih = get_ih(&path);
-		sd = get_item(&path);
+		ih = tp_item_head(&path);
+		sd = tp_item_body(&path);
 
 		get_sd_size(ih, sd, &sd_size);
 		sd_size += item_len;

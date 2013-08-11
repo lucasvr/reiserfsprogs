@@ -79,7 +79,7 @@ void do_recover(reiserfs_filsys_t fs)
 
 			printf("working with block %lu..\n", block);
 
-			ih = B_N_PITEM_HEAD(bh, 0);
+			ih = item_head(bh, 0);
 			for (i = 0; i < node_item_number(bh); i++, ih++) {
 				__u32 *indirect;
 				struct buffer_head *tmp_bh;
@@ -89,7 +89,7 @@ void do_recover(reiserfs_filsys_t fs)
 				    || key.k_objectid != ih->ih_key.k_objectid)
 					continue;
 
-				indirect = (__u32 *) B_I_PITEM(bh, ih);
+				indirect = (__u32 *) ih_item_body(bh, ih);
 				for (j = 0; j < I_UNFM_NUM(ih); j++) {
 					block = le32_to_cpu(indirect[j]);
 					if (!block)
@@ -308,7 +308,7 @@ static void recover_items(FILE * fp, reiserfs_filsys_t *fs, FILE * target_file)
 		if (i == map_size / sizeof(struct saved_item)) {
 			if (start != -1) {
 				reiserfs_print_item(stdout, bh,
-						    B_N_PITEM_HEAD(bh,
+						    item_head(bh,
 								   (cur -
 								    1)->
 								   si_item_num));
@@ -341,7 +341,7 @@ static void recover_items(FILE * fp, reiserfs_filsys_t *fs, FILE * target_file)
 
 				printf("Problem item %d:\n", i - start - 1);
 				reiserfs_print_item(stdout, bh,
-						    B_N_PITEM_HEAD(bh,
+						    item_head(bh,
 								   (cur -
 								    1)->
 								   si_item_num));
@@ -349,7 +349,7 @@ static void recover_items(FILE * fp, reiserfs_filsys_t *fs, FILE * target_file)
 				/* problem interval finished */
 				printf("Problem item %d:\n", i - start - 1);
 				reiserfs_print_item(stdout, bh,
-						    B_N_PITEM_HEAD(bh,
+						    item_head(bh,
 								   (cur -
 								    1)->
 								   si_item_num));
@@ -377,15 +377,15 @@ static void recover_items(FILE * fp, reiserfs_filsys_t *fs, FILE * target_file)
 
 		fseek(target_file,
 		      get_offset(&(map + result)->si_ih.ih_key) - 1, SEEK_SET);
-		ih = B_N_PITEM_HEAD(bh, (map + result)->si_item_num);
+		ih = item_head(bh, (map + result)->si_item_num);
 		if (is_direct_ih(ih)) {
-			fwrite(B_I_PITEM(bh, ih),
+			fwrite(ih_item_body(bh, ih),
 			       (map + result)->si_ih.ih2_item_len, 1,
 			       target_file);
 		} else if (is_indirect_ih(ih)) {
 			for (j = 0; j < I_UNFM_NUM(ih); j++) {
 				unfm_ptr =
-				    d32_get((__u32 *) B_I_PITEM(bh, ih), j);
+				    d32_get((__u32 *) ih_item_body(bh, ih), j);
 				if (!unfm_ptr) {
 					fseek(target_file, fs->fs_blocksize,
 					      SEEK_CUR);

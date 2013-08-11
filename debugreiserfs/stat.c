@@ -111,7 +111,7 @@ static void stat1_the_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 	struct item_head *ih;
 	int is_there_unique_item;
 
-	ih = B_N_PITEM_HEAD(bh, 0);
+	ih = item_head(bh, 0);
 	is_there_unique_item = 0;
 	i_num = leaf_item_number_estimate(bh);
 	for (i = 0; i < i_num; i++, ih++) {
@@ -131,7 +131,7 @@ static void stat1_the_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 		fs_stat.blocks_to_skip++;
 		reiserfs_bitmap_clear_bit(input_bitmap(fs), bh->b_blocknr);
 	} else {
-		ih = B_N_PITEM_HEAD(bh, 0);
+		ih = item_head(bh, 0);
 		/* node contains at least one unique item. We will put it in, count items of each type */
 		for (i = 0; i < i_num; i++, ih++) {
 			fs_stat.items[get_type(&ih->ih_key)]++;

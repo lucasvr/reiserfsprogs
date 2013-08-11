@@ -407,7 +407,7 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 			return;
 		}
 
-		ih = B_N_PITEM_HEAD(bh, 0);
+		ih = item_head(bh, 0);
 		for (i = 0; i < get_blkh_nr_items(B_BLK_HEAD(bh)); i++, ih++) {
 			struct reiserfs_de_head *deh;
 			/* look for property objectid */
@@ -456,7 +456,7 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 			printf("Wrong format \'%c\'\n", corruption_command[0]);
 			return;
 		}
-		ih = B_N_PITEM_HEAD(bh, 0);
+		ih = item_head(bh, 0);
 		for (i = 0; i < get_blkh_nr_items(B_BLK_HEAD(bh)); i++, ih++) {
 			struct reiserfs_de_head *deh;
 			/* look for property objectid */
@@ -482,7 +482,7 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 			return;
 		}
 
-		ih = B_N_PITEM_HEAD(bh, item_num);
+		ih = item_head(bh, item_num);
 		set_ih_key_format(ih, format);
 		set_type(format, &ih->ih_key, type);
 
@@ -500,7 +500,7 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 			       corruption_command[0]);
 			return;
 		}
-		ih = B_N_PITEM_HEAD(bh, item_num);
+		ih = item_head(bh, item_num);
 		set_key_objectid(&ih->ih_key, objectid);
 		break;
 
@@ -516,14 +516,14 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 			       corruption_command[0]);
 			return;
 		}
-		ih = B_N_PITEM_HEAD(bh, item_num);
+		ih = item_head(bh, item_num);
 		if (!is_indirect_ih(ih) || pos_in_item >= I_UNFM_NUM(ih)) {
 			reiserfs_warning(stderr,
 					 "Not an indirect item or there is "
 					 "not so many unfm ptrs in it\n");
 			return;
 		}
-		d32_put((__u32 *) B_I_PITEM(bh, ih), pos_in_item,
+		d32_put((__u32 *) ih_item_body(bh, ih), pos_in_item,
 			get_sb_block_count(fs->fs_ondisk_sb) + 100);
 		break;
 
@@ -563,7 +563,7 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 				printf("can not destroy order\n");
 				return;
 			}
-			ih = B_N_PITEM_HEAD(bh, item_num);
+			ih = item_head(bh, item_num);
 			key = &(ih + 1)->ih_key;
 			set_key_dirid(&ih->ih_key, get_key_dirid(key) + 1);
 
@@ -586,9 +586,9 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 				       corruption_command[0]);
 				return;
 			}
-			ih = B_N_PITEM_HEAD(bh, item_num);
+			ih = item_head(bh, item_num);
 
-			sd = (struct stat_data_v1 *)B_I_PITEM(bh, ih);
+			sd = (struct stat_data_v1 *)ih_item_body(bh, ih);
 			reiserfs_warning(stderr,
 					 "Changing sd_size of %k from %d to %d\n",
 					 &ih->ih_key, sd_v1_size(sd), value);
@@ -613,9 +613,9 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 				       corruption_command[0]);
 				return;
 			}
-			ih = B_N_PITEM_HEAD(bh, item_num);
+			ih = item_head(bh, item_num);
 
-			sd = (struct stat_data_v1 *)B_I_PITEM(bh, ih);
+			sd = (struct stat_data_v1 *)ih_item_body(bh, ih);
 			reiserfs_warning(stderr,
 					 "Changing sd_first_direct_byte of %k from %d to %d\n",
 					 &ih->ih_key,
@@ -640,7 +640,7 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 
 		for (i = 0; i < item_numbers; i++) {
 			printf("Do corruptions :  %d item header; \n", i);
-			ih = B_N_PITEM_HEAD(bh, i);
+			ih = item_head(bh, i);
 			do_one_ih_corrupt(ih, bytes_to_corrupt);
 			printf("Ok\n");
 		}
@@ -954,7 +954,7 @@ void do_ih_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 			printf("# block %lu , item header %d\n", bh->b_blocknr,
 			       j);
 
-			ih = B_N_PITEM_HEAD(bh, j);
+			ih = item_head(bh, j);
 			do_one_ih_random_corrupt(ih);
 		}
 		mark_buffer_dirty(bh);
@@ -980,7 +980,7 @@ void do_one_item_random_corrupt(struct buffer_head *bh, struct item_head *ih)
 	unsigned int count;
 	char *p;
 
-	p = (char *)B_I_PITEM(bh, ih);
+	p = (char *)ih_item_body(bh, ih);
 
 	from = get_rand(0, get_ih_item_len(ih) - 1);
 	count = get_rand(1, get_ih_item_len(ih));
@@ -1066,7 +1066,7 @@ void do_dir_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 					bh->b_blocknr, j);
 			printf("# block %lu , item %d\n", bh->b_blocknr, j);
 
-			ih = B_N_PITEM_HEAD(bh, j);
+			ih = item_head(bh, j);
 			if (get_type(&ih->ih_key) != TYPE_DIRENTRY)
 				continue;
 			do_one_item_random_corrupt(bh, ih);
@@ -1151,7 +1151,7 @@ void do_sd_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 					bh->b_blocknr, j);
 			printf("# block %lu , item %d\n", bh->b_blocknr, j);
 
-			ih = B_N_PITEM_HEAD(bh, j);
+			ih = item_head(bh, j);
 			if (get_type(&ih->ih_key) != TYPE_STAT_DATA)
 				continue;
 			do_one_item_random_corrupt(bh, ih);
@@ -1230,7 +1230,7 @@ void do_ind_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 			if (should_be_corrupted == 0)
 				continue;
 
-			ih = B_N_PITEM_HEAD(bh, j);
+			ih = item_head(bh, j);
 			if (get_type(&ih->ih_key) != TYPE_INDIRECT)
 				continue;
 			if ((data(fs)->log_file_name) && (data(fs)->log))
