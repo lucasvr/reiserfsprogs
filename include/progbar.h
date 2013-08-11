@@ -20,12 +20,12 @@ struct spinner {
 	FILE *file;
 };
 
-void progbar_init(struct progbar *ctx, const char *units, FILE *fp);
-void progbar_clear(struct progbar * ctx);
-int progbar_update(struct progbar * ctx, const char *label, int curr, int max,
-                           unsigned int dpynum);
+void progbar_init(struct progbar *ctx, const char *units, FILE * fp);
+void progbar_clear(struct progbar *ctx);
+int progbar_update(struct progbar *ctx, const char *label, int curr, int max,
+		   unsigned int dpynum);
 
-void spinner_init(struct spinner *spinner, FILE *fp);
+void spinner_init(struct spinner *spinner, FILE * fp);
 void spinner_touch(struct spinner *spinner);
 void spinner_clear(struct spinner *spinner);
 

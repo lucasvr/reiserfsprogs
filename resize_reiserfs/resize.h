@@ -32,8 +32,8 @@
 #define DIE(form, args...) die("%s: " form "\n", g_progname , ## args)
 
 /* reiserfs_resize.c */
-extern struct buffer_head * g_sb_bh;
-extern char * g_progname;
+extern struct buffer_head *g_sb_bh;
+extern char *g_progname;
 
 extern int opt_force;
 extern int opt_verbose;
@@ -41,7 +41,7 @@ extern int opt_nowrite;
 extern int opt_safe;
 
 /* fe.c */
-extern int resize_fs_online(char * devname, long long int blocks);
+extern int resize_fs_online(char *devname, long long int blocks);
 
 /* do_shrink.c */
 extern int shrink_fs(reiserfs_filsys_t *, long long int blocks);

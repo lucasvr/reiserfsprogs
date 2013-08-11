@@ -35,60 +35,72 @@
 #define INVAL_PTR	(void *)-1
 
 void check_memory_msg(void);
-void die (char * fmt, ...) __attribute__ ((format (printf, 1, 2)));
-void * getmem (int size);
+void die(char *fmt, ...) __attribute__ ((format(printf, 1, 2)));
+void *getmem(int size);
 void *mem_alloc(int size);
-void freemem (void * p);
-void checkmem (char * p, int size);
-void * expandmem (void * p, int size, int by);
-unsigned int get_mem_size (char * p);
-void check_and_free_mem (void);
-char * kdevname (int dev);
+void freemem(void *p);
+void checkmem(char *p, int size);
+void *expandmem(void *p, int size, int by);
+unsigned int get_mem_size(char *p);
+void check_and_free_mem(void);
+char *kdevname(int dev);
 
 typedef enum mount_flags {
-	MF_NOT_MOUNTED  = 0x0,
-	MF_RO		= 0x1,
-	MF_RW		= 0x2
+	MF_NOT_MOUNTED = 0x0,
+	MF_RO = 0x1,
+	MF_RW = 0x2
 } mount_flags_t;
 
 typedef struct mount_hint {
-    char *point;	/* Mount point. */
-    __u32 psize;	/* Mount point buffer size. */
-    __u32 flags;	/* Mount flags. */
+	char *point;		/* Mount point. */
+	__u32 psize;		/* Mount point buffer size. */
+	__u32 flags;		/* Mount flags. */
 } mount_hint_t;
 
 struct mntent *misc_mntent(char *device);
 int misc_device_mounted(char *device);
-	
+
 typedef struct dma_info {
-    int fd;
-    struct stat st;
-    int support_type;
-    int dma;
-    __u64 speed;
+	int fd;
+	struct stat st;
+	int support_type;
+	int dma;
+	__u64 speed;
 } dma_info_t;
 
 int prepare_dma_check(dma_info_t *dma_info);
 int get_dma_info(dma_info_t *dma_info);
 void clean_after_dma_check(int fd, dma_info_t *dma_info);
 
-int valid_offset( int fd, loff_t offset);
-unsigned long count_blocks (char * filename, int blocksize);
+int valid_offset(int fd, loff_t offset);
+unsigned long count_blocks(char *filename, int blocksize);
 
-void print_how_far (FILE * fp, unsigned long *passed, unsigned long total, unsigned int inc, int quiet);
-void print_how_fast (unsigned long total, 
-		     unsigned long passed, int cursor_pos, int reset_time);
-__u32 get_random (void);
+void print_how_far(FILE * fp, unsigned long *passed, unsigned long total,
+		   unsigned int inc, int quiet);
+void print_how_fast(unsigned long total, unsigned long passed, int cursor_pos,
+		    int reset_time);
+__u32 get_random(void);
 
-int user_confirmed (FILE * fp, char * q, char * yes);
+int user_confirmed(FILE * fp, char *q, char *yes);
 
-extern inline int misc_set_bit (unsigned long long nr, void * addr);
-extern inline int misc_clear_bit (unsigned long long nr, void * addr);
-extern inline int misc_test_bit(unsigned long long nr, const void * addr);
-extern inline unsigned long long misc_find_first_zero_bit (const void *vaddr, unsigned long long size);
-extern inline unsigned long long misc_find_next_zero_bit (const void *vaddr, unsigned long long size, unsigned long long offset);
-extern inline unsigned long long misc_find_next_set_bit(const void *vaddr, unsigned long long size, unsigned long long offset);
-extern inline unsigned long long misc_find_first_set_bit (const void *vaddr, unsigned long long size);
+extern inline int misc_set_bit(unsigned long long nr, void *addr);
+extern inline int misc_clear_bit(unsigned long long nr, void *addr);
+extern inline int misc_test_bit(unsigned long long nr, const void *addr);
+extern inline unsigned long long misc_find_first_zero_bit(const void *vaddr,
+							  unsigned long long
+							  size);
+extern inline unsigned long long misc_find_next_zero_bit(const void *vaddr,
+							 unsigned long long
+							 size,
+							 unsigned long long
+							 offset);
+extern inline unsigned long long misc_find_next_set_bit(const void *vaddr,
+							unsigned long long size,
+							unsigned long long
+							offset);
+extern inline unsigned long long misc_find_first_set_bit(const void *vaddr,
+							 unsigned long long
+							 size);
 
 #define STAT_FIELD_H(Field, Type)	\
 inline Type misc_device_##Field(char *device);
@@ -98,25 +110,24 @@ STAT_FIELD_H(rdev, dev_t);
 STAT_FIELD_H(size, off_t);
 STAT_FIELD_H(blocks, blkcnt_t);
 
-__u16 mask16 (int from, int count);
-__u32 mask32 (int from, int count);
-__u64 mask64 (int from, int count);
+__u16 mask16(int from, int count);
+__u32 mask32(int from, int count);
+__u64 mask64(int from, int count);
 
-int reiserfs_bin_search (void * key, void * base, __u32 num, int width,
-			 __u32 *ppos, __compar_fn_t comp_func);
+int reiserfs_bin_search(void *key, void *base, __u32 num, int width,
+			__u32 * ppos, __compar_fn_t comp_func);
 
 struct block_handler {
-    __u32 blocknr;
-    dev_t device;
+	__u32 blocknr;
+	dev_t device;
 };
 
-int  blocklist__is_block_saved (struct block_handler ** base, __u32 * count, __u32 blocknr, 
-    dev_t device, __u32 * position);
-void blocklist__insert_in_position (void * block_h, void ** base, __u32 * count, 
-    int elem_size, __u32 * position);
-int blockdev_list_compare (const void * block1, const void * block2);
-			
-			 
+int blocklist__is_block_saved(struct block_handler **base, __u32 * count,
+			      __u32 blocknr, dev_t device, __u32 * position);
+void blocklist__insert_in_position(void *block_h, void **base, __u32 * count,
+				   int elem_size, __u32 * position);
+int blockdev_list_compare(const void *block1, const void *block2);
+
 #define set_bit_field_XX(XX,vp,val,from,count) \
 {\
     __u##XX * p, tmp;\
@@ -137,7 +148,6 @@ int blockdev_list_compare (const void * block1, const void * block2);
     *p = cpu_to_le##XX (tmp);\
 }
 
-
 #define get_bit_field_XX(XX,vp,from,count) \
 \
     __u##XX * p, tmp;\
@@ -152,19 +162,16 @@ int blockdev_list_compare (const void * block1, const void * block2);
     tmp >>= from;\
     return tmp;
 
-
 #ifndef major
 #define major(rdev)      ((rdev)>>8)
 #define minor(rdev)      ((rdev) & 0xff)
 #endif /* major */
 
-
-
 #ifndef SCSI_DISK_MAJOR
 #define SCSI_DISK_MAJOR(maj) ((maj) == SCSI_DISK0_MAJOR || \
 			     ((maj) >= SCSI_DISK1_MAJOR && (maj) <= SCSI_DISK7_MAJOR))
 #endif /* SCSI_DISK_MAJOR */
-    
+
 #ifndef SCSI_BLK_MAJOR
 #define SCSI_BLK_MAJOR(maj)  (SCSI_DISK_MAJOR(maj) || (maj) == SCSI_CDROM_MAJOR)
 #endif /* SCSI_BLK_MAJOR */
@@ -182,6 +189,5 @@ int blockdev_list_compare (const void * block1, const void * block2);
 			     (maj) == IDE4_MAJOR || (maj) == IDE5_MAJOR)
 #endif /* IDE9_MAJOR */
 #endif /* IDE_DISK_MAJOR */
-
 
 #endif /* REISERFS_MISC_H */

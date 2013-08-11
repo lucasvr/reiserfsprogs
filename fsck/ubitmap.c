@@ -40,151 +40,90 @@
       
  */
 
-
-
 /* is blocks used (marked by 1 in new bitmap) in the tree which is being built
    (as leaf, internal, bitmap, or unformatted node) */
-int is_block_used (unsigned long block)
+int is_block_used(unsigned long block)
 {
-    return reiserfs_bitmap_test_bit (fsck_new_bitmap (fs), block);
+	return reiserfs_bitmap_test_bit(fsck_new_bitmap(fs), block);
 }
 
-void mark_block_used (unsigned long block, int check_hardware)
+void mark_block_used(unsigned long block, int check_hardware)
 {
-    if (!block)
-	return;
-    if (is_block_used (block)) {
-	if (check_hardware)
-	    check_memory_msg();
-	die ("mark_block_used: (%lu) used already", block);
-    }
+	if (!block)
+		return;
+	if (is_block_used(block)) {
+		if (check_hardware)
+			check_memory_msg();
+		die("mark_block_used: (%lu) used already", block);
+	}
 
-    reiserfs_bitmap_set_bit (fsck_new_bitmap (fs), block);
+	reiserfs_bitmap_set_bit(fsck_new_bitmap(fs), block);
 }
 
-
-void mark_block_free (unsigned long block)
+void mark_block_free(unsigned long block)
 {
-    if (!is_block_used (block))
-	die ("mark_block_free: (%lu) is free already", block);
+	if (!is_block_used(block))
+		die("mark_block_free: (%lu) is free already", block);
 
-    reiserfs_bitmap_clear_bit (fsck_new_bitmap (fs), block);
+	reiserfs_bitmap_clear_bit(fsck_new_bitmap(fs), block);
 }
 
-
-int is_block_uninsertable (unsigned long block)
+int is_block_uninsertable(unsigned long block)
 {
-    return !reiserfs_bitmap_test_bit (fsck_uninsertables (fs), block);
+	return !reiserfs_bitmap_test_bit(fsck_uninsertables(fs), block);
 }
-
 
 /* uninsertable block is marked by bit clearing */
-void mark_block_uninsertable (unsigned long block)
+void mark_block_uninsertable(unsigned long block)
 {
-    if (is_block_uninsertable (block))
-	die ("mark_block_uninsertable: (%lu) is uninsertable already", block);
+	if (is_block_uninsertable(block))
+		die("mark_block_uninsertable: (%lu) is uninsertable already",
+		    block);
 
-    reiserfs_bitmap_clear_bit (fsck_uninsertables (fs), block);
-    /* we do not need thsi actually */
-    pass_1_stat (fs)->uninsertable_leaves ++;
+	reiserfs_bitmap_clear_bit(fsck_uninsertables(fs), block);
+	/* we do not need thsi actually */
+	pass_1_stat(fs)->uninsertable_leaves++;
 }
-
 
 /* FIXME: should be able to work around no disk space */
-int reiserfsck_reiserfs_new_blocknrs (reiserfs_filsys_t * fs,
-				      unsigned long * free_blocknrs,
-				      unsigned long start, int amount_needed)
+int reiserfsck_reiserfs_new_blocknrs(reiserfs_filsys_t *fs,
+				     unsigned long *free_blocknrs,
+				     unsigned long start, int amount_needed)
 {
-    int i;
+	int i;
 
-    if (!are_there_allocable_blocks (amount_needed))
-	die ("out of disk space");
-    for (i = 0; i < amount_needed; i ++) {
-	free_blocknrs[i] = alloc_block ();
-	if (!free_blocknrs[i])
-	    die ("reiserfs_new_blocknrs: 0 is allocated");
-	mark_block_used (free_blocknrs[i], 0);
-    }
-    return CARRY_ON;
+	if (!are_there_allocable_blocks(amount_needed))
+		die("out of disk space");
+	for (i = 0; i < amount_needed; i++) {
+		free_blocknrs[i] = alloc_block();
+		if (!free_blocknrs[i])
+			die("reiserfs_new_blocknrs: 0 is allocated");
+		mark_block_used(free_blocknrs[i], 0);
+	}
+	return CARRY_ON;
 }
-
 
 // FIXME: do you check readability of a block? If f_read fails - you
 // free block in bitmap or if you mark bad blocks used to avoid their
 // allocation in future you should have bad block counter in a super
 // block. Another minor issue: users of _get_new_buffer expect buffer
 // to be filled with 0s
-struct buffer_head * reiserfsck_get_new_buffer (unsigned long start)
+struct buffer_head *reiserfsck_get_new_buffer(unsigned long start)
 {
-    unsigned long blocknr = 0;
-    struct buffer_head * bh = NULL;
+	unsigned long blocknr = 0;
+	struct buffer_head *bh = NULL;
 
-    reiserfs_new_blocknrs (fs, &blocknr, start, 1);
-    bh = getblk (fs->fs_dev, blocknr, fs->fs_blocksize);
-    return bh;
+	reiserfs_new_blocknrs(fs, &blocknr, start, 1);
+	bh = getblk(fs->fs_dev, blocknr, fs->fs_blocksize);
+	return bh;
 }
-
 
 /* free block in new bitmap */
-int reiserfsck_reiserfs_free_block (reiserfs_filsys_t * fs, unsigned long block)
+int reiserfsck_reiserfs_free_block(reiserfs_filsys_t *fs, unsigned long block)
 {
-    mark_block_free (block);
+	mark_block_free(block);
 
-    /* put it back to pool of blocks for allocation */
-    make_allocable (block);
-    return 0;
+	/* put it back to pool of blocks for allocation */
+	make_allocable(block);
+	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

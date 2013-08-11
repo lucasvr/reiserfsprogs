@@ -17,7 +17,7 @@ time_t parse_time(char *str)
 	if (strcmp(str, "now") == 0) {
 		return (time(0));
 	}
-	memset(&ts, 0, sizeof (ts));
+	memset(&ts, 0, sizeof(ts));
 #ifdef HAVE_STRPTIME
 	strptime(str, "%Y%m%d%H%M%S", &ts);
 #else
@@ -32,6 +32,6 @@ time_t parse_time(char *str)
 #endif
 	if (ts.tm_mday == 0)
 		reiserfs_warning(stderr, "Couldn't parse date/time "
-		                 "specifier: %s", str);
+				 "specifier: %s", str);
 	return (mktime(&ts));
 }

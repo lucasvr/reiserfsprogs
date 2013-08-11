@@ -41,7 +41,6 @@
                 (__u64)(((__u64)(__x) & (__u64)0xff00000000000000ULL) >> 56) )); \
 })
 
-
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 
 # define cpu_to_le16(val)                 (val)

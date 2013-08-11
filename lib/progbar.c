@@ -8,19 +8,18 @@
 static char bar[128], spaces[128];
 static const char spinner[] = "\\|/-";
 
-void progbar_init(struct progbar *ctx, const char *units, FILE *fp)
+void progbar_init(struct progbar *ctx, const char *units, FILE * fp)
 {
-	memset(ctx, 0, sizeof (*ctx));
+	memset(ctx, 0, sizeof(*ctx));
 	if (!bar[0])
-		memset(bar, '=', sizeof(bar)-1);
+		memset(bar, '=', sizeof(bar) - 1);
 	if (!spaces[0])
-		memset(spaces, ' ', sizeof(spaces)-1);
+		memset(spaces, ' ', sizeof(spaces) - 1);
 	strncpy(ctx->units, units, sizeof(ctx->units));
 	ctx->file = fp;
 }
 
-
-void progbar_clear(struct progbar * ctx)
+void progbar_clear(struct progbar *ctx)
 {
 	if (!(ctx->flags & E2F_FLAG_PROG_BAR))
 		return;
@@ -30,17 +29,17 @@ void progbar_clear(struct progbar * ctx)
 	ctx->flags &= ~E2F_FLAG_PROG_BAR;
 }
 
-int progbar_update(struct progbar * ctx, const char *label, int curr, int max,
-                           unsigned int dpynum)
+int progbar_update(struct progbar *ctx, const char *label, int curr, int max,
+		   unsigned int dpynum)
 {
-	int	i;
-	unsigned int	tick;
-	struct timeval	tv;
+	int i;
+	unsigned int tick;
+	struct timeval tv;
 	int dpywidth;
 	int fixed_percent;
 	assert (curr >= 0);
 	assert (max > 0);
-	float percent = ((float) curr) / ((float) max) * 100;
+	float percent = ((float)curr) / ((float)max) * 100;
 
 	if (ctx->flags & E2F_FLAG_PROG_SUPPRESS)
 		return 0;
@@ -50,7 +49,7 @@ int progbar_update(struct progbar * ctx, const char *label, int curr, int max,
 	 * percentage hasn't changed, then we skip out right
 	 * away.
 	 */
-	fixed_percent = (int) ((10 * percent) + 0.5);
+	fixed_percent = (int)((10 * percent) + 0.5);
 	if (ctx->progress_last_percent == fixed_percent)
 		return 0;
 	ctx->progress_last_percent = fixed_percent;
@@ -71,7 +70,7 @@ int progbar_update(struct progbar * ctx, const char *label, int curr, int max,
 	 * Advance the spinner, and note that the progress bar
 	 * will be on the screen
 	 */
-	ctx->progress_pos = (ctx->progress_pos+1) & 3;
+	ctx->progress_pos = (ctx->progress_pos + 1) & 3;
 	ctx->flags |= E2F_FLAG_PROG_BAR;
 
 	dpywidth = 66 - strlen(label);
@@ -81,8 +80,8 @@ int progbar_update(struct progbar * ctx, const char *label, int curr, int max,
 
 	i = ((percent * dpywidth) + 50) / 100;
 	fprintf(ctx->file, "\r%s: |%s%s", label,
-	       bar + (sizeof(bar) - (i+1)),
-	       spaces + (sizeof(spaces) - (dpywidth - i + 1)));
+		bar + (sizeof(bar) - (i + 1)),
+		spaces + (sizeof(spaces) - (dpywidth - i + 1)));
 	if (fixed_percent == 1000)
 		fputc('|', ctx->file);
 	else
@@ -100,21 +99,18 @@ int progbar_update(struct progbar * ctx, const char *label, int curr, int max,
 	return 0;
 }
 
-void
-spinner_init(struct spinner *ctx, FILE *fp)
+void spinner_init(struct spinner *ctx, FILE * fp)
 {
-	memset(ctx, 0, sizeof (*ctx));
+	memset(ctx, 0, sizeof(*ctx));
 	ctx->file = fp;
 }
 
-void
-spinner_touch(struct spinner *ctx)
+void spinner_touch(struct spinner *ctx)
 {
 	fprintf(ctx->file, "%c", spinner[ctx->count++ % 4]);
 }
 
-void
-spinner_clear(struct spinner *ctx)
+void spinner_clear(struct spinner *ctx)
 {
 	fputs("", ctx->file);
 }
