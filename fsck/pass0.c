@@ -566,7 +566,7 @@ static __inline__ int does_it_fit_into_dev (__u64 offset, __u64 fs_size) {
 }
 
 
-static int is_wrong_short_key (struct key * key) {
+static int is_wrong_short_key (struct reiserfs_key *key) {
     if (get_key_dirid (key) == 0 || get_key_objectid (key) == 0 || get_key_objectid (key) == 1 ||
 	get_key_dirid (key) == ~(__u32)0 || get_key_objectid (key) == ~(__u32)0 ||
 	get_key_dirid (key) == get_key_objectid (key) ||
@@ -1263,7 +1263,7 @@ static void pass0_correct_leaf (reiserfs_filsys_t * fs,
 
 	/* Darko Palic's filesystem had item: [20079 17328 0xfffb1001 IND, len 4048], format old */
 	{
-	    struct key tmp_key;
+	    struct reiserfs_key tmp_key;
 
 	    tmp_key = ih->ih_key;
 	    set_offset (key_format (&tmp_key), &tmp_key,

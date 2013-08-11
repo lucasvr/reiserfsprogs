@@ -35,7 +35,7 @@ struct relocated {
    beginning of semantic pass */
 static struct relocated * relocated_list = NULL;
 
-static __u32 get_relocated_objectid_from_list (struct key * key) {
+static __u32 get_relocated_objectid_from_list (struct reiserfs_key *key) {
     struct relocated *cur = relocated_list;
 
     while (cur) {
@@ -49,7 +49,7 @@ static __u32 get_relocated_objectid_from_list (struct key * key) {
 }
 
 /* return objectid the object has to be remapped with */
-__u32 objectid_for_relocation (struct key * key)
+__u32 objectid_for_relocation (struct reiserfs_key *key)
 {
     struct relocated * cur;
     __u32 cur_id;
@@ -71,7 +71,7 @@ __u32 objectid_for_relocation (struct key * key)
 /* relocated files get added into lost+found with slightly different names */
 static __u64 link_one (struct relocated * file) {
     char * name;
-    struct key obj_key;
+    struct reiserfs_key obj_key;
     __u64 len = 0;
 
     asprintf (&name, "%lu,%lu", file->old_dir_id, file->new_objectid);
@@ -88,7 +88,7 @@ static __u64 link_one (struct relocated * file) {
     return len;
 }
 
-void linked_already(struct key *new_key /*, link_func_t link_func*/) {
+void linked_already(struct reiserfs_key *new_key /*, link_func_t link_func*/) {
     struct relocated *cur = relocated_list;
     struct relocated *prev = NULL;
 
@@ -152,7 +152,7 @@ void save_item (struct si ** head, struct item_head * ih, char * item, __u32 blo
 }
 
 
-struct si * save_and_delete_file_item (struct si * si, struct path * path)
+struct si * save_and_delete_file_item (struct si * si, struct reiserfs_path *path)
 {
     struct buffer_head * bh = PATH_PLAST_BUFFER (path);
     struct item_head * ih = PATH_PITEM_HEAD (path);
@@ -168,9 +168,9 @@ struct si * save_and_delete_file_item (struct si * si, struct path * path)
 /* check whether there are any directory items with this key */
 int should_relocate (struct item_head * ih)
 {
-    struct key key;
-    struct key * rkey;
-    struct path path;
+    struct reiserfs_key key;
+    struct reiserfs_key *rkey;
+    struct reiserfs_path path;
     struct item_head * path_ih;
 
 
@@ -240,7 +240,7 @@ int should_relocate (struct item_head * ih)
 
 /* either both sd-s are new of both are old */
 static void overwrite_stat_data (struct item_head * new_ih,
-				 void * new_item, struct path * path)
+				 void * new_item, struct reiserfs_path *path)
 {
     __u16 new_mode, old_mode;
 
@@ -281,7 +281,7 @@ static void overwrite_stat_data (struct item_head * new_ih,
 /* insert sd item if it does not exist, overwrite it otherwise */
 static void put_sd_into_tree (struct item_head * new_ih, char * new_item)
 {
-    struct path path;
+    struct reiserfs_path path;
 
     if (!not_a_directory (new_item)) {
 	/* new item is a stat data of a directory. So we have to
@@ -368,7 +368,7 @@ static void put_directory_item_into_tree (struct item_head * comingih, char * it
            directory in the tree yet - new item will be inserted
            marked not reached */
 	reiserfs_add_entry (fs, &(comingih->ih_key), buf, entry_length (comingih, deh, i),
-			(struct key *)&(deh->deh2_dir_id), 1 << IH_Unreachable);
+			(struct reiserfs_key *)&(deh->deh2_dir_id), 1 << IH_Unreachable);
 	free (buf);
     }
 }

@@ -15,22 +15,22 @@ struct check_relocated {
 
 static struct check_relocated * relocated_list;
 
-void to_be_relocated (struct key * key)
+void to_be_relocated (struct reiserfs_key *key)
 {
     struct check_relocated * cur, * prev, * new_relocated;
 
     cur = relocated_list;
     prev = 0;
 
-    while (cur && comp_short_keys(key, (struct key *)cur) != 1) {
-	if (comp_short_keys (key, (struct key *)cur) == 0)
+    while (cur && comp_short_keys(key, (struct reiserfs_key *)cur) != 1) {
+	if (comp_short_keys (key, (struct reiserfs_key *)cur) == 0)
 	    return;
 	prev = cur;
         cur = cur->next;
     }
         
     new_relocated = getmem (sizeof (struct check_relocated));
-    copy_short_key ((struct key *)new_relocated, key);
+    copy_short_key ((struct reiserfs_key *)new_relocated, key);
              
     if (prev) {
         new_relocated->next = prev->next;
@@ -41,7 +41,7 @@ void to_be_relocated (struct key * key)
     }
 }
 
-int should_be_relocated (struct key * key)
+int should_be_relocated (struct reiserfs_key *key)
 {
     struct check_relocated *cur, *prev;
     int ret = 0;
@@ -52,8 +52,8 @@ int should_be_relocated (struct key * key)
     cur = relocated_list;
 
     prev = NULL;
-    while (cur && comp_short_keys(key, (struct key *)cur) != 1) {
-	if (comp_short_keys (key, (struct key *)cur) == 0) {
+    while (cur && comp_short_keys(key, (struct reiserfs_key *)cur) != 1) {
+	if (comp_short_keys (key, (struct reiserfs_key *)cur) == 0) {
 	    ret = 1;
 	    break;
 	}
@@ -996,7 +996,7 @@ static int get_pos (struct buffer_head * bh, unsigned long block)
 
 
 /* path[h] - leaf node */
-static struct key * lkey (struct buffer_head ** path, int h)
+static struct reiserfs_key *lkey (struct buffer_head ** path, int h)
 {
     int pos;
 
@@ -1011,7 +1011,7 @@ static struct key * lkey (struct buffer_head ** path, int h)
 
 
 /* path[h] - leaf node */
-static struct key * rkey (struct buffer_head ** path, int h)
+static struct reiserfs_key *rkey (struct buffer_head ** path, int h)
 {
     int pos;
 
@@ -1029,7 +1029,7 @@ static struct key * rkey (struct buffer_head ** path, int h)
 static int bad_path (reiserfs_filsys_t * fs, struct buffer_head ** path, int h1)
 {
     int h = 0;
-    struct key * dk;
+    struct reiserfs_key *dk;
     int pos = 0;
 
     while (path[h])

@@ -22,7 +22,7 @@ void do_recover (reiserfs_filsys_t fs)
     char * line = 0;
     int n = 0;
     int fd;
-    struct key key = {0, 0, };
+    struct reiserfs_key key = {0, 0, };
     struct buffer_head * bh;
     struct item_head * ih;
     unsigned long block;

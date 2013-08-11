@@ -5,17 +5,17 @@
 
 #include "fsck.h"
 
-static int do_items_have_the_same_type (struct item_head * ih, struct key * key)
+static int do_items_have_the_same_type (struct item_head * ih, struct reiserfs_key *key)
 {
     return (get_type (&ih->ih_key) == get_type (key)) ? 1 : 0;
 }
 
-static int are_items_in_the_same_node (struct path * path)
+static int are_items_in_the_same_node (struct reiserfs_path *path)
 {
   return (PATH_LAST_POSITION (path) < B_NR_ITEMS (PATH_PLAST_BUFFER (path)) - 1) ? 1 : 0;
 }
 
-static void cut_last_unfm_pointer (struct path * path, struct item_head * ih)
+static void cut_last_unfm_pointer (struct reiserfs_path *path, struct item_head * ih)
 {
     set_ih_free_space(ih, 0);
     if (I_UNFM_NUM (ih) == 1)
@@ -28,7 +28,7 @@ static void cut_last_unfm_pointer (struct path * path, struct item_head * ih)
     if this is not a symlink - make it of_this_size;
     otherwise find a size and return it in symlink_size;
 */
-static unsigned long indirect_to_direct (struct path * path, __u64 len, int symlink)
+static unsigned long indirect_to_direct (struct reiserfs_path *path, __u64 len, int symlink)
 {
     struct buffer_head * bh = PATH_PLAST_BUFFER (path);
     struct item_head * ih = PATH_PITEM_HEAD (path);
@@ -102,10 +102,10 @@ static unsigned long indirect_to_direct (struct path * path, __u64 len, int syml
     start_key is the first undeleted item.
     return whether we are sure there is nothing else of this file
  */
-int delete_N_items_after_key(struct key * start_key, struct si ** save_here, int skip_dir_items, int n_to_delete) {
-    struct path path;
-//    struct key key = *start_key;
-    struct key * rkey;
+int delete_N_items_after_key(struct reiserfs_key *start_key, struct si ** save_here, int skip_dir_items, int n_to_delete) {
+    struct reiserfs_path path;
+//    struct reiserfs_key key = *start_key;
+    struct reiserfs_key *rkey;
     int count = 0;
 
     while (1) {
@@ -172,9 +172,9 @@ int delete_N_items_after_key(struct key * start_key, struct si ** save_here, int
 int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, __u32 * blocks,
 				int mark_passed_items, int * symlink)
 {
-    struct path path;
+    struct reiserfs_path path;
     struct item_head * ih;
-    struct key * next_key, * key;
+    struct reiserfs_key *next_key, * key;
     __u32 sd_first_direct_byte = 0;
     __u64 sd_size;
     unsigned int i;
@@ -415,11 +415,11 @@ int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, _
    if should_change_ih is specified then the key in ih is changed also. */
 void rewrite_file (struct item_head * ih, int should_relocate, int should_change_ih)
 {
-    struct key key;
+    struct reiserfs_key key;
     struct si * si;
     __u32 new_objectid = 0;
     int moved_items;
-    struct key old, new;
+    struct reiserfs_key old, new;
     int nothing_else = 0;
 
     /* starting with the leftmost one - look for all items of file,
@@ -520,7 +520,7 @@ static int make_file_writeable (struct buffer_head * bh, int pos)
 
 /* this inserts __first__ indirect item (having k_offset == 1 and only
    one unfm pointer) into tree */
-static int create_first_item_of_file (struct item_head * ih, char * item, struct path * path, int was_in_tree)
+static int create_first_item_of_file (struct item_head * ih, char * item, struct reiserfs_path *path, int was_in_tree)
 {
     __u32 unfm_ptr;
     __u32 * ni = 0;
@@ -599,7 +599,7 @@ static int create_first_item_of_file (struct item_head * ih, char * item, struct
    its block number. */
 /* we convert direct item that is on the path to indirect. we need a number of free block for
    unformatted node. reiserfs_new_blocknrs will start from block number returned by this function */
-static unsigned long block_to_start (struct path * path)
+static unsigned long block_to_start (struct reiserfs_path *path)
 {
   struct buffer_head * bh;
   struct item_head * ih;
@@ -616,10 +616,10 @@ static unsigned long block_to_start (struct path * path)
 }
 
 
-static void direct2indirect2 (unsigned long unfm, struct path * path)
+static void direct2indirect2 (unsigned long unfm, struct reiserfs_path *path)
 {
     struct item_head * ih;
-    struct key key;
+    struct reiserfs_key key;
     struct buffer_head * unbh;
     __u32 ni;
     int copied = 0;
@@ -709,7 +709,7 @@ static void direct2indirect2 (unsigned long unfm, struct path * path)
 
 
 static int append_to_unformatted_node (struct item_head * comingih, struct item_head * ih, char * item,
-                                        struct path * path, unsigned int coming_len)
+                                        struct reiserfs_path *path, unsigned int coming_len)
 {
     struct buffer_head * bh, * unbh = NULL;
     __u64 end_of_data, free_space;
@@ -773,7 +773,7 @@ static int append_to_unformatted_node (struct item_head * comingih, struct item_
 /* this appends file with one unformatted node pointer (since balancing
    algorithm limitation). This pointer can be 0, or new allocated block or
    pointer from indirect item that is being inserted into tree */
-int reiserfsck_append_file (struct item_head * comingih, char * item, int pos, struct path * path,
+int reiserfsck_append_file (struct item_head * comingih, char * item, int pos, struct reiserfs_path *path,
 			    int was_in_tree)
 {
     __u32 * ni;
@@ -838,7 +838,7 @@ int reiserfsck_append_file (struct item_head * comingih, char * item, int pos, s
     return retval;
 }
 
-long long int must_there_be_a_hole (struct item_head * comingih, struct path * path)
+long long int must_there_be_a_hole (struct item_head * comingih, struct reiserfs_path *path)
 {
     struct item_head * ih = PATH_PITEM_HEAD (path);
 
@@ -858,7 +858,7 @@ long long int must_there_be_a_hole (struct item_head * comingih, struct path * p
 }
 
 
-int reiserfs_append_zero_unfm_ptr (struct path * path, long long int p_count)
+int reiserfs_append_zero_unfm_ptr (struct reiserfs_path *path, long long int p_count)
 {
     __u32 * ni;
     long long int count;
@@ -883,7 +883,7 @@ int reiserfs_append_zero_unfm_ptr (struct path * path, long long int p_count)
 
 /* write direct item to unformatted node */
 /* coming item is direct */
-static int overwrite_by_direct_item (struct item_head * comingih, char * item, struct path * path)
+static int overwrite_by_direct_item (struct item_head * comingih, char * item, struct reiserfs_path *path)
 {
     __u32 unfm_ptr;
     struct buffer_head * unbh, * bh;
@@ -984,7 +984,7 @@ void overwrite_unfm_by_unfm (unsigned long unfm_in_tree, unsigned long coming_un
 
 /* put unformatted node pointers from incoming item over the in-tree ones */
 static int overwrite_by_indirect_item (struct item_head * comingih, __u32 * coming_item,
-				       struct path * path, int * pos_in_coming_item)
+				       struct reiserfs_path *path, int * pos_in_coming_item)
 {
     struct buffer_head * bh = PATH_PLAST_BUFFER (path);
     struct item_head * ih = PATH_PITEM_HEAD (path);
@@ -1033,7 +1033,7 @@ static int overwrite_by_indirect_item (struct item_head * comingih, __u32 * comi
 
 
 static int reiserfsck_overwrite_file (struct item_head * comingih, char * item,
-				      struct path * path, int * pos_in_coming_item,
+				      struct reiserfs_path *path, int * pos_in_coming_item,
 				      int was_in_tree)
 {
     __u32 unfm_ptr;
@@ -1079,10 +1079,10 @@ static int reiserfsck_overwrite_file (struct item_head * comingih, char * item,
 /*
  */
 int reiserfsck_file_write (struct item_head * ih, char * item, int was_in_tree) {
-    struct path path;
+    struct reiserfs_path path;
     int count, pos_in_coming_item;
     long long int retval, written;
-    struct key key;
+    struct reiserfs_key key;
     int file_format = KEY_FORMAT_UNDEFINED;
     int relocated = 0;
 

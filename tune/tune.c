@@ -272,7 +272,7 @@ static void set_time_last_checked(char *str)
 }
 
 static void callback_new_badblocks(reiserfs_filsys_t *fs, 
-				   struct path *badblock_path, 
+				   struct reiserfs_path *badblock_path, 
 				   void *data) 
 {
 	struct item_head *tmp_ih;
@@ -297,7 +297,7 @@ static void callback_new_badblocks(reiserfs_filsys_t *fs,
 }
 
 static void callback_clear_badblocks(reiserfs_filsys_t *fs, 
-				     struct path *badblock_path, 
+				     struct reiserfs_path *badblock_path, 
 				     void *data) 
 {
 	struct item_head *tmp_ih;

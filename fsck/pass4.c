@@ -7,13 +7,13 @@
 
 void pass_4_check_unaccessed_items (void)
 {
-    struct key key;
-    struct path path;
+    struct reiserfs_key key;
+    struct reiserfs_path path;
     int i;
     struct buffer_head * bh;
     struct item_head * ih;
     unsigned long items;
-    struct key * rdkey;
+    struct reiserfs_key *rdkey;
 
     path.path_length = ILLEGAL_PATH_ELEMENT_OFFSET;
     key = root_dir_key;

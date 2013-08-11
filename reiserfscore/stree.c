@@ -75,8 +75,8 @@ int comp_short_keys (const void * k1, const void * k2)
 int comp_keys_3 (const void * p1, const void * p2)
 {
     int retval;
-    const struct key * k1 = p1;
-    const struct key * k2 = p2;
+    const struct reiserfs_key *k1 = p1;
+    const struct reiserfs_key *k2 = p2;
     loff_t off1, off2;
 
     retval = comp_short_keys (k1, k2);
@@ -103,8 +103,8 @@ int comp_keys_3 (const void * p1, const void * p2)
 int comp_keys (const void * p1, const void * p2)
 {
     int retval;
-    const struct key * k1 = p1;
-    const struct key * k2 = p2;
+    const struct reiserfs_key *k1 = p1;
+    const struct reiserfs_key *k2 = p2;
     __u32 u1, u2;
 
     retval = comp_keys_3 (k1, k2);
@@ -156,7 +156,7 @@ int bin_search (
     int   n_rbound, n_lbound, n_j;
 
     for ( n_j = ((n_rbound = p_n_num - 1) + (n_lbound = 0))/2; n_lbound <= n_rbound; n_j = (n_rbound + n_lbound)/2 )
-	switch( COMP_KEYS((struct key *)((char * )p_v_base + n_j * p_n_width), p_v_key) )  {
+	switch( COMP_KEYS((struct reiserfs_key *)((char * )p_v_base + n_j * p_n_width), p_v_key) )  {
 	case -1: n_lbound = n_j + 1; continue;
 	case  1: n_rbound = n_j - 1; continue;
 	case  0: *p_n_pos = n_j;     return ITEM_FOUND; /* Key found in the array.  */
@@ -169,10 +169,10 @@ int bin_search (
 }
 
 /* Minimal possible key. It is never in the tree. */
-struct key  MIN_KEY = {0, 0, {{0, 0},}};
+struct reiserfs_key  MIN_KEY = {0, 0, {{0, 0},}};
 
 /* Maximal possible key. It is never in the tree. */
-struct key  MAX_KEY = {0xffffffff, 0xffffffff, {{0xffffffff, 0xffffffff},}};
+struct reiserfs_key  MAX_KEY = {0xffffffff, 0xffffffff, {{0xffffffff, 0xffffffff},}};
 
 
 /* Get delimiting key of the buffer by looking for it in the buffers in the
@@ -181,7 +181,7 @@ struct key  MAX_KEY = {0xffffffff, 0xffffffff, {{0xffffffff, 0xffffffff},}};
    there is no delimiting key in the tree (buffer is first or last buffer in
    tree), and in this case we return a special key, either MIN_KEY or
    MAX_KEY. */
-struct key * get_lkey (struct path * p_s_chk_path,
+struct reiserfs_key *get_lkey (struct reiserfs_path *p_s_chk_path,
 		       reiserfs_filsys_t * fs)
 {
     struct reiserfs_super_block * sb;
@@ -215,7 +215,7 @@ struct key * get_lkey (struct path * p_s_chk_path,
 
 
 /* Get delimiting key of the buffer at the path and its right neighbor. */
-struct key * get_rkey (struct path * p_s_chk_path,
+struct reiserfs_key *get_rkey (struct reiserfs_path *p_s_chk_path,
 		       reiserfs_filsys_t * fs)
 {
     struct reiserfs_super_block * sb;
@@ -256,8 +256,8 @@ struct key * get_rkey (struct path * p_s_chk_path,
    may be absent, and in this case get_lkey and get_rkey return a special key
    which is MIN_KEY or MAX_KEY. */
 static  inline  int key_in_buffer (
-    struct path         * p_s_chk_path, /* Path which should be checked.  */
-    struct key          * p_s_key,      /* Key which should be checked.   */
+    struct reiserfs_path         * p_s_chk_path, /* Path which should be checked.  */
+    struct reiserfs_key          * p_s_key,      /* Key which should be checked.   */
     reiserfs_filsys_t  * fs        /* Super block pointer.           */
     ) {
 
@@ -269,7 +269,7 @@ static  inline  int key_in_buffer (
 }
 
 /* Release all buffers in the path. */
-void  pathrelse (struct path * p_s_search_path) 
+void  pathrelse (struct reiserfs_path *p_s_search_path) 
 {
     int n_path_offset = p_s_search_path->path_length;
     
@@ -303,8 +303,8 @@ void  pathrelse (struct path * p_s_search_path)
    correctness of the top of the path but need not be checked for the
    correctness of the bottom of the path */
 int search_by_key (reiserfs_filsys_t * fs,
-		   struct key * p_s_key,        /* Key to search */
-		   struct path * p_s_search_path,/* This structure was
+		   struct reiserfs_key *p_s_key,        /* Key to search */
+		   struct reiserfs_path *p_s_search_path,/* This structure was
 						    allocated and
 						    initialized by the
 						    calling
@@ -318,7 +318,7 @@ int search_by_key (reiserfs_filsys_t * fs,
 	expected_level,
 	n_block_size    = fs->fs_blocksize;
     struct buffer_head  *       p_s_bh;
-    struct path_element *       p_s_last_element;
+    struct reiserfs_path_element *       p_s_last_element;
     int				n_retval;
 
 
@@ -390,7 +390,7 @@ int search_by_key (reiserfs_filsys_t * fs,
 
 
 int bin_search_in_dir_item (struct item_head * ih, struct reiserfs_de_head * deh, 
-			    struct key * key, int * pos_in_item)
+			    struct reiserfs_key *key, int * pos_in_item)
 {
     int rbound, lbound, j;
 

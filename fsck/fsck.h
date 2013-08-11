@@ -120,7 +120,7 @@ void pass_2 (reiserfs_filsys_t *);
 void load_pass_2_result (reiserfs_filsys_t *);
 void insert_item_separately (struct item_head * ih, char * item, int was_in_tree);
 void save_item (struct si ** head, struct item_head * ih, char * item, __u32 blocknr);
-struct si * save_and_delete_file_item (struct si * si, struct path * path);
+struct si * save_and_delete_file_item (struct si * si, struct reiserfs_path *path);
 void take_bad_blocks_put_into_tree (void);
 void rewrite_object (struct item_head * ih, int do_remap);
 void pass_2_take_bad_blocks_put_into_tree (void);
@@ -129,8 +129,8 @@ void link_relocated_files (void);
 int should_relocate (struct item_head * ih);
 void relocate_dir (struct item_head * ih, int change_ih);
 
-extern __u32 objectid_for_relocation (struct key * key);
-extern void linked_already(struct key *new_key);
+extern __u32 objectid_for_relocation (struct reiserfs_key *key);
+extern void linked_already(struct reiserfs_key *new_key);
 
 /* file.c */
 struct si {
@@ -145,7 +145,7 @@ struct si {
 void put_saved_items_into_tree (struct si *);
 int reiserfsck_file_write (struct item_head * ih, char * item, int was_in_tree);
 int are_file_items_correct (struct item_head * sd_ih, void * sd, __u64 * size, __u32 * blocks, int mark_passed_items, int * symlink);
-int delete_N_items_after_key(struct key * start_key, struct si ** save_here, int skip_dir_items, int n_to_delete);
+int delete_N_items_after_key(struct reiserfs_key *start_key, struct si ** save_here, int skip_dir_items, int n_to_delete);
 void rewrite_file (struct item_head * ih, int should_relocate, int should_change_ih);
 
 
@@ -163,18 +163,18 @@ void load_semantic_result (FILE *, reiserfs_filsys_t *);
 
 void pass_3_semantic (reiserfs_filsys_t *);
 void semantic_check (void);
-int check_semantic_tree (struct key * key, struct key * parent, int is_dot_dot, int lost_found, struct item_head * new_ih);
+int check_semantic_tree (struct reiserfs_key *key, struct reiserfs_key *parent, int is_dot_dot, int lost_found, struct item_head * new_ih);
 void zero_nlink (struct item_head * ih, void * sd);
 int not_a_directory (void * sd);
 int not_a_regfile (void * sd);
-int fix_obviously_wrong_sd_mode (struct path * path);
+int fix_obviously_wrong_sd_mode (struct reiserfs_path *path);
 int is_dot_dot (char * name, int namelen);
 int is_dot (char * name, int namelen);
 /*void create_dir_sd (reiserfs_filsys_t * fs, 
-  struct path * path, struct key * key);*/
-int rebuild_check_regular_file (struct path * path, void * sd,
+  struct reiserfs_path *path, struct reiserfs_key *key);*/
+int rebuild_check_regular_file (struct reiserfs_path *path, void * sd,
 				struct item_head * new_ih);
-int rebuild_semantic_pass (struct key * key, struct key * parent, int is_dot_dot,
+int rebuild_semantic_pass (struct reiserfs_key *key, struct reiserfs_key *parent, int is_dot_dot,
 			   struct item_head * new_ih);
 
 
@@ -207,23 +207,23 @@ int bad_pair (reiserfs_filsys_t *, struct buffer_head * bh, int i);
 int bad_leaf_2 (reiserfs_filsys_t *, struct buffer_head * bh);
 
 #if 0
-extern int should_be_relocated (struct key * key);
-extern void to_be_relocated (struct key * key);
+extern int should_be_relocated (struct reiserfs_key *key);
+extern void to_be_relocated (struct reiserfs_key *key);
 extern void clear_relocated_list(void);
 #endif
 
 /* ustree.c */
-void reiserfsck_paste_into_item (struct path * path, const char * body, int size);
-void reiserfsck_insert_item (struct path * path, struct item_head * ih, const char * body);
-void reiserfsck_delete_item (struct path * path, int temporary);
-void reiserfsck_cut_from_item (struct path * path, int cut_size);
+void reiserfsck_paste_into_item (struct reiserfs_path *path, const char * body, int size);
+void reiserfsck_insert_item (struct reiserfs_path *path, struct item_head * ih, const char * body);
+void reiserfsck_delete_item (struct reiserfs_path *path, int temporary);
+void reiserfsck_cut_from_item (struct reiserfs_path *path, int cut_size);
 /*typedef	int (comp3_function_t)(void * key1, void * key2, int version);*/
-/*typedef int (comp_function_t)(struct key * key1, struct key * key2);*/
+/*typedef int (comp_function_t)(struct reiserfs_key *key1, struct reiserfs_key *key2);*/
 /*int ubin_search_id(__u32 * id, __u32 * base, __u32 number, __u32 * pos);*/
-/*int usearch_by_key (struct super_block * s, struct key * key, struct path * path);*/
-/*int usearch_by_key_3 (struct super_block * s, struct key * key, struct path * path, int * repeat, int stop_level,
+/*int usearch_by_key (struct super_block * s, struct reiserfs_key *key, struct reiserfs_path *path);*/
+/*int usearch_by_key_3 (struct super_block * s, struct reiserfs_key *key, struct reiserfs_path *path, int * repeat, int stop_level,
 		      comp3_function_t comp_func, int version);		
-		      int usearch_by_entry_key (struct super_block * s, struct key * key, struct path * path);*/
+		      int usearch_by_entry_key (struct super_block * s, struct reiserfs_key *key, struct reiserfs_path *path);*/
 
 typedef int do_after_read_t (reiserfs_filsys_t *, struct buffer_head **, int h);
 typedef int do_on_full_path_t (reiserfs_filsys_t *, struct buffer_head **, int);

@@ -14,8 +14,8 @@ void modify_item (struct item_head * ih, void * item);
 /* fixme: search_by_key is not needed after any add_entry */
 static __u64 _look_for_lost (reiserfs_filsys_t * fs, int link_lost_dirs)
 {
-    struct key key, prev_key, * rdkey;
-    INITIALIZE_PATH (path);
+    struct reiserfs_key key, prev_key, * rdkey;
+    INITIALIZE_REISERFS_PATH(path);
     int item_pos;
     struct buffer_head * bh;
     struct item_head * ih;
@@ -75,8 +75,8 @@ static __u64 _look_for_lost (reiserfs_filsys_t * fs, int link_lost_dirs)
 
 	    if (is_direntry_ih (ih)) {
 		/* if this directory has no stat data - try to recover it */
-		struct key sd;
-		struct path tmp;
+		struct reiserfs_key sd;
+		struct reiserfs_path tmp;
 
 		sd = ih->ih_key;
 		set_type_and_offset (KEY_FORMAT_1, &sd, SD_OFFSET, TYPE_STAT_DATA);
@@ -102,8 +102,8 @@ static __u64 _look_for_lost (reiserfs_filsys_t * fs, int link_lost_dirs)
     	    is_it_dir = ((not_a_directory (B_I_PITEM (bh,ih))) ? 0 : 1);
 
 	    if (is_it_dir) {
-		struct key tmp_key;
-		INITIALIZE_PATH (tmp_path);
+		struct reiserfs_key tmp_key;
+		INITIALIZE_REISERFS_PATH(tmp_path);
 		struct item_head * tmp_ih;
 
 		/* there is no need to link empty lost directories into /lost+found */
@@ -135,7 +135,7 @@ static __u64 _look_for_lost (reiserfs_filsys_t * fs, int link_lost_dirs)
 	    lost_found_pass_stat (fs)->lost_found ++;
 
 	    {
-		struct key obj_key = {0, 0, {{0, 0},}};
+		struct reiserfs_key obj_key = {0, 0, {{0, 0},}};
 		char * lost_name;
 		struct item_head tmp_ih;
 
@@ -318,7 +318,7 @@ void after_lost_found (reiserfs_filsys_t * fs)
 
 void pass_3a_look_for_lost (reiserfs_filsys_t * fs)
 {
-    INITIALIZE_PATH (path);
+    INITIALIZE_REISERFS_PATH(path);
     struct item_head * ih;
     void * sd;
     __u64 size, sd_size;

@@ -65,11 +65,11 @@ static int print_short_key (FILE * stream,
 			    const struct printf_info *info,
 			    const void *const *args)
 {
-    const struct key * key;
+    const struct reiserfs_key *key;
     char * buffer;
     int len;
 
-    key = *((const struct key **)(args[0]));
+    key = *((const struct reiserfs_key **)(args[0]));
     len = asprintf (&buffer, "[%u %u]", get_key_dirid (key),
 		    get_key_objectid (key));
     FPRINTF;
@@ -81,11 +81,11 @@ static int print_key (FILE * stream,
 		      const struct printf_info *info,
 		      const void *const *args)
 {
-    const struct key * key;
+    const struct reiserfs_key *key;
     char * buffer;
     int len;
 
-    key = *((const struct key **)(args[0]));
+    key = *((const struct reiserfs_key **)(args[0]));
     len = asprintf (&buffer, "[%u %u 0x%Lx %s (%d)]",  
 		    get_key_dirid (key), get_key_objectid (key),
 		    (unsigned long long)get_offset (key), key_of_what (key), get_type (key));
@@ -257,7 +257,7 @@ void print_virtual_node (struct virtual_node * vn)
 }
 
 
-void print_path (struct tree_balance * tb, struct path * path)
+void print_path (struct tree_balance * tb, struct reiserfs_path *path)
 {
     int offset = path->path_length;
     struct buffer_head * bh;
@@ -306,7 +306,7 @@ void print_directory_item (FILE * fp, reiserfs_filsys_t * fs,
 	name = name_in_entry (deh, i);
 	reiserfs_warning (fp, "%3d: \"%-25.*s\"(%3d)%20K%12d%5d, loc %u, state %x %s\n", 
 			  i, namelen, name, namelen,
-			  (struct key *)&(deh->deh2_dir_id),
+			  (struct reiserfs_key *)&(deh->deh2_dir_id),
 			  GET_HASH_VALUE (get_deh_offset (deh)),
 			  GET_GENERATION_NUMBER (get_deh_offset (deh)),
 			  get_deh_location (deh), get_deh_state (deh),
@@ -451,7 +451,7 @@ void reiserfs_print_item (FILE * fp, struct buffer_head * bh,
    dc_size)...*/
 static int print_internal (FILE * fp, struct buffer_head * bh, int first, int last)
 {
-    struct key * key;
+    struct reiserfs_key *key;
     struct disk_child * dc;
     int i;
     int from, to;

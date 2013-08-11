@@ -563,7 +563,7 @@ static void do_dump_tree (reiserfs_filsys_t * fs)
 }
 
 static void callback_badblock_print(reiserfs_filsys_t *fs, 
-				    struct path *badblock_path, 
+				    struct reiserfs_path *badblock_path, 
 				    void *data) 
 {
 	struct item_head *tmp_ih;

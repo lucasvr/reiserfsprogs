@@ -507,7 +507,7 @@ void do_one_corruption_in_one_block (reiserfs_filsys_t * fs,
 		
 	case 'O': /* make item out of order */
 		{
-			struct key * key;
+			struct reiserfs_key *key;
 			if (sscanf (corruption_command, "%c %d\n", &code, &item_num) != 2) {
 				printf ("Wrong format \'%c\'\n", corruption_command [0]);
 				return;

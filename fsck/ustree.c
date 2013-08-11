@@ -8,7 +8,7 @@
 
 struct tree_balance * cur_tb = 0;
 
-void reiserfsck_paste_into_item (struct path * path, const char * body, int size)
+void reiserfsck_paste_into_item (struct reiserfs_path *path, const char * body, int size)
 {
     struct tree_balance tb;
   
@@ -22,7 +22,7 @@ void reiserfsck_paste_into_item (struct path * path, const char * body, int size
 }
 
 
-void reiserfsck_insert_item (struct path * path, struct item_head * ih, const char * body)
+void reiserfsck_insert_item (struct reiserfs_path *path, struct item_head * ih, const char * body)
 {
     struct tree_balance tb;
     
@@ -55,7 +55,7 @@ static void free_unformatted_nodes (struct item_head * ih, struct buffer_head * 
     }
 }
 
-void reiserfsck_delete_item (struct path * path, int temporary)
+void reiserfsck_delete_item (struct reiserfs_path *path, int temporary)
 {
     struct tree_balance tb;
     struct item_head * ih = PATH_PITEM_HEAD (path);
@@ -72,7 +72,7 @@ void reiserfsck_delete_item (struct path * path, int temporary)
 }
 
 
-void reiserfsck_cut_from_item (struct path * path, int cut_size)
+void reiserfsck_cut_from_item (struct reiserfs_path *path, int cut_size)
 {
     struct tree_balance tb;
     struct item_head * ih;
@@ -108,7 +108,7 @@ void reiserfsck_cut_from_item (struct path * path, int cut_size)
 
 /* uget_rkey is utils clone of stree.c/get_rkey */
 /*
-struct key * uget_rkey (struct path * path)
+struct reiserfs_key *uget_rkey (struct reiserfs_path *path)
 {
     int pos, offset = path->path_length;
     struct buffer_head * bh;

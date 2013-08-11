@@ -865,7 +865,7 @@ typedef union {
     __u64 linear;
 } __attribute__ ((__packed__)) offset_v2_esafe_overlay;
 
-static inline __u64 get_key_offset_v2 (const struct key *key)
+static inline __u64 get_key_offset_v2 (const struct reiserfs_key *key)
 {
     offset_v2_esafe_overlay tmp =
                         *(offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
@@ -873,7 +873,7 @@ static inline __u64 get_key_offset_v2 (const struct key *key)
     return tmp.offset_v2.k_offset;
 }
 
-static inline __u32 get_key_type_v2 (const struct key *key)
+static inline __u32 get_key_type_v2 (const struct reiserfs_key *key)
 {
     offset_v2_esafe_overlay tmp =
                         *(offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
@@ -881,7 +881,7 @@ static inline __u32 get_key_type_v2 (const struct key *key)
     return tmp.offset_v2.k_type;
 }
 
-static inline void set_key_offset_v2 (struct key *key, __u64 offset)
+static inline void set_key_offset_v2 (struct reiserfs_key *key, __u64 offset)
 {
     offset_v2_esafe_overlay *tmp =
                         (offset_v2_esafe_overlay *)(&(key->u.k2_offset_v2));
@@ -890,7 +890,7 @@ static inline void set_key_offset_v2 (struct key *key, __u64 offset)
     tmp->linear = cpu_to_le64(tmp->linear);
 }
 
-static inline void set_key_type_v2 (struct key *key, __u32 type)
+static inline void set_key_type_v2 (struct reiserfs_key *key, __u32 type)
 {
     offset_v2_esafe_overlay *tmp =
                         (offset_v2_esafe_overlay *)(&(key->u.k2_offset_v2));
@@ -913,7 +913,7 @@ static inline int is_key_format_1 (int type) {
    indirect) or == 0 (dir items and stat data) */
 
 /* */
-int key_format (const struct key * key)
+int key_format (const struct reiserfs_key *key)
 {
     int type;
 
@@ -926,7 +926,7 @@ int key_format (const struct key * key)
 }
 
 
-unsigned long long get_offset (const struct key * key) {
+unsigned long long get_offset (const struct reiserfs_key *key) {
     if (key_format (key) == KEY_FORMAT_1)
 	return get_key_offset_v1 (key);
 
@@ -958,7 +958,7 @@ __u32 type2uniqueness (int type)
 }
 
 
-int get_type (const struct key * key)
+int get_type (const struct reiserfs_key *key)
 {
     int type_v2 = get_key_type_v2 (key);
 
@@ -969,7 +969,7 @@ int get_type (const struct key * key)
 }
 
 
-char * key_of_what (const struct key * key)
+char * key_of_what (const struct reiserfs_key *key)
 {
     switch (get_type (key)) {
     case TYPE_STAT_DATA: return "SD";
@@ -981,7 +981,7 @@ char * key_of_what (const struct key * key)
 }
 
 
-int type_unknown (struct key * key)
+int type_unknown (struct reiserfs_key *key)
 {
     int type = get_type (key);
     
@@ -1000,7 +1000,7 @@ int type_unknown (struct key * key)
 
 // this sets key format as well as type of item key belongs to
 //
-void set_type (int format, struct key * key, int type)
+void set_type (int format, struct reiserfs_key *key, int type)
 {
     if (format == KEY_FORMAT_1)
 	set_key_uniqueness (key, type2uniqueness (type));
@@ -1010,7 +1010,7 @@ void set_type (int format, struct key * key, int type)
 
 
 // 
-void set_offset (int format, struct key * key, loff_t offset)
+void set_offset (int format, struct reiserfs_key *key, loff_t offset)
 {
     if (format == KEY_FORMAT_1)
 	set_key_offset_v1 (key, offset);
@@ -1020,7 +1020,7 @@ void set_offset (int format, struct key * key, loff_t offset)
 }
 
 
-void set_type_and_offset (int format, struct key * key, loff_t offset, int type)
+void set_type_and_offset (int format, struct reiserfs_key *key, loff_t offset, int type)
 {
     set_type (format, key, type);
     set_offset (format, key, offset);

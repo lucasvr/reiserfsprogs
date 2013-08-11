@@ -76,7 +76,7 @@ typedef struct _transaction reiserfs_trans_t;
 
 /* reiserfslib.c */
 
-void init_tb_struct (struct tree_balance * tb, reiserfs_filsys_t *, struct path * path, int size);
+void init_tb_struct (struct tree_balance * tb, reiserfs_filsys_t *, struct reiserfs_path *path, int size);
 
 reiserfs_filsys_t * reiserfs_open (char * filename, int flags, int * error, void * vp, int skip_check);
 reiserfs_filsys_t * reiserfs_create (char * filename, int version, unsigned long block_count,
@@ -106,50 +106,50 @@ int spread_bitmaps (reiserfs_filsys_t *);
 int filesystem_dirty (reiserfs_filsys_t *);
 void mark_filesystem_dirty (reiserfs_filsys_t *);
 
-void reiserfs_paste_into_item (reiserfs_filsys_t *, struct path * path,
+void reiserfs_paste_into_item (reiserfs_filsys_t *, struct reiserfs_path *path,
 			       const void * body, int size);
-void reiserfs_insert_item (reiserfs_filsys_t *, struct path * path,
+void reiserfs_insert_item (reiserfs_filsys_t *, struct reiserfs_path *path,
 			   struct item_head * ih, const void * body);
 
-int reiserfs_locate_entry (reiserfs_filsys_t *, struct key * dir, char * name,
-			   struct path * path);
-int reiserfs_find_entry (reiserfs_filsys_t *, struct key * dir, char * name,
-			 unsigned int * min_gen_counter, struct key * key);
-int reiserfs_add_entry (reiserfs_filsys_t *, struct key * dir, char * name, int name_len,
-			struct key * key, __u16 fsck_need);
+int reiserfs_locate_entry (reiserfs_filsys_t *, struct reiserfs_key *dir, char * name,
+			   struct reiserfs_path *path);
+int reiserfs_find_entry (reiserfs_filsys_t *, struct reiserfs_key *dir, char * name,
+			 unsigned int * min_gen_counter, struct reiserfs_key *key);
+int reiserfs_add_entry (reiserfs_filsys_t *, struct reiserfs_key *dir, char * name, int name_len,
+			struct reiserfs_key *key, __u16 fsck_need);
 
-struct key * uget_lkey (struct path * path);
-struct key * uget_rkey (struct path * path);
-int reiserfs_search_by_key_3 (reiserfs_filsys_t *, struct key * key,
-			    struct path * path);
-int reiserfs_search_by_key_4 (reiserfs_filsys_t *, struct key * key, 
-			    struct path * path);
-int reiserfs_search_by_entry_key (reiserfs_filsys_t *, struct key * key, 
-				  struct path * path);
-int usearch_by_position (reiserfs_filsys_t *, struct key * key, int version, struct path * path);
-struct key * reiserfs_next_key (struct path * path);
+struct reiserfs_key *uget_lkey (struct reiserfs_path *path);
+struct reiserfs_key *uget_rkey (struct reiserfs_path *path);
+int reiserfs_search_by_key_3 (reiserfs_filsys_t *, struct reiserfs_key *key,
+			    struct reiserfs_path *path);
+int reiserfs_search_by_key_4 (reiserfs_filsys_t *, struct reiserfs_key *key, 
+			    struct reiserfs_path *path);
+int reiserfs_search_by_entry_key (reiserfs_filsys_t *, struct reiserfs_key *key, 
+				  struct reiserfs_path *path);
+int usearch_by_position (reiserfs_filsys_t *, struct reiserfs_key *key, int version, struct reiserfs_path *path);
+struct reiserfs_key *reiserfs_next_key (struct reiserfs_path *path);
 void copy_key (void * to, void * from);
 void copy_short_key (void * to, void * from);
 void copy_item_head(void * p_v_to, void * p_v_from);
 int comp_keys (const void * k1, const void * k2);
 int comp_keys_3 (const void * k1, const void * k2);
 int  comp_short_keys (const void * p_s_key1, const void * p_s_key2);
-int comp_items (struct item_head  * p_s_ih, struct path * p_s_path);
+int comp_items (struct item_head  * p_s_ih, struct reiserfs_path *p_s_path);
 
 __u32 hash_value (hashf_t func, char * name, int namelen);
 
 int create_dir_sd (reiserfs_filsys_t * fs,
-		    struct path * path, struct key * key,
+		    struct reiserfs_path *path, struct reiserfs_key *key,
 		    void (*modify_item)(struct item_head *, void *));
 void make_sure_root_dir_exists (reiserfs_filsys_t * fs,
 				void (*modyfy_item)(struct item_head *, void *),
 				int ih_flags);
 
 typedef void (*badblock_func_t) (reiserfs_filsys_t *fs, 
-				 struct path *badblock_path, 
+				 struct reiserfs_path *badblock_path, 
 				 void *data);
 
-void mark_badblock(reiserfs_filsys_t *fs, struct path *badblock_path, void *data);
+void mark_badblock(reiserfs_filsys_t *fs, struct reiserfs_path *badblock_path, void *data);
 int create_badblock_bitmap (reiserfs_filsys_t * fs, char * badblocks_file);
 void add_badblock_list (reiserfs_filsys_t * fs, int no_badblock_in_tree_yet);
 void badblock_list(reiserfs_filsys_t * fs, badblock_func_t action, void *data);
@@ -157,9 +157,9 @@ void badblock_list(reiserfs_filsys_t * fs, badblock_func_t action, void *data);
 #define reiserfs_bmap_nr(count, blk_size) ((count - 1) / (blk_size * 8) + 1)
 #define reiserfs_bmap_over(nr) (nr > ((1LL << 16) - 1))
 
-extern struct key root_dir_key;
-extern struct key parent_root_dir_key;
-extern struct key lost_found_dir_key;
+extern struct reiserfs_key root_dir_key;
+extern struct reiserfs_key parent_root_dir_key;
+extern struct reiserfs_key lost_found_dir_key;
 extern __u16 root_dir_format;
 extern __u16 lost_found_dir_format;
 
@@ -206,7 +206,7 @@ reiserfs_bitmap_t * reiserfs_bitmap_load (FILE * fp);
 void reiserfs_bitmap_invert (reiserfs_bitmap_t * bm);
 
 
-int reiserfs_remove_entry (reiserfs_filsys_t *, struct key * key);
+int reiserfs_remove_entry (reiserfs_filsys_t *, struct reiserfs_key *key);
 
 
 
@@ -262,16 +262,16 @@ typedef void (*item_head_action_t) (struct item_head * ih);
 
 void for_every_item (struct buffer_head * bh, item_head_action_t action,
 		     item_action_t * actions);
-int key_format (const struct key * key);
-unsigned long long get_offset (const struct key * key);
+int key_format (const struct reiserfs_key *key);
+unsigned long long get_offset (const struct reiserfs_key *key);
 int uniqueness2type (__u32 uniqueness);
 __u32 type2uniqueness (int type);
-int get_type (const struct key * key);
-char * key_of_what (const struct key * key);
-int type_unknown (struct key * key);
-void set_type (int format, struct key * key, int type);
-void set_offset (int format, struct key * key, loff_t offset);
-void set_type_and_offset (int format, struct key * key, loff_t offset, int type);
+int get_type (const struct reiserfs_key *key);
+char * key_of_what (const struct reiserfs_key *key);
+int type_unknown (struct reiserfs_key *key);
+void set_type (int format, struct reiserfs_key *key, int type);
+void set_offset (int format, struct reiserfs_key *key, loff_t offset);
+void set_type_and_offset (int format, struct reiserfs_key *key, loff_t offset, int type);
 
 
 typedef int (*check_unfm_func_t) (reiserfs_filsys_t *, __u32);

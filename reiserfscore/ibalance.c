@@ -107,7 +107,7 @@ static void internal_insert_childs (reiserfs_filsys_t * fs,
     struct buffer_head * cur = cur_bi->bi_bh;
     struct block_head * blkh;
     int nr;
-    struct key * key;
+    struct reiserfs_key *key;
     struct disk_child new_dc[2];
     struct disk_child * dc;
     int i;
@@ -173,7 +173,7 @@ static void internal_delete_pointers_items (reiserfs_filsys_t * fs,
     struct buffer_head * cur = cur_bi->bi_bh;
     int nr;
     struct block_head * blkh;
-    struct key * key;
+    struct reiserfs_key *key;
     struct disk_child * dc;
 
     if ( del_num == 0 )
@@ -241,7 +241,7 @@ static void internal_copy_pointers_items (reiserfs_filsys_t * fs,
     int nr_dest, nr_src;
     int dest_order, src_order;
     struct block_head * blkh;
-    struct key * key;
+    struct reiserfs_key *key;
     struct disk_child * dc;
 
     nr_src = B_NR_ITEMS (src);
@@ -331,7 +331,7 @@ static void internal_insert_key (reiserfs_filsys_t * fs,
     struct buffer_head * dest = dest_bi->bi_bh;
     int nr;
     struct block_head * blkh;
-    struct key * key;
+    struct reiserfs_key *key;
 
     blkh = B_BLK_HEAD(dest);
     nr = get_blkh_nr_items (blkh);

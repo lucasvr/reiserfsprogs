@@ -9,10 +9,10 @@
 #include <linux/kdev_t.h>
 #include <time.h>
 
-struct key root_dir_key = {0, 0, {{0, 0},}};
-struct key parent_root_dir_key = {0, 0, {{0, 0},}};
-struct key lost_found_dir_key = {0, 0, {{0, 0}, }};
-struct key badblock_key = {BADBLOCK_DIRID, BADBLOCK_OBJID, {{0, 0},}};
+struct reiserfs_key root_dir_key = {0, 0, {{0, 0},}};
+struct reiserfs_key parent_root_dir_key = {0, 0, {{0, 0},}};
+struct reiserfs_key lost_found_dir_key = {0, 0, {{0, 0}, }};
+struct reiserfs_key badblock_key = {BADBLOCK_DIRID, BADBLOCK_OBJID, {{0, 0},}};
 
 __u16 root_dir_format = 0;
 __u16 lost_found_dir_format = 0;
@@ -440,12 +440,12 @@ int reiserfs_free_block (reiserfs_filsys_t * fs, unsigned long block)
     return 0;
 }
 
-static int reiserfs_search_by_key_x (reiserfs_filsys_t * fs, struct key * key,
-				     struct path * path, int key_length)
+static int reiserfs_search_by_key_x (reiserfs_filsys_t * fs, struct reiserfs_key *key,
+				     struct reiserfs_path *path, int key_length)
 {
     struct buffer_head * bh;   
     unsigned long block;
-    struct path_element * curr;
+    struct reiserfs_path_element * curr;
     int retval;
     
 
@@ -488,15 +488,15 @@ static int reiserfs_search_by_key_x (reiserfs_filsys_t * fs, struct key * key,
 }
 
 
-int reiserfs_search_by_key_3 (reiserfs_filsys_t * fs, struct key * key,
-			      struct path * path)
+int reiserfs_search_by_key_3 (reiserfs_filsys_t * fs, struct reiserfs_key *key,
+			      struct reiserfs_path *path)
 {
     return reiserfs_search_by_key_x (fs, key, path, 3);
 }
 
 
-int reiserfs_search_by_key_4 (reiserfs_filsys_t * fs, struct key * key,
-			      struct path * path)
+int reiserfs_search_by_key_4 (reiserfs_filsys_t * fs, struct reiserfs_key *key,
+			      struct reiserfs_path *path)
 {
     return reiserfs_search_by_key_x (fs, key, path, 4);
 }
@@ -504,12 +504,12 @@ int reiserfs_search_by_key_4 (reiserfs_filsys_t * fs, struct key * key,
 
 /* key is key of byte in the regular file. This searches in tree
    through items and in the found item as well */
-int usearch_by_position (reiserfs_filsys_t * s, struct key * key,
-			 int version, struct path * path)
+int usearch_by_position (reiserfs_filsys_t * s, struct reiserfs_key *key,
+			 int version, struct reiserfs_path *path)
 {
     struct buffer_head * bh;
     struct item_head * ih;
-    struct key * next_key;
+    struct reiserfs_key *next_key;
 
     if (reiserfs_search_by_key_3 (s, key, path) == ITEM_FOUND) {
     	ih = get_ih (path);
@@ -601,7 +601,7 @@ static int comp_dir_entries (const void * p1, const void * p2)
     return 0;
 }
 
-struct key * uget_lkey (struct path * path)
+struct reiserfs_key *uget_lkey (struct reiserfs_path *path)
 {
     int pos, offset = path->path_length;
     struct buffer_head * bh;
@@ -637,7 +637,7 @@ struct key * uget_lkey (struct path * path)
     return 0;
 }
 
-struct key * uget_rkey (struct path * path)
+struct reiserfs_key *uget_rkey (struct reiserfs_path *path)
 {
     int pos, offset = path->path_length;
     struct buffer_head * bh;
@@ -671,7 +671,7 @@ struct key * uget_rkey (struct path * path)
     return 0;
 }
 
-struct key * reiserfs_next_key (struct path * path) {
+struct reiserfs_key *reiserfs_next_key (struct reiserfs_path *path) {
     if (get_item_pos (path) < B_NR_ITEMS (get_bh (path)) - 1)
 	return B_N_PKEY (get_bh (path), get_item_pos (path) + 1);
 
@@ -680,13 +680,13 @@ struct key * reiserfs_next_key (struct path * path) {
 
 
 /* NOTE: this only should be used to look for keys who exists */
-int reiserfs_search_by_entry_key (reiserfs_filsys_t * fs, struct key * key, 
-				  struct path * path)
+int reiserfs_search_by_entry_key (reiserfs_filsys_t * fs, struct reiserfs_key *key, 
+				  struct reiserfs_path *path)
 {
     struct buffer_head * bh;
     int item_pos;
     struct item_head * ih;
-    struct key tmpkey;
+    struct reiserfs_key tmpkey;
     __u32 offset;
 
     if (reiserfs_search_by_key_4 (fs, key, path) == ITEM_FOUND) {
@@ -740,7 +740,7 @@ int reiserfs_search_by_entry_key (reiserfs_filsys_t * fs, struct key * key,
 				key);
         } else {
 	    /* next item is in right neighboring node */
-            struct key * next_key = uget_rkey (path);
+            struct reiserfs_key *next_key = uget_rkey (path);
 
             if (next_key == 0 || not_of_one_file (next_key, key)) {
                 /* there are no items of that directory */
@@ -777,7 +777,7 @@ int reiserfs_search_by_entry_key (reiserfs_filsys_t * fs, struct key * key,
 
 
 void init_tb_struct (struct tree_balance * tb, reiserfs_filsys_t * fs,
-			     struct path * path, int size)
+			     struct reiserfs_path *path, int size)
 {
     memset (tb, '\0', sizeof(struct tree_balance));
     tb->tb_fs = fs;
@@ -789,9 +789,9 @@ void init_tb_struct (struct tree_balance * tb, reiserfs_filsys_t * fs,
 }
 
 
-int reiserfs_remove_entry (reiserfs_filsys_t * fs, struct key * key)
+int reiserfs_remove_entry (reiserfs_filsys_t * fs, struct reiserfs_key *key)
 {
-    struct path path;
+    struct reiserfs_path path;
     struct tree_balance tb;
     struct item_head * ih;
     struct reiserfs_de_head * deh;
@@ -824,7 +824,7 @@ int reiserfs_remove_entry (reiserfs_filsys_t * fs, struct key * key)
 
 
 
-void reiserfs_paste_into_item (reiserfs_filsys_t * fs, struct path * path,
+void reiserfs_paste_into_item (reiserfs_filsys_t * fs, struct reiserfs_path *path,
 			       const void * body, int size)
 {
     struct tree_balance tb;
@@ -838,7 +838,7 @@ void reiserfs_paste_into_item (reiserfs_filsys_t * fs, struct path * path,
 }
 
 
-void reiserfs_insert_item (reiserfs_filsys_t * fs, struct path * path,
+void reiserfs_insert_item (reiserfs_filsys_t * fs, struct reiserfs_path *path,
 			   struct item_head * ih, const void * body)
 {
     struct tree_balance tb;
@@ -868,14 +868,14 @@ __u32 hash_value (hashf_t func, char * name, int namelen)
 
 /* if name is found in a directory - return 1 and set path to the name,
    otherwise return 0 and pathrelse path */
-int reiserfs_locate_entry (reiserfs_filsys_t * fs, struct key * dir, char * name,
-			   struct path * path)
+int reiserfs_locate_entry (reiserfs_filsys_t * fs, struct reiserfs_key *dir, char * name,
+			   struct reiserfs_path *path)
 {
-    struct key entry_key;
+    struct reiserfs_key entry_key;
     struct item_head * ih;
     struct reiserfs_de_head * deh;
     int i, retval;
-    struct key * rdkey;
+    struct reiserfs_key *rdkey;
     
     set_key_dirid (&entry_key, get_key_dirid (dir));
     set_key_objectid (&entry_key, get_key_objectid (dir));
@@ -927,16 +927,16 @@ int reiserfs_locate_entry (reiserfs_filsys_t * fs, struct key * dir, char * name
    found. Stores key found in the entry in 'key'. Returns minimal not used
    generation counter in 'min_gen_counter'. dies if found object is not a
    directory. */
-int reiserfs_find_entry (reiserfs_filsys_t * fs, struct key * dir, char * name, 
-			 unsigned int * min_gen_counter, struct key * key)
+int reiserfs_find_entry (reiserfs_filsys_t * fs, struct reiserfs_key *dir, char * name, 
+			 unsigned int * min_gen_counter, struct reiserfs_key *key)
 {
-    struct key entry_key;
+    struct reiserfs_key entry_key;
     int retval;
     int i;
-    INITIALIZE_PATH (path);
+    INITIALIZE_REISERFS_PATH(path);
     struct item_head * ih;
     struct reiserfs_de_head * deh;
-    struct key * rdkey;
+    struct reiserfs_key *rdkey;
     __u32 hash;
 
 
@@ -975,7 +975,7 @@ int reiserfs_find_entry (reiserfs_filsys_t * fs, struct key * dir, char * name,
 	        (!memcmp (name_in_entry (deh, i), name, strlen (name)))) {
 		/* entry found in the directory */
 		if (key) {
-		    memset (key, 0, sizeof (struct key));
+		    memset (key, 0, sizeof (struct reiserfs_key));
 		    set_key_dirid (key, get_deh_dirid (deh));
 		    set_key_objectid (key, get_deh_objectid (deh));
 		}
@@ -1014,7 +1014,7 @@ int reiserfs_find_entry (reiserfs_filsys_t * fs, struct key * dir, char * name,
 
 
 /* compose directory entry: dir entry head and name itself */
-char * make_entry (char * entry, char * name, struct key * key, __u32 offset)
+char * make_entry (char * entry, char * name, struct reiserfs_key *key, __u32 offset)
 {
     struct reiserfs_de_head * deh;
     __u16 state;
@@ -1041,13 +1041,13 @@ char * make_entry (char * entry, char * name, struct key * key, __u32 offset)
 
 /* add new name into a directory. If it exists in a directory - do
    nothing */
-int reiserfs_add_entry (reiserfs_filsys_t * fs, struct key * dir, char * name, int name_len,
-			struct key * key, __u16 fsck_need)
+int reiserfs_add_entry (reiserfs_filsys_t * fs, struct reiserfs_key *dir, char * name, int name_len,
+			struct reiserfs_key *key, __u16 fsck_need)
 {
     struct item_head entry_ih = {{0,}, };
     char * entry;
     int retval;
-    INITIALIZE_PATH(path);
+    INITIALIZE_REISERFS_PATH(path);
     unsigned int gen_counter;
     int item_len;
     __u32 hash;
@@ -1130,7 +1130,7 @@ void copy_item_head(void * p_v_to, void * p_v_from)
 
 /* inserts new or old stat data of a directory (unreachable, nlinks == 0) */
 int create_dir_sd (reiserfs_filsys_t * fs,
-		    struct path * path, struct key * key,
+		    struct reiserfs_path *path, struct reiserfs_key *key,
 		    void (*modify_item)(struct item_head *, void *))
 {
     struct item_head ih;
@@ -1176,7 +1176,7 @@ void make_sure_root_dir_exists (reiserfs_filsys_t * fs,
 				void (*modify_item)(struct item_head *, void *),
 				int ih_flags)
 {
-    INITIALIZE_PATH (path);
+    INITIALIZE_REISERFS_PATH(path);
 
 
     /* is there root's stat data */
@@ -1308,9 +1308,9 @@ int create_badblock_bitmap (reiserfs_filsys_t * fs, char * badblocks_file) {
 }
 
 void badblock_list(reiserfs_filsys_t * fs, badblock_func_t action, void *data) {
-    struct path badblock_path;
-    struct key rd_key = badblock_key;
-    struct key *key;
+    struct reiserfs_path badblock_path;
+    struct reiserfs_key rd_key = badblock_key;
+    struct reiserfs_key *key;
     
     badblock_path.path_length = ILLEGAL_PATH_ELEMENT_OFFSET;
     set_type_and_offset (KEY_FORMAT_2, &badblock_key, 1, TYPE_INDIRECT);
@@ -1355,7 +1355,7 @@ void badblock_list(reiserfs_filsys_t * fs, badblock_func_t action, void *data) {
 }
 
 static void callback_badblock_rm(reiserfs_filsys_t *fs,
-				 struct path *badblock_path, 
+				 struct reiserfs_path *badblock_path, 
 				 void *data) 
 {
 	struct tree_balance tb;
@@ -1374,7 +1374,7 @@ static void callback_badblock_rm(reiserfs_filsys_t *fs,
 }
 
 void mark_badblock(reiserfs_filsys_t *fs, 
-		   struct path *badblock_path, 
+		   struct reiserfs_path *badblock_path, 
 		   void *data) 
 {
 	struct item_head *tmp_ih;
@@ -1397,7 +1397,7 @@ void mark_badblock(reiserfs_filsys_t *fs,
 
 void add_badblock_list (reiserfs_filsys_t * fs, int replace) {
     struct tree_balance tb;
-    struct path badblock_path;
+    struct reiserfs_path badblock_path;
     struct item_head badblock_ih;
     __u32 ni;
 

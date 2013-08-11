@@ -254,7 +254,7 @@ static void scan_for_name (struct buffer_head * bh)
     return;
 }
 
-static struct saved_name *scan_for_key(struct key *key) {
+static struct saved_name *scan_for_key(struct reiserfs_key *key) {
 	char *name;
 	struct saved_name * new, *name_in;
 
@@ -296,7 +296,7 @@ static struct saved_name *scan_for_key(struct key *key) {
 	return new;
 }
 
-static int comp_token_key(struct buffer_head *bh, struct item_head *ih, struct key *key) {
+static int comp_token_key(struct buffer_head *bh, struct item_head *ih, struct reiserfs_key *key) {
     struct reiserfs_de_head * deh;
     int j, ih_entry_count = 0;
     int min_entry_size = 1;
@@ -332,7 +332,7 @@ static int comp_token_key(struct buffer_head *bh, struct item_head *ih, struct k
 
 /* take every item, look for its key in the key index, if it is found - store
    item in the sorted list of items of a file */
-static void scan_items (struct buffer_head * bh, struct key *key) {
+static void scan_items (struct buffer_head * bh, struct reiserfs_key *key) {
     int i, i_num, pos;
     struct item_head * ih;
     struct saved_name * name_in_store;
@@ -563,9 +563,9 @@ static void map_one_item (struct saved_item * item)
 
 // flush map which is in variable map 
 static void flush_map (reiserfs_filsys_t * fs,
-		       struct key * dir,
+		       struct reiserfs_key *dir,
 		       char * name,
-		       struct key * key)
+		       struct reiserfs_key *key)
 {
     int i;
     FILE * fp;
@@ -684,8 +684,8 @@ static void make_file_map (const void *nodep, VISIT value, int level)
 		twalk (name->items, map_item_list);
 		
 		// write map to a file 
-		flush_map (fs, (struct key *)&name->parent_dirid, name->name,
-			   (struct key *)&name->dirid);
+		flush_map (fs, (struct reiserfs_key *)&name->parent_dirid, name->name,
+			   (struct reiserfs_key *)&name->dirid);
 		
 	    } else if (name->first_name)
 		reiserfs_warning (stdout, "[%K]:\"%s\" has item list\n",
@@ -812,10 +812,10 @@ static void make_map(const void *nodep, VISIT value, int level) {
 }
 
 /* store map if it is a regular file */
-static void locate_file (reiserfs_filsys_t * fs, struct key * key)
+static void locate_file (reiserfs_filsys_t * fs, struct reiserfs_key *key)
 {
-    INITIALIZE_PATH (path);
-    struct key * next_key;
+    INITIALIZE_REISERFS_PATH(path);
+    struct reiserfs_key *next_key;
     int retval;
 
     do {
@@ -850,10 +850,10 @@ static void locate_file (reiserfs_filsys_t * fs, struct key * key)
 /* read stdin and look for specified name in the specified directory */
 static void look_for_name (reiserfs_filsys_t * fs)
 {
-    INITIALIZE_PATH (path);
+    INITIALIZE_REISERFS_PATH(path);
     char * name, * objectid, * dirid;
     size_t n;
-    struct key key = {0, };
+    struct reiserfs_key key = {0, };
 
     reiserfs_warning (stderr,
 		      "Enter dirid objectid \"name\" or press ^D to quit\n");
@@ -880,7 +880,7 @@ static void look_for_name (reiserfs_filsys_t * fs)
 			  name, &key);
 
 	if (reiserfs_locate_entry (fs, &key, name, &path)) {
-	    struct key fkey = {0, };
+	    struct reiserfs_key fkey = {0, };
 	    struct reiserfs_de_head * deh;
 
 	    reiserfs_warning (stdout, "name is found in block %lu (item %d, entry %d)\n",
@@ -910,7 +910,7 @@ static void look_for_name (reiserfs_filsys_t * fs)
 }
 
 #if 0
-static void scan_for_key (struct buffer_head * bh, struct key * key)
+static void scan_for_key (struct buffer_head * bh, struct reiserfs_key *key)
 {
     int i, j, i_num;
     struct item_head * ih;
@@ -961,7 +961,7 @@ void do_scan (reiserfs_filsys_t * fs)
     int type;
     char * answer = 0;
     size_t n = 0;
-    struct key key = {0, 0, };
+    struct reiserfs_key key = {0, 0, };
     unsigned long done, total;
 
     if (debug_mode (fs) == DO_LOOK_FOR_NAME) {

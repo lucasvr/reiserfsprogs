@@ -26,7 +26,7 @@ struct buffer_head * make_buffer (int dev, unsigned long blocknr, int size, char
 }
 
 
-int find_not_of_one_file(struct key * to_find, struct key * key) {
+int find_not_of_one_file(struct reiserfs_key *to_find, struct reiserfs_key *key) {
     if ((get_key_objectid (to_find) != ~(__u32)0) &&
         (get_key_objectid (to_find) != get_key_objectid (key)))
         return 1;
@@ -131,7 +131,7 @@ static void leaf_is_in_tree_now (struct buffer_head * bh)
 }
 
 
-static void insert_pointer (struct buffer_head * bh, struct path * path)
+static void insert_pointer (struct buffer_head * bh, struct reiserfs_path *path)
 {
     struct item_head * ih;
     char * body;
@@ -180,10 +180,10 @@ int balance_condition_fails (struct buffer_head * left, struct buffer_head * rig
 
 /* return 1 if new can be joined with last node on the path or with
    its right neighbor, 0 otherwise */
-int balance_condition_2_fails (struct buffer_head * new, struct path * path)
+int balance_condition_2_fails (struct buffer_head * new, struct reiserfs_path *path)
 {
     struct buffer_head * bh;
-    struct key * right_dkey;
+    struct reiserfs_key *right_dkey;
     int pos, used_space;
     
     bh = PATH_PLAST_BUFFER (path);
@@ -204,7 +204,7 @@ int balance_condition_2_fails (struct buffer_head * new, struct path * path)
     if (pos == B_NR_ITEMS (bh = PATH_H_PBUFFER (path, 1))) {
 	/* we have to read parent of right neighbor. For simplicity we
 	   call search_by_key, which will read right neighbor as well */
-	INITIALIZE_PATH(path_to_right_neighbor);
+	INITIALIZE_REISERFS_PATH(path_to_right_neighbor);
 	
 	if (reiserfs_search_by_key_4 (fs, right_dkey, &path_to_right_neighbor) != ITEM_FOUND)
 	    reiserfs_panic ("%s: block %lu, pointer %d: The left delimiting key %k of the block (%lu) is wrong,"
@@ -225,7 +225,7 @@ int balance_condition_2_fails (struct buffer_head * new, struct path * path)
 }
 
 
-static void get_max_buffer_key (struct buffer_head * bh, struct key * key)
+static void get_max_buffer_key (struct buffer_head * bh, struct reiserfs_key *key)
 {
     struct item_head * ih;
 
@@ -264,10 +264,10 @@ void make_single_leaf_tree (struct buffer_head * bh)
    uninsertable in special bitmap */
 static void try_to_insert_pointer_to_leaf (struct buffer_head * new_bh)
 {
-    INITIALIZE_PATH (path);
+    INITIALIZE_REISERFS_PATH(path);
     struct buffer_head * bh;			/* last path buffer */
-    struct key * first_bh_key, last_bh_key;	/* first and last keys of new buffer */
-    struct key last_path_buffer_last_key, * right_dkey;
+    struct reiserfs_key *first_bh_key, last_bh_key;	/* first and last keys of new buffer */
+    struct reiserfs_key last_path_buffer_last_key, * right_dkey;
     int ret_value;
 
     if (tree_is_empty () == 1) {

@@ -4,38 +4,38 @@
 
 #include "fsck.h"
 
-static struct key *trunc_links = NULL;
+static struct reiserfs_key *trunc_links = NULL;
 static __u32 links_num = 0;
 
-int wrong_mode (struct key * key, __u16 * mode, __u64 real_size, int symlink);
-int wrong_st_blocks(struct key * key, __u32 * blocks, __u32 sd_blocks, __u16 mode, 
+int wrong_mode (struct reiserfs_key *key, __u16 * mode, __u64 real_size, int symlink);
+int wrong_st_blocks(struct reiserfs_key *key, __u32 * blocks, __u32 sd_blocks, __u16 mode, 
 		    int new_format);
-int wrong_st_size (struct key * key, unsigned long long max_file_size, int blocksize,
+int wrong_st_size (struct reiserfs_key *key, unsigned long long max_file_size, int blocksize,
 		   __u64 * size, __u64 sd_size, int type);
-int wrong_first_direct_byte (struct key * key, int blocksize, __u32 * first_direct_byte,
+int wrong_first_direct_byte (struct reiserfs_key *key, int blocksize, __u32 * first_direct_byte,
 			     __u32 sd_first_direct_byte, __u32 size);
-void get_object_key (struct reiserfs_de_head * deh, struct key * key, 
-		     struct key * entry_key, struct item_head * ih);
+void get_object_key (struct reiserfs_de_head * deh, struct reiserfs_key *key, 
+		     struct reiserfs_key *entry_key, struct item_head * ih);
 void print_name (char * name, int len);
 void erase_name (int len);
 
 
-struct path_key
+struct reiserfs_path_key
 {
     struct short_key
     {
         __u32 k_dir_id;
         __u32 k_objectid;
     } key;
-    struct path_key * next, * prev;
+    struct reiserfs_path_key * next, * prev;
 };
 
-struct path_key * head_key = NULL;
-struct path_key * tail_key = NULL;
+struct reiserfs_path_key * head_key = NULL;
+struct reiserfs_path_key * tail_key = NULL;
 
-static int check_path_key(struct key * key)
+static int check_path_key(struct reiserfs_key *key)
 {
-    struct path_key * cur = head_key;
+    struct reiserfs_path_key * cur = head_key;
 
     while(cur != NULL)
     {
@@ -48,18 +48,18 @@ static int check_path_key(struct key * key)
     return 0;
 }
 
-static int add_path_key(struct key * key)
+static int add_path_key(struct reiserfs_key *key)
 {
     if (check_path_key(key))
     	return LOOP_FOUND;
 
     if (tail_key == NULL)
     {
-        tail_key = getmem(sizeof(struct path_key));
+        tail_key = getmem(sizeof(struct reiserfs_path_key));
         head_key = tail_key;
         tail_key->prev = NULL;
     }else{
-        tail_key->next = getmem(sizeof(struct path_key));
+        tail_key->next = getmem(sizeof(struct reiserfs_path_key));
         tail_key->next->prev = tail_key;
         tail_key = tail_key->next;
     }
@@ -87,11 +87,11 @@ void del_path_key()
 
 /* path is path to stat data. If file will be relocated - new_ih will contain
    a key file was relocated with */
-static int check_check_regular_file (struct path * path, void * sd,
+static int check_check_regular_file (struct reiserfs_path *path, void * sd,
                                      struct item_head * new_ih)
 {
     int is_new_file;
-//    struct key key, sd_key;
+//    struct reiserfs_key key, sd_key;
     __u16 mode;
     __u32 nlink;
     __u64 real_size, sd_size;
@@ -215,12 +215,12 @@ static int check_check_regular_file (struct path * path, void * sd,
 
 /* returns buffer, containing found directory item.*/
 static char * get_next_directory_item (
-	struct key * key, /* on return this will contain key of next item in the tree */
-	struct key * parent, struct item_head * ih, __u32 * pos_in_item, int dir_format)
+	struct reiserfs_key *key, /* on return this will contain key of next item in the tree */
+	struct reiserfs_key *parent, struct item_head * ih, __u32 * pos_in_item, int dir_format)
 {
-    INITIALIZE_PATH (path);
+    INITIALIZE_REISERFS_PATH(path);
     char * dir_item;
-    struct key * rdkey;
+    struct reiserfs_key *rdkey;
     struct buffer_head * bh;
     struct reiserfs_de_head * deh;
     int i;
@@ -296,7 +296,7 @@ start_again:
 		
 		//deh->deh_objectid != REISERFS_ROOT_PARENT_OBJECTID)/*????*/ {
 		fsck_log ("get_next_directory_item: The entry \".\" of the directory %K "
-		    "pointes to %K, instead of %K", key, (struct key *)(&(deh->deh2_dir_id)), 
+		    "pointes to %K, instead of %K", key, (struct reiserfs_key *)(&(deh->deh2_dir_id)), 
 		    key);
 		if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 		    set_deh_dirid (deh, get_key_dirid (key));
@@ -314,7 +314,7 @@ start_again:
 	    /* set ".." so that it points to the correct parent directory */
 	    if (comp_short_keys (&(deh->deh2_dir_id), parent)) {
 		fsck_log ("get_next_directory_item: The entry \"..\" of the directory %K "
-		    "pointes to %K, instead of %K", key, (struct key *)(&(deh->deh2_dir_id)));
+		    "pointes to %K, instead of %K", key, (struct reiserfs_key *)(&(deh->deh2_dir_id)));
 		if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 		    set_deh_dirid (deh, get_key_dirid (parent));
 		    set_deh_objectid (deh, get_key_objectid (parent));
@@ -350,10 +350,10 @@ start_again:
 }
 
 /* semantic pass of --check */
-static int check_semantic_pass (struct key * key, struct key * parent, int dot_dot, 
+static int check_semantic_pass (struct reiserfs_key *key, struct reiserfs_key *parent, int dot_dot, 
     struct item_head * new_ih)
 {
-    struct path path;
+    struct reiserfs_path path;
     void * sd;
     __u32 nlink;
     int is_new_dir;
@@ -363,7 +363,7 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
     char * dir_item;
     __u32 pos_in_item;
     struct item_head tmp_ih;
-    struct key next_item_key, entry_key, object_key;
+    struct reiserfs_key next_item_key, entry_key, object_key;
     __u64 dir_size = 0;
     __u32 blocks;
     __u64 sd_size;
@@ -526,15 +526,15 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 		/* not alighed directory of new format - delete it */
 		if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
 		    fsck_log ("Entry %K (\"%.*s\") in the directory %K is not formated "
-			"properly - deleted\n",	(struct key *)&(deh->deh2_dir_id), 
+			"properly - deleted\n",	(struct reiserfs_key *)&(deh->deh2_dir_id), 
 			namelen, name, &tmp_ih.ih_key);
 		    reiserfs_remove_entry (fs, &entry_key);
 		    entry_len = name_length (name, dir_format);
 		    reiserfs_add_entry (fs, key, name, entry_len, 
-			(struct key *)&(deh->deh2_dir_id), 0);
+			(struct reiserfs_key *)&(deh->deh2_dir_id), 0);
 		} else {
 		    fsck_log ("Entry %K (\"%.*s\") in the directory %K is not formated "
-			"properly.\n", (struct key *)&(deh->deh2_dir_id), namelen, name, 
+			"properly.\n", (struct reiserfs_key *)&(deh->deh2_dir_id), namelen, name, 
 			&tmp_ih.ih_key);
 		    one_more_corruption (fs, FIXABLE);
 		}
@@ -670,10 +670,10 @@ static int check_semantic_pass (struct key * key, struct key * parent, int dot_d
 
 int check_safe_links ()
 {
-    struct path safe_link_path, path;
-    struct key safe_link_key = {-1, 0, {{0, 0}}};
-    struct key key = {0, 0, {{0, 0}}};
-    struct key * rkey;
+    struct reiserfs_path safe_link_path, path;
+    struct reiserfs_key safe_link_key = {-1, 0, {{0, 0}}};
+    struct reiserfs_key key = {0, 0, {{0, 0}}};
+    struct reiserfs_key *rkey;
     struct item_head * tmp_ih;
 
     while (1) {

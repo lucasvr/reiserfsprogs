@@ -321,7 +321,7 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 			if ( tb->lbytes >= pos_in_item ) {
 			    /* appended item will be in L[0] in whole */
 			    int l_n, temp_n;
-                            struct key * key;
+                            struct reiserfs_key *key;
 
 			    /* this bytes number must be appended to the last item of L[h] */
 			    l_n = tb->lbytes - pos_in_item;
@@ -548,7 +548,7 @@ static int balance_leaf(/*struct reiserfs_transaction_handle *th, */
 
 			int n_shift, n_rem, r_zeros_number;
 			const char * r_body;
-			struct key * key;
+			struct reiserfs_key *key;
 
 			/* Calculate number of bytes which must be shifted from appended item */
 			if ( (n_shift = tb->rbytes - tb->insert_size[0]) < 0 )

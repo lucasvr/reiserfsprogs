@@ -541,7 +541,7 @@ struct offset_v2 {
 
 
 /* Key of the object determines object's location in the tree, composed of 4 components */
-struct key {
+struct reiserfs_key {
     __u32 k2_dir_id;    /* packing locality: by default parent directory object id */
     __u32 k2_objectid;  /* object identifier */
     union {
@@ -581,11 +581,11 @@ struct key {
 #define set_key_objectid(key,n)         ((key)->k_objectid = cpu_to_le32((n)))
 */
 
-#define KEY_SIZE (sizeof(struct key))
+#define KEY_SIZE (sizeof(struct reiserfs_key))
 #define SHORT_KEY_SIZE 8
 
 
-// values for k_uniqueness field of the struct key
+// values for k_uniqueness field of the struct reiserfs_key
 #define V1_SD_UNIQUENESS 0
 #define V1_DIRENTRY_UNIQUENESS 500
 #define DIRENTRY_UNIQUENESS 500
@@ -593,7 +593,7 @@ struct key {
 #define V1_INDIRECT_UNIQUENESS 0xfffffffe
 #define V1_UNKNOWN_UNIQUENESS 555
 
-// values for k_type field of the struct key
+// values for k_type field of the struct reiserfs_key
 #define TYPE_STAT_DATA 0
 #define TYPE_INDIRECT 1
 #define TYPE_DIRECT 2
@@ -623,7 +623,7 @@ struct key {
 
 struct item_head
 {
-    struct key ih_key; 	/* Everything in the tree is found by searching for it
+    struct reiserfs_key ih_key; 	/* Everything in the tree is found by searching for it
                            based on its key.*/
 
     union {
@@ -1108,7 +1108,7 @@ struct disk_child {
    equal to given key, or which is the maximal key less than the given
    key. */
 
-struct path_element  {
+struct reiserfs_path_element  {
     struct buffer_head * pe_buffer; /* Pointer to the buffer at the path in
 				       the tree. */
     unsigned int pe_position;  /* Position in the tree node which is placed
@@ -1134,14 +1134,14 @@ struct path_element  {
    is still valid. You'll need to read search_by_key and the comments
    in it, especially about decrement_counters_in_path(), to understand
    this structure. */
-struct path {
+struct reiserfs_path {
   unsigned int          path_length;                      	/* Length of the array above.   */
-  struct  path_element  path_elements[EXTENDED_MAX_HEIGHT];	/* Array of the path elements.  */
+  struct  reiserfs_path_element  path_elements[EXTENDED_MAX_HEIGHT];	/* Array of the path elements.  */
   unsigned int		pos_in_item;
 };
 
-#define INITIALIZE_PATH(var) \
-struct path var = {ILLEGAL_PATH_ELEMENT_OFFSET, }
+#define INITIALIZE_REISERFS_PATH(var) \
+struct reiserfs_path var = {ILLEGAL_PATH_ELEMENT_OFFSET, }
 
 /* Get path element by path and path position. */
 #define PATH_OFFSET_PELEMENT(p_s_path,n_offset)  ((p_s_path)->path_elements +(n_offset))
@@ -1312,7 +1312,7 @@ struct tree_balance
 {
     struct reiserfs_transaction_handle *transaction_handle ;
     reiserfs_filsys_t * tb_fs;
-    struct path * tb_path;
+    struct reiserfs_path *tb_path;
     struct buffer_head * L[MAX_HEIGHT];        /* array of left neighbors of nodes in the path */
     struct buffer_head * R[MAX_HEIGHT];        /* array of right neighbors of nodes in the path*/
     struct buffer_head * FL[MAX_HEIGHT];       /* array of fathers of the left  neighbors      */
@@ -1480,7 +1480,7 @@ struct buffer_info {
 #define B_N_PITEM_HEAD(bh,item_num) ( (struct item_head * )((bh)->b_data + BLKH_SIZE) + (item_num) )
 
 /* get key */
-#define B_N_PDELIM_KEY(bh,item_num) ( (struct key * )((bh)->b_data + BLKH_SIZE) + (item_num) )
+#define B_N_PDELIM_KEY(bh,item_num) ( (struct reiserfs_key *)((bh)->b_data + BLKH_SIZE) + (item_num) )
 
 /* get the key */
 #define B_N_PKEY(bh,item_num) ( &(B_N_PITEM_HEAD(bh,item_num)->ih_key) )
@@ -1511,18 +1511,18 @@ struct buffer_info {
 /* stree.c */
 void padd_item (char * item, int total_length, int length);
 int B_IS_IN_TREE(struct buffer_head *);
-struct key * get_rkey (struct path * p_s_chk_path, reiserfs_filsys_t *);
+struct reiserfs_key *get_rkey (struct reiserfs_path *p_s_chk_path, reiserfs_filsys_t *);
 int bin_search (void * p_v_key, void * p_v_base, int p_n_num, int p_n_width, unsigned int * p_n_pos);
-int search_by_key (reiserfs_filsys_t *, struct key *, struct path *, int);
-int search_by_entry_key (reiserfs_filsys_t *, struct key *, struct path *);
-int search_for_position_by_key (reiserfs_filsys_t *, struct key *, struct path *);
-int search_by_objectid (reiserfs_filsys_t *, struct key *, struct path *, int *);
-void decrement_counters_in_path (struct path * p_s_search_path);
-void pathrelse (struct path * p_s_search_path);
+int search_by_key (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *, int);
+int search_by_entry_key (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *);
+int search_for_position_by_key (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *);
+int search_by_objectid (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *, int *);
+void decrement_counters_in_path (struct reiserfs_path *p_s_search_path);
+void pathrelse (struct reiserfs_path *p_s_search_path);
 
 
-int is_left_mergeable (reiserfs_filsys_t * s, struct path * path);
-int is_right_mergeable (reiserfs_filsys_t * s, struct path * path);
+int is_left_mergeable (reiserfs_filsys_t * s, struct reiserfs_path *path);
+int is_right_mergeable (reiserfs_filsys_t * s, struct reiserfs_path *path);
 int are_items_mergeable (struct item_head * left, struct item_head * right, int bsize);
 
 
@@ -1533,7 +1533,7 @@ int fix_nodes (/*struct reiserfs_transaction_handle *th,*/ int n_op_mode, struct
                /*int n_pos_in_item,*/ struct item_head * p_s_ins_ih);
 void unfix_nodes (/*struct reiserfs_transaction_handle *th,*/ struct tree_balance *);
 void free_buffers_in_tb (struct tree_balance * p_s_tb);
-void init_path (struct path *);
+void init_path (struct reiserfs_path *);
 
 /* prints.c */
 /* options */

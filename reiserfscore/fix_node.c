@@ -807,7 +807,7 @@ static void set_parameters (struct tree_balance * tb, int h, int lnum,
     }
 }
 
-static void decrement_key (struct key * p_s_key) 
+static void decrement_key (struct reiserfs_key *p_s_key) 
 {
     int type;
 
@@ -853,10 +853,10 @@ int are_items_mergeable (struct item_head * left, struct item_head * right, int 
 }
 
 /* get left neighbor of the leaf node */
-static struct buffer_head * get_left_neighbor (reiserfs_filsys_t * s, struct path * path)
+static struct buffer_head * get_left_neighbor (reiserfs_filsys_t * s, struct reiserfs_path *path)
 {
-    struct key key;
-    struct path path_to_left_neighbor;
+    struct reiserfs_key key;
+    struct reiserfs_path path_to_left_neighbor;
     struct buffer_head * bh;
 
     copy_key (&key, B_N_PKEY (PATH_PLAST_BUFFER (path), 0));
@@ -875,12 +875,12 @@ static struct buffer_head * get_left_neighbor (reiserfs_filsys_t * s, struct pat
 }
 
 
-extern struct key  MIN_KEY;
-static struct buffer_head * get_right_neighbor (reiserfs_filsys_t * s, struct path * path)
+extern struct reiserfs_key  MIN_KEY;
+static struct buffer_head * get_right_neighbor (reiserfs_filsys_t * s, struct reiserfs_path *path)
 {
-    struct key key;
-    struct key * rkey;
-    struct path path_to_right_neighbor;
+    struct reiserfs_key key;
+    struct reiserfs_key *rkey;
+    struct reiserfs_path path_to_right_neighbor;
     struct buffer_head * bh;
     
     rkey = get_rkey (path, s);
@@ -902,7 +902,7 @@ static struct buffer_head * get_right_neighbor (reiserfs_filsys_t * s, struct pa
 }
 
 
-int is_left_mergeable (reiserfs_filsys_t * s, struct path * path)
+int is_left_mergeable (reiserfs_filsys_t * s, struct reiserfs_path *path)
 {
     struct item_head * right;
     struct buffer_head * bh;
@@ -920,7 +920,7 @@ int is_left_mergeable (reiserfs_filsys_t * s, struct path * path)
 }
 
 
-int is_right_mergeable (reiserfs_filsys_t * s, struct path * path)
+int is_right_mergeable (reiserfs_filsys_t * s, struct reiserfs_path *path)
 {
     struct item_head * left;
     struct buffer_head * bh;
@@ -1231,7 +1231,7 @@ static int  is_left_neighbor_in_cache (struct tree_balance * p_s_tb,
 
 
 
-void init_path (struct path * path)
+void init_path (struct reiserfs_path *path)
 {
     path->path_length = ILLEGAL_PATH_ELEMENT_OFFSET;
 }
@@ -1252,9 +1252,9 @@ static int get_far_parent (struct tree_balance *   p_s_tb,
 			   char c_lr_par)
 {
     struct buffer_head  * p_s_parent;
-    struct path         	s_path_to_neighbor_father,
+    struct reiserfs_path         	s_path_to_neighbor_father,
 	* p_s_path = p_s_tb->tb_path;
-    struct key		s_lr_father_key;
+    struct reiserfs_key		s_lr_father_key;
     int                   n_counter,
 	n_position = -1,
 	n_first_last_position = 0,
@@ -1341,7 +1341,7 @@ static int get_far_parent (struct tree_balance *   p_s_tb,
  */
 static int  get_parents (struct tree_balance * p_s_tb, int n_h)
 {
-    struct path         * p_s_path = p_s_tb->tb_path;
+    struct reiserfs_path         * p_s_path = p_s_tb->tb_path;
     int                   n_position,
 	n_ret_value,
 	n_path_offset = PATH_H_PATH_OFFSET(p_s_tb->tb_path, n_h);
@@ -2048,7 +2048,7 @@ static int check_balance (int mode, struct tree_balance * tb,
 static void get_direct_parent (struct tree_balance * p_s_tb, int n_h)
 {
     struct buffer_head  * p_s_bh;
-    struct path         * p_s_path      = p_s_tb->tb_path;
+    struct reiserfs_path         * p_s_path      = p_s_tb->tb_path;
     int                   n_position,
 	n_path_offset = PATH_H_PATH_OFFSET(p_s_tb->tb_path, n_h);
     
@@ -2264,7 +2264,7 @@ int fix_nodes (int n_op_mode, struct tree_balance * p_s_tb,
 
 void unfix_nodes (struct tree_balance * p_s_tb)
 {
-    struct path * p_s_path = p_s_tb->tb_path;
+    struct reiserfs_path *p_s_path = p_s_tb->tb_path;
     int		n_counter;
     //  int i, j;
     //struct buffer_head * bh;
