@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2004 by Hans Reiser, licensing governed by 
+ * Copyright 2002-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -90,7 +90,7 @@ static int should_make_journal_standard(reiserfs_filsys_t *fs,
 {
 	if (!is_reiserfs_jr_magic_string(fs->fs_ondisk_sb))
 		return 0;
-/*    
+/*
     if (!user_confirmed (stderr, "ATTENTION! Filesystem with non-standard journal "
 			 "found. Continue? (y/n):", "y\n")) {
 	exit(1);
@@ -375,7 +375,7 @@ static void add_badblocks(reiserfs_filsys_t *fs)
 	}
 
 	if (Bads == 1) {
-		/* fs->fs_badblocks_bm contains blocks which are not in the bad 
+		/* fs->fs_badblocks_bm contains blocks which are not in the bad
 		   block list yet. Merge it with what is in the tree already. */
 		badblock_list(fs, mark_badblock, NULL);
 	}
@@ -615,7 +615,7 @@ int main(int argc, char **argv)
 	}
 
 	/* now we try to open journal, it makes sence if there is no the flag
-	   NEED_TUNE  in ondisk superblock and --no-journal available is not 
+	   NEED_TUNE  in ondisk superblock and --no-journal available is not
 	   specified. */
 	if (get_jp_journal_magic(sb_jp(fs->fs_ondisk_sb)) != NEED_TUNE &&
 	    !(Options & OPT_SKIP_J)) {
@@ -638,7 +638,7 @@ int main(int argc, char **argv)
 	}
 
 	/* in spite of journal was opened, the file system can be non-consistent or
-	   there are non-replayed transaction in journal, 
+	   there are non-replayed transaction in journal,
 	   make sure it isn't (if there is no the flag NEED_TUNE in ondisk superblock */
 	if (get_jp_journal_magic(sb_jp(fs->fs_ondisk_sb)) != NEED_TUNE &&
 	    reiserfs_journal_opened(fs)) {

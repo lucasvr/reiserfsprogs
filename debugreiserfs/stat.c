@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2004 by Hans Reiser, licensing governed by 
+ * Copyright 2002-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -37,7 +37,7 @@ static int comp_items_1(const void *p1, const void *p2)
 	int retval;
 	struct item_head *ih1, *ih2;
 
-	/*    
+	/*
 	   if (*(int *)p1 != *(int *)p2)
 	   retval = 1;
 	   else
@@ -166,7 +166,7 @@ void do_stat(reiserfs_filsys_t *fs)
 /*
     bh = bread (fs->s_dev, 8211, fs->s_blocksize);
     stat1_the_leaf (fs, bh);
-    
+
     return;
 */
 

@@ -1,5 +1,5 @@
-/* 
- * Copyright 2000-2004 by Hans Reiser, licensing governed by 
+/*
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -128,10 +128,10 @@ int reiserfs_bitmap_compare(reiserfs_bitmap_t *bm1, reiserfs_bitmap_t *bm2)
 	return diff;
 }
 
-/* 
-    Does X | Y for every bit of the bitmap `to`, where 
-    X - bit of the `to` bitmap, 
-    Y - `from` bitmap. 
+/*
+    Does X | Y for every bit of the bitmap `to`, where
+    X - bit of the `to` bitmap,
+    Y - `from` bitmap.
     Save result in the `to` bitmap.
 */
 void reiserfs_bitmap_disjunction(reiserfs_bitmap_t *to,
@@ -152,10 +152,10 @@ void reiserfs_bitmap_disjunction(reiserfs_bitmap_t *to,
 	}
 }
 
-/* 
-    Does X & !Y for every bit of the bitmap `base`, where 
-    X - bit of the `base` bitmap, 
-    Y - `exclude` bitmap. 
+/*
+    Does X & !Y for every bit of the bitmap `base`, where
+    X - bit of the `base` bitmap,
+    Y - `exclude` bitmap.
     Save result in the `base` bitmap.
 */
 void reiserfs_bitmap_delta(reiserfs_bitmap_t *base,

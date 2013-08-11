@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -172,10 +172,10 @@ void freemem(void *vp)
 
 typedef int (*func_t) (char *);
 
-/* Lookup the @file in the @mntfile. @file is mntent.mnt_fsname if @fsname 
+/* Lookup the @file in the @mntfile. @file is mntent.mnt_fsname if @fsname
    is set; mntent.mnt_dir otherwise. Return the mnt entry from the @mntfile.
-   
-   Warning: if the root fs is mounted RO, the content of /etc/mtab may be 
+
+   Warning: if the root fs is mounted RO, the content of /etc/mtab may be
    not correct. */
 static struct mntent *misc_mntent_lookup(char *mntfile, char *file, int path)
 {
@@ -232,13 +232,13 @@ static struct mntent *misc_mntent_lookup(char *mntfile, char *file, int path)
 			break;
 
 		if (path) {
-			/* Either names or stats match. Make sure the st_dev of 
+			/* Either names or stats match. Make sure the st_dev of
 			   the path is same as @mnt_fsname device rdev. */
 			if (stat(mnt->mnt_fsname, &st) == 0 &&
 			    dev == st.st_rdev)
 				break;
 		} else {
-			/* Either names or stats match. Make sure the st_dev of 
+			/* Either names or stats match. Make sure the st_dev of
 			   the mount entry is same as the given device rdev. */
 			if (stat(mnt->mnt_dir, &st) == 0 && rdev == st.st_dev)
 				break;
@@ -296,7 +296,7 @@ struct mntent *misc_mntent(char *device)
 		proc = 1;
 
 		if (root) {
-			/* Lookup the "/" entry in /proc/mounts. Special 
+			/* Lookup the "/" entry in /proc/mounts. Special
 			   case as root entry can present as:
 			   rootfs / rootfs rw 0 0
 			   Look up the mount point in this case. */
@@ -335,7 +335,7 @@ struct mntent *misc_mntent(char *device)
 	}
 #endif /* defined(MOUNTED) || defined(_PATH_MOUNTED) */
 
-	/* If has not been checked in neither /proc/mounts nor /etc/mtab (or 
+	/* If has not been checked in neither /proc/mounts nor /etc/mtab (or
 	   errors have occured), return INVAL_PTR, NULL otherwise. */
 	return (!proc && !path) ? INVAL_PTR : NULL;
 }
@@ -344,7 +344,7 @@ int misc_device_mounted(char *device)
 {
 	struct mntent *mnt;
 
-	/* Check for the "/" first to avoid any possible problem with 
+	/* Check for the "/" first to avoid any possible problem with
 	   reflecting the root fs info in mtab files. */
 	if (misc_root_mounted(device) == 1) {
 		return misc_file_ro("/") ? MF_RO : MF_RW;
@@ -465,7 +465,7 @@ void print_how_far(FILE * fp,
 #   define BLKGETSIZE64 _IOR(0x12, 114, size_t)
 #endif
 
-/* To not have problem with last sectors on the block device when switching 
+/* To not have problem with last sectors on the block device when switching
    to smaller one. */
 #define MAX_BS (64 * 1024)
 
@@ -688,10 +688,10 @@ static void get_dma_support(dma_info_t *dma_info)
 	dma_info->support_type = 0;
 }
 
-/* 
- * Return values: 
+/*
+ * Return values:
  * 0 - ok;
- * 1 - preparation cannot be done 
+ * 1 - preparation cannot be done
  * -1 - preparation failed
  */
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2004 by Hans Reiser, licensing governed by 
+ * Copyright 2002-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -546,7 +546,7 @@ int reiserfs_open_journal(reiserfs_filsys_t *fs, char *j_filename, int flags)
 	return 0;
 }
 
-/* initialize super block's journal related fields and journal header fields. 
+/* initialize super block's journal related fields and journal header fields.
  * If len is 0 - make journal of default size */
 int reiserfs_create_journal(reiserfs_filsys_t *fs, char *j_device,	/* journal device name */
 			    unsigned long offset,	/* journal offset on the j_device */
@@ -562,7 +562,7 @@ int reiserfs_create_journal(reiserfs_filsys_t *fs, char *j_device,	/* journal de
 	sb = fs->fs_ondisk_sb;
 
 	if (!j_device || !strcmp(j_device, fs->fs_file_name)) {
-		/* Journal is to be on the host device, check the amount space for the 
+		/* Journal is to be on the host device, check the amount space for the
 		 * journal on it. */
 		len =
 		    len ? len : journal_default_size(fs->fs_super_bh->b_blocknr,
@@ -847,7 +847,7 @@ int replay_journal(reiserfs_filsys_t *fs)
 		return 0;
 	}
 
-	/*  Smth strange with journal header or journal. We cannot say for sure what was the last 
+	/*  Smth strange with journal header or journal. We cannot say for sure what was the last
 	   replaied transaction, but relying on JH data is preferable. */
 
 	replayed = 0;

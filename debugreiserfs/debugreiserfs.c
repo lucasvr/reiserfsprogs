@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2004 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -47,12 +47,12 @@ Options:\n\
   -v\tverboes unpack, prints the block number of every block being unpacked\n\
   -Z\tzero all data.
 
-  To build a map of a file blocks by name: 
-  debugreiserfs device -a mapfile -n filename 
-  
-  To build a map of a file blocks by key: 
-  debugreiserfs device -a mapfile -k 
-  
+  To build a map of a file blocks by name:
+  debugreiserfs device -a mapfile -n filename
+
+  To build a map of a file blocks by key:
+  debugreiserfs device -a mapfile -k
+
   To extract some:
   debugreiserfs device -a mapfile -r filename > backup
 */
@@ -318,7 +318,7 @@ static char *parse_options(struct debugreiserfs_data *data,
 			break;
 
 		case 'k':
-			/* read the device and print reiserfs blocks which contain 
+			/* read the device and print reiserfs blocks which contain
 			   defined key */
 			data->mode = DO_SCAN;
 			break;
@@ -348,7 +348,7 @@ static char *parse_options(struct debugreiserfs_data *data,
 			break;
 
 		case 'D':
-			/* print leaf details accordingly the bitmap - can be used 
+			/* print leaf details accordingly the bitmap - can be used
 			   with -S */
 			data->options |= PRINT_DETAILS;
 			break;

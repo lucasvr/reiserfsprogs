@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -173,7 +173,7 @@ int not_a_regfile(void *sd);
 int fix_obviously_wrong_sd_mode(struct reiserfs_path *path);
 int is_dot_dot(char *name, int namelen);
 int is_dot(char *name, int namelen);
-/*void create_dir_sd (reiserfs_filsys_t *fs, 
+/*void create_dir_sd (reiserfs_filsys_t *fs,
   struct reiserfs_path *path, struct reiserfs_key *key);*/
 int rebuild_check_regular_file(struct reiserfs_path *path, void *sd,
 			       struct item_head *new_ih);

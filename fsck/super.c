@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2004 by Hans Reiser, licensing governed by 
+ * Copyright 2001-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -37,11 +37,11 @@ int what_fs_version()
     fsck_log(text);			\
     return exit_code;			\
 }
-    
+
 int check_sb (reiserfs_filsys_t *fs) {
     int magic = 0, version = 0;
-    
-    if (!is_blocksize_correct (fs->fs_blocksize)) 
+
+    if (!is_blocksize_correct (fs->fs_blocksize))
 	super_error(-1, "Wrong blocksize found in the super block\n");
 
     if (is_reiserfs_3_6_magic_string (sb))
@@ -50,9 +50,9 @@ int check_sb (reiserfs_filsys_t *fs) {
 	magic = 1;
     else if (is_reiserfs_jr_magic_string (sb))
 	magic = 3;
-    else 
+    else
 	super_error(-1, "Invalid magic found in the super block.\n");
-    
+
     if (magic == 1 || magic == 2) {
 	if (fsck_data (fs)->journal_dev_name)
             fsck_log("Reiserfs with standard journal found, but there was specified a "
@@ -60,69 +60,69 @@ int check_sb (reiserfs_filsys_t *fs) {
 	
 	standard_journal = 1;
     } else {
-	if (!fsck_data (fs)->journal_dev_name) 
+	if (!fsck_data (fs)->journal_dev_name)
             super_error(-1, "Reiserfs with non standard journal found, but there was not "
 		"specified any journal dev\n");
 	
 	standard_journal = 0;
     }
-    
-    if (get_sb_version (sb) != REISERFS_FORMAT_3_6 && get_sb_version (sb) != REISERFS_FORMAT_3_5) 
+
+    if (get_sb_version (sb) != REISERFS_FORMAT_3_6 && get_sb_version (sb) != REISERFS_FORMAT_3_5)
 	super_error(-1, "Invalid format found in the super block.\n");
 	
-    if (is_new_sb_location(fs->fs_super_bh->b_blocknr, fs->fs_blocksize)) 
+    if (is_new_sb_location(fs->fs_super_bh->b_blocknr, fs->fs_blocksize))
     {
-	if (magic == 3) 
+	if (magic == 3)
 	    version = get_sb_version (sb) == REISERFS_FORMAT_3_6 ? 1 : 2;
 	else
 	    version = magic == 2 ? 1 : 2;	
     } else if (is_old_sb_location(fs->fs_super_bh->b_blocknr, fs->fs_blocksize)) {
-	if (magic == 3) 
+	if (magic == 3)
 	    version = get_sb_version (sb) == REISERFS_FORMAT_3_6 ? 3 : 4;
-	else 
+	else
 	    version = magic == 2 ? 3 : 4;	
-    } else 
+    } else
 	die("Super block in the wong block(%d).\n", fs->fs_super_bh->b_blocknr);
-    
-    if (version == 0) 
+
+    if (version == 0)
 	die ("FS format must be figured out here.\n");
 
-    if (get_sb_block_count (sb) > count_blocks (filename, fs->fs_blocksize)) 
+    if (get_sb_block_count (sb) > count_blocks (filename, fs->fs_blocksize))
 	super_error(-1, "Invalid block count found in the super block.\n");
 
-    if (get_sb_block_size (sb) != fs->fs_blocksize) 
-        super_error(-1, "Invalid block size found in the super block (%lu).\n", 
+    if (get_sb_block_size (sb) != fs->fs_blocksize)
+        super_error(-1, "Invalid block size found in the super block (%lu).\n",
 	    get_sb_block_size (sb));
 
 //Non needed from here
-    p_oid_maxsize = (fs->fs_blocksize - reiserfs_super_block_size (sb)) / sizeof(__u32) / 2 * 2;    
-    if (get_sb_oid_maxsize (sb) != p_oid_maxsize) 
-	super_error(-1, "Invalid objectid map max size found in the super block (%lu).\n", 
+    p_oid_maxsize = (fs->fs_blocksize - reiserfs_super_block_size (sb)) / sizeof(__u32) / 2 * 2;
+    if (get_sb_oid_maxsize (sb) != p_oid_maxsize)
+	super_error(-1, "Invalid objectid map max size found in the super block (%lu).\n",
 	    get_sb_oid_maxsize (sb));
 
     if (get_sb_oid_cursize (sb) == 1 || get_sb_oid_cursize (sb) > get_sb_oid_maxsize (sb))
-        super_error(-1, "Invalid objectid map found in the super block (%lu).\n", 
+        super_error(-1, "Invalid objectid map found in the super block (%lu).\n",
 	    get_sb_oid_cursize (sb));
 
-    if (get_sb_root_block (sb) > block_count && get_sb_root_block (sb) != ~0) 
-	fsck_log("Invalid root block found in the super block (%lu).\n", 
+    if (get_sb_root_block (sb) > block_count && get_sb_root_block (sb) != ~0)
+	fsck_log("Invalid root block found in the super block (%lu).\n",
 	    get_sb_root_block (sb));
 
-    if (get_sb_free_blocks (sb) > block_count) 
-	fsck_log ("Invalid free block count found in the super block (%lu).\n", 
+    if (get_sb_free_blocks (sb) > block_count)
+	fsck_log ("Invalid free block count found in the super block (%lu).\n",
 	    get_sb_free_blocks (sb));
 
     if (get_sb_tree_height (sb) && ((get_sb_tree_height (sb) < DISK_LEAF_NODE_LEVEL + 1) ||
-	(get_sb_tree_height (sb) > MAX_HEIGHT) && (get_sb_tree_height (sb) != ~0))) 
-	super_error(-1, "Invalid tree height found in the super block (%lu).\n", 
+	(get_sb_tree_height (sb) > MAX_HEIGHT) && (get_sb_tree_height (sb) != ~0)))
+	super_error(-1, "Invalid tree height found in the super block (%lu).\n",
 	    get_sb_tree_height (sb));
 
-    if (get_sb_hash_code (sb) && code2name (get_sb_hash_code (sb)) == 0) 
-	super_error(-1, "Invalid hash found in the super block (%lu).\n", 
+    if (get_sb_hash_code (sb) && code2name (get_sb_hash_code (sb)) == 0)
+	super_error(-1, "Invalid hash found in the super block (%lu).\n",
 	    get_sb_hash_code (sb));
 
     if (version == 1 || version == 3) {
-        if (!uuid_is_correct(sb->s_uuid)) 
+        if (!uuid_is_correct(sb->s_uuid))
 	    fsck_log ("Invalid uuid found, you should generate a new one.\n");
 
 	if (sb->s_flags & 0xfffffffe)
@@ -132,21 +132,21 @@ int check_sb (reiserfs_filsys_t *fs) {
 //Not needed till here.
 
     p_bmap_nr = (block_count + (fs->fs_blocksize * 8 - 1)) / (fs->fs_blocksize * 8);
-    if (get_sb_bmap_nr (sb) != p_bmap_nr) 
-	super_error(-1, "Invalid bitmap number found in the super block (%lu).\n", 
+    if (get_sb_bmap_nr (sb) != p_bmap_nr)
+	super_error(-1, "Invalid bitmap number found in the super block (%lu).\n",
 	    get_sb_bmap_nr (sb));
 
     if (!fsck_skip_journal (fs) && standard_journal == 1) {
         if (get_jp_journal_dev (sb_jp(sb)) != 0)
  	    super_error(-1, "Invalid journal device found (%lu).\n", get_jp_journal_dev (sb_jp(sb)));
 
-        if (get_jp_journal_1st_block (sb_jp(sb)) != get_journal_start_must (fs)) 
+        if (get_jp_journal_1st_block (sb_jp(sb)) != get_journal_start_must (fs))
             super_error(-1, "Invalid journal first block found (%lu).\n", get_jp_journal_1st_block (sb_jp(sb)));
 
-        if (get_jp_journal_size (sb_jp(sb)) != journal_default_size(fs->fs_super_bh->b_blocknr, fs->fs_blocksize)) 
+        if (get_jp_journal_size (sb_jp(sb)) != journal_default_size(fs->fs_super_bh->b_blocknr, fs->fs_blocksize))
 	    super_error(-1, "Invalid journal size found (%lu).\n", get_jp_journal_size (sb_jp(sb)) + 1);
-        
-        
+
+
 	
 	if (get_jp_journal_max_batch (sb_jp(sb)) != advise_journal_max_batch(get_jp_journal_max_trans_len (sb_jp(sb)))) {
  	    fsck_conditional_log (magic_was_found, "rebuild-sb: wrong journal max batch size occured (%lu), fixed (%d)\n",
@@ -164,7 +164,7 @@ int check_sb (reiserfs_filsys_t *fs) {
  	    set_jp_journal_max_trans_age (sb_jp(sb), advise_journal_max_trans_age());
         }
 
-        
+
 }
 */
 
@@ -342,7 +342,7 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 		}
 	}
 
-	/* if no reiserfs_found or bad data found in that SB, what was checked in previous 
+	/* if no reiserfs_found or bad data found in that SB, what was checked in previous
 	 * clause */
 	if (no_reiserfs_found(fs)) {
 		int fd;
@@ -638,7 +638,7 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 
 		retval = 0;
 		if (magic_was_found) {
-			/* Super block was found. Try to open the journal on the base of its 
+			/* Super block was found. Try to open the journal on the base of its
 			 * journal parameters. */
 
 			retval = reiserfs_open_journal(fs, journal_dev_name,
@@ -654,8 +654,8 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 					   sizeof(struct journal_params));
 
 				if (retval) {
-					/* journal parameters from the SB and from the J_Header does not 
-					 * match. Close the jouranl, ask the user about correct journal 
+					/* journal parameters from the SB and from the J_Header does not
+					 * match. Close the jouranl, ask the user about correct journal
 					 * parameters. */
 					reiserfs_close_journal(fs);
 				}
@@ -713,7 +713,7 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 			}
 
 			/* default size if magic was not found is device size - journal_1st_block;
-			   default size if magic was found is found value + 1 block for journal 
+			   default size if magic was found is found value + 1 block for journal
 			   header */
 			if (magic_was_found == 0)
 				default_value =
@@ -772,7 +772,7 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 				exit(retval < 0 ? EXIT_OPER : EXIT_USER);
 			}
 
-			/* SB was found, but journal params were broken and have been recovered. 
+			/* SB was found, but journal params were broken and have been recovered.
 			 * Futher work goes as SB would not be found. */
 			magic_was_found = 0;
 		}
@@ -791,7 +791,7 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 	}
 
 	if (reiserfs_journal_opened(fs)) {
-		/* Journal was openned. Check/fix journal parameters and copy it the journal 
+		/* Journal was openned. Check/fix journal parameters and copy it the journal
 		 * header. */
 
 		if (get_jp_journal_max_trans_len(sb_jp(sb)) !=
@@ -922,7 +922,7 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 		}
 	}
 
-	/*  whether journal header contains params with the same dev, offset, size will be 
+	/*  whether journal header contains params with the same dev, offset, size will be
 	   checked in open_journal */
 
 	if (version == 1 || version == 3)

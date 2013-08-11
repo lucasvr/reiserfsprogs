@@ -1,6 +1,6 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
- * reiserfsprogs/README 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
+ * reiserfsprogs/README
  */
 
 #include "fsck.h"
@@ -780,7 +780,7 @@ static void after_pass_1(reiserfs_filsys_t *fs)
 	/* update fsck_state */
 
 	/* we  should not flush bitmaps on disk after pass1, because
-	   new_bitmap contains only those blocks which are good leaves or 
+	   new_bitmap contains only those blocks which are good leaves or
 	   just allocated internal blocks. */
 
 	set_sb_fs_state(fs->fs_ondisk_sb, PASS_1_DONE);

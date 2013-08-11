@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2004 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -66,7 +66,7 @@ static void unpack_type(struct packed_item *pi, struct item_head *ih)
 			       get_pi_type(pi), ih);
 }
 
-/* direntry item comes in the following format: 
+/* direntry item comes in the following format:
    for each entry
       mask - 8 bits
       entry length - 16 bits

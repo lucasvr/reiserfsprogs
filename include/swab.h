@@ -1,5 +1,5 @@
 /*
- *  Copyright 2002-2004 by Hans Reiser, licensing governed by 
+ *  Copyright 2002-2004 by Hans Reiser, licensing governed by
  *  reiserfsprogs/README
  */
 

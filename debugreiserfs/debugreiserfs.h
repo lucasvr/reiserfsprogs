@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2004 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 #define _GNU_SOURCE
@@ -50,10 +50,10 @@ extern reiserfs_filsys_t *fs;
 #define BE_VERBOSE 		0x200
 
 /* these moved to reiserfs_fs.h */
-//#define PRINT_TREE_DETAILS            
-//#define PRINT_DETAILS         
-//#define PRINT_ITEM_DETAILS            
-//#define PRINT_DIRECT_ITEMS            
+//#define PRINT_TREE_DETAILS
+//#define PRINT_DETAILS
+//#define PRINT_ITEM_DETAILS
+//#define PRINT_DIRECT_ITEMS
 
 // the leaf is stored in compact form:
 // start magic number

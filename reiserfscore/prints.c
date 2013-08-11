@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -811,7 +811,7 @@ void print_tb(int mode, int item_pos, int pos_in_item, struct tree_balance *tb,
 			tbSh = PATH_H_PBUFFER(tb->tb_path, h);
 			tbFh = PATH_H_PPARENT(tb->tb_path, h);
 		} else {
-			/*      printk ("print_tb: h=%d, PATH_H_PATH_OFFSET=%d, path_length=%d\n", 
+			/*      printk ("print_tb: h=%d, PATH_H_PATH_OFFSET=%d, path_length=%d\n",
 			   h, PATH_H_PATH_OFFSET (tb->tb_path, h), tb->tb_path->path_length); */
 			tbSh = 0;
 			tbFh = 0;

@@ -1,14 +1,14 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
-/* mkreiserfs is very simple. It skips first 64k of device, and then 
-   writes the super block, the needed amount of bitmap blocks (this 
-   amount is calculated based on file system size), and root block. 
-   Bitmap policy is primitive: it assumes, that device does not have 
-   unreadable blocks, and it occupies first blocks for super, bitmap 
-   and root blocks. bitmap blocks are interleaved across the disk, 
+/* mkreiserfs is very simple. It skips first 64k of device, and then
+   writes the super block, the needed amount of bitmap blocks (this
+   amount is calculated based on file system size), and root block.
+   Bitmap policy is primitive: it assumes, that device does not have
+   unreadable blocks, and it occupies first blocks for super, bitmap
+   and root blocks. bitmap blocks are interleaved across the disk,
    mainly to make resizing faster. */
 
 #define _GNU_SOURCE
@@ -477,7 +477,7 @@ static void set_journal_device_size(char *str)
 /*
     if (Journal_size < JOURNAL_MIN_SIZE)
 		die ("%s: wrong journal size specified: %lu. Should be at least %u",
-			 program_name, 
+			 program_name,
 			 Journal_size + 1, JOURNAL_MIN_SIZE + 1);
 */
 }
@@ -794,7 +794,7 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-/* 
+/*
  * Use BSD fomatting.
  * Local variables:
  * c-indentation-style: "bsd"

@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -25,14 +25,14 @@
    if lnum is larger than 0 we put items into the left node
    if rnum is larger than 0 we put items into the right node
    if snum1 is larger than 0 we put items into the new node s1
-   if snum2 is larger than 0 we put items into the new node s2 
+   if snum2 is larger than 0 we put items into the new node s2
 Note that all *num* count new items being created.
 
 It would be easier to read balance_leaf() if each of these summary
 lines was a separate procedure rather than being inlined.  I think
 that there are many passages here and in balance_leaf_when_delete() in
 which two calls to one procedure can replace two passages, and it
-might save cache space and improve software maintenance costs to do so.  
+might save cache space and improve software maintenance costs to do so.
 
 Vladimir made the perceptive comment that we should offload most of
 the decision making in this function into fix_nodes/check_balance, and
@@ -220,13 +220,13 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 	struct buffer_head *tbS0 = PATH_PLAST_BUFFER(tb->tb_path);
 /*  struct buffer_head * tbF0 = PATH_H_PPARENT (tb->tb_path, 0);
     int S0_b_item_order = PATH_H_B_ITEM_ORDER (tb->tb_path, 0);*/
-	int item_pos = PATH_LAST_POSITION(tb->tb_path);	/*  index into the array of item headers in S[0] 
+	int item_pos = PATH_LAST_POSITION(tb->tb_path);	/*  index into the array of item headers in S[0]
 							   of the affected item */
 	struct buffer_info bi;
 	struct buffer_head *S_new[2];	/* new nodes allocated to hold what could not fit into S */
 	int snum[2];		/* number of items that will be placed into S_new (includes partially shifted items) */
-	int sbytes[2];		/* if an item is partially shifted into S_new then 
-				   if it is a directory item 
+	int sbytes[2];		/* if an item is partially shifted into S_new then
+				   if it is a directory item
 				   it is the number of entries from the item that are shifted into S_new
 				   else
 				   it is the number of bytes from the item that are shifted into S_new
@@ -1281,7 +1281,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 								   n_rem);
 
 						//B_N_PKEY(S_new[i],0)->k_offset += n_rem;
-//                      
+//
 
 						tb->insert_size[0] = n_rem;
 						if (!n_rem)

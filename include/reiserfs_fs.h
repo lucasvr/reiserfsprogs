@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -718,7 +718,7 @@ extern_inline __u16 unmark_item_bad( struct item_head *ih )
 #define REISERFS_ROOT_OBJECTID 2
 #define REISERFS_ROOT_PARENT_OBJECTID 1
 
-/* 
+/*
  * Picture represents a leaf of internal tree
  *  ______________________________________________________
  * |      |  Array of     |                   |           |
@@ -837,7 +837,7 @@ struct stat_data {
 	union {
 		__u32 sd_rdev;
 		__u32 sd_generation;
-		//__u32 sd_first_direct_byte; 
+		//__u32 sd_first_direct_byte;
 		/* first byte of file which is stored in a direct item: except that if
 		   it equals 1 it is a symlink and if it equals ~(__u32)0 there is no
 		   direct item.  The existence of this field really grates on me. Let's
@@ -861,7 +861,7 @@ struct stat_data {
 /***************************************************************************/
 /*                      DIRECTORY STRUCTURE                                */
 /***************************************************************************/
-/* 
+/*
    Picture represents the structure of directory items
    ________________________________________________
    |  Array of     |   |     |        |       |   |
@@ -881,7 +881,7 @@ struct stat_data {
 /* Each directory entry has its header. This header has deh_dir_id and
    deh_objectid fields, those are key of object, entry points to */
 
-/* NOT IMPLEMENTED:   
+/* NOT IMPLEMENTED:
    Directory will someday contain stat data of object */
 struct reiserfs_de_head {
 	__u32 deh2_offset;	/* third component of the directory entry key */
@@ -1344,7 +1344,7 @@ struct buffer_info {
 +-------------------+------------+--------------+------------+
 |     stat data     |	0        |      0       |   no       |
 +-------------------+------------+--------------+------------+
-| 1st directory item| DOT_OFFSET |DIRENTRY_UNIQUENESS|   no       | 
+| 1st directory item| DOT_OFFSET |DIRENTRY_UNIQUENESS|   no       |
 | non 1st directory | hash value |              |   yes      |
 |     item          |            |              |            |
 +-------------------+------------+--------------+------------+
@@ -1402,7 +1402,7 @@ struct buffer_info {
 #define d32_put(p, i, v) put_unaligned(cpu_to_le32(v), (p) + (i))
 
 
-/* get the item header */ 
+/* get the item header */
 #define B_N_PITEM_HEAD(bh,item_num) ( (struct item_head * )((bh)->b_data + BLKH_SIZE) + (item_num) )
 
 /* get key */
@@ -1453,9 +1453,9 @@ int are_items_mergeable (struct item_head * left, struct item_head * right, int 
 
 
 /* fix_nodes.c */
-void * reiserfs_kmalloc (size_t size, int flags, reiserfs_filsys_t * s);
+void *reiserfs_kmalloc (size_t size, int flags, reiserfs_filsys_t * s);
 void reiserfs_kfree (/*const*/ void * vp, size_t size, reiserfs_filsys_t * s);
-int fix_nodes (/*struct reiserfs_transaction_handle *th,*/ int n_op_mode, struct tree_balance * p_s_tb, 
+int fix_nodes (/*struct reiserfs_transaction_handle *th,*/ int n_op_mode, struct tree_balance * p_s_tb,
                /*int n_pos_in_item,*/ struct item_head * p_s_ins_ih);
 void unfix_nodes (/*struct reiserfs_transaction_handle *th,*/ struct tree_balance *);
 void free_buffers_in_tb (struct tree_balance * p_s_tb);
@@ -1478,18 +1478,18 @@ void print_objectid_map (FILE * fp, reiserfs_filsys_t *fs);
 
 
 /* lbalance.c */
-int leaf_move_items (int shift_mode, struct tree_balance * tb, 
+int leaf_move_items (int shift_mode, struct tree_balance * tb,
                      int mov_num, int mov_bytes, struct buffer_head * Snew);
 int leaf_shift_left (struct tree_balance * tb, int shift_num, int shift_bytes);
 int leaf_shift_right (struct tree_balance * tb, int shift_num, int shift_bytes);
-void leaf_delete_items (reiserfs_filsys_t *, struct buffer_info * cur_bi, 
+void leaf_delete_items (reiserfs_filsys_t *, struct buffer_info * cur_bi,
                         int last_first, int first, int del_num, int del_bytes);
-void leaf_insert_into_buf (reiserfs_filsys_t *, struct buffer_info * bi, 
-			   int before, struct item_head * inserted_item_ih, const char * inserted_item_body, 
+void leaf_insert_into_buf (reiserfs_filsys_t *, struct buffer_info * bi,
+			   int before, struct item_head * inserted_item_ih, const char * inserted_item_body,
 			   int zeros_number);
-void leaf_paste_in_buffer (reiserfs_filsys_t *, struct buffer_info * bi, int pasted_item_num, 
+void leaf_paste_in_buffer (reiserfs_filsys_t *, struct buffer_info * bi, int pasted_item_num,
 			   int pos_in_item, int paste_size, const char * body, int zeros_number);
-void leaf_cut_from_buffer (reiserfs_filsys_t *, struct buffer_info * bi, int cut_item_num, 
+void leaf_cut_from_buffer (reiserfs_filsys_t *, struct buffer_info * bi, int cut_item_num,
                            int pos_in_item, int cut_size);
 void leaf_paste_entries (struct buffer_head * bh, int item_num, int before, int new_entry_count,
 			 struct reiserfs_de_head * new_dehs, const char * records,
@@ -1500,7 +1500,7 @@ void cut_entry (reiserfs_filsys_t *, struct buffer_head * bh,
 
 
 /* ibalance.c */
-int balance_internal (struct tree_balance * , int, int, struct item_head * , 
+int balance_internal (struct tree_balance * , int, int, struct item_head * ,
                       struct buffer_head **);
 
 /* do_balance.c */

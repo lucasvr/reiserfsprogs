@@ -135,7 +135,7 @@ static int check_check_regular_file(struct reiserfs_path *path, void *sd,
 
 /*	
     if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
-    	// check and set nlink first 
+    	// check and set nlink first
     	nlink ++;
     	set_sd_nlink (ih, sd, &nlink);
     	mark_buffer_dirty (bh);
@@ -429,8 +429,8 @@ static int check_semantic_pass(struct reiserfs_key *key,
 
 	get_sd_nlink(ih, sd, &nlink);
 
-	/* It seems quite difficult to relocate objects on fix-fixable - 
-	 * rewrite_file calls reiserfs_file_write which can convert tails 
+	/* It seems quite difficult to relocate objects on fix-fixable -
+	 * rewrite_file calls reiserfs_file_write which can convert tails
 	 * to unfm, plus unreachable, was_tail flags, etc. */
 #if 0
 	if (( /* relocate = */ should_be_relocated(&ih->ih_key))) {
@@ -483,17 +483,17 @@ static int check_semantic_pass(struct reiserfs_key *key,
     }
 */
 
-/* 
+/*
     if (fsck_mode (fs) == FSCK_FIX_FIXABLE) {
-    	// it looks like stat data of a directory found 
+    	// it looks like stat data of a directory found
     	if (nlink) {
-	    // we saw this directory already 
+	    // we saw this directory already
 	    if (!dot_dot) {
-	    	// this name is not ".."  - and hard links are not allowed on directories 
+	    	// this name is not ".."  - and hard links are not allowed on directories
 	    	pathrelse (&path);
 	    	return STAT_DATA_NOT_FOUND;
 	    } else {
-	    	// ".." found 
+	    	// ".." found
 	    	nlink ++;
 	    	set_sd_nlink (ih, sd, &nlink);
 	    	mark_buffer_dirty (get_bh (&path));
@@ -506,7 +506,7 @@ static int check_semantic_pass(struct reiserfs_key *key,
     	if (get_key_objectid (key) == REISERFS_ROOT_OBJECTID)
 	    nlink ++;
     	set_sd_nlink (ih, sd, &nlink);
-    	mark_buffer_dirty (get_bh (&path));    
+    	mark_buffer_dirty (get_bh (&path));
     }
 */
 

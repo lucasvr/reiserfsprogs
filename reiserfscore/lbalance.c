@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -125,8 +125,8 @@ static void leaf_copy_dir_entries(reiserfs_filsys_t *fs,
 			   DEH_SIZE * copy_count + copy_records_len);
 }
 
-/* Copy the first (if last_first == FIRST_TO_LAST) or last (last_first == LAST_TO_FIRST) item or 
-   part of it or nothing (see the return 0 below) from SOURCE to the end 
+/* Copy the first (if last_first == FIRST_TO_LAST) or last (last_first == LAST_TO_FIRST) item or
+   part of it or nothing (see the return 0 below) from SOURCE to the end
    (if last_first) or beginning (!last_first) of the DEST */
 /* returns 1 if anything was copied, else 0 */
 static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
@@ -345,7 +345,7 @@ static void leaf_item_bottle(reiserfs_filsys_t *fs,
 		else {
 			struct item_head n_ih;
 
-			/* copy part of the body of the item number 'item_num' of SOURCE to the end of the DEST 
+			/* copy part of the body of the item number 'item_num' of SOURCE to the end of the DEST
 			   part defined by 'cpy_bytes'; create new item header; change old item_header (????);
 			   n_ih = new item_header;
 			 */
@@ -372,7 +372,7 @@ static void leaf_item_bottle(reiserfs_filsys_t *fs,
 		else {
 			struct item_head n_ih;
 
-			/* copy part of the body of the item number 'item_num' of SOURCE to the begin of the DEST 
+			/* copy part of the body of the item number 'item_num' of SOURCE to the begin of the DEST
 			   part defined by 'cpy_bytes'; create new item header;
 			   n_ih = new item_header;
 			 */
@@ -638,7 +638,7 @@ static void leaf_delete_items_entirely(reiserfs_filsys_t *sb,
 				       struct buffer_info *bi,
 				       int first, int del_num);
 /*  If del_bytes == -1, starting from position 'first' delete del_num items in whole in buffer CUR.
-    If not. 
+    If not.
     If last_first == 0. Starting from position 'first' delete del_num-1 items in whole. Delete part of body of
     the first item. Part defined by del_bytes. Don't delete first item header
     If last_first == 1. Starting from position 'first+1' delete del_num-1 items in whole. Delete part of body of
@@ -689,7 +689,7 @@ void leaf_delete_items(reiserfs_filsys_t *fs,
 				/* len = body len of item */
 				len = get_ih_item_len(ih);
 
-			/* delete the part of the last item of the bh 
+			/* delete the part of the last item of the bh
 			   do not delete item header
 			 */
 			leaf_cut_from_buffer(fs, cur_bi, B_NR_ITEMS(bh) - 1,
@@ -774,7 +774,7 @@ void leaf_insert_into_buf(reiserfs_filsys_t *s,
 			       bh->b_blocknr, bh);
 }
 
-/* paste paste_size bytes to affected_item_num-th item. 
+/* paste paste_size bytes to affected_item_num-th item.
    When item is a directory, this only prepare space for new entries */
 void leaf_paste_in_buffer(reiserfs_filsys_t *fs,
 			  struct buffer_info *bi,
@@ -813,7 +813,7 @@ void leaf_paste_in_buffer(reiserfs_filsys_t *fs,
 			//if (mem_mode == REISERFS_USER_MEM) {
 			//memset (bh->b_data + unmoved_loc - paste_size, 0, zeros_number);
 			//copy_from_user (bh->b_data + unmoved_loc - paste_size + zeros_number, body, paste_size - zeros_number);
-			//} else 
+			//} else
 			{
 				if (!pos_in_item) {
 					/* shift data to right */
@@ -939,7 +939,7 @@ static int leaf_cut_entries(struct buffer_head *bh,
 /*  when cut item is part of regular file
         pos_in_item - first byte that must be cut
         cut_size - number of bytes to be cut beginning from pos_in_item
- 
+
    when cut item is part of directory
         pos_in_item - number of first deleted entry
         cut_size - count of deleted entries

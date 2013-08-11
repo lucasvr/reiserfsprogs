@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -293,7 +293,7 @@ void fetch_objectid_map (struct id_map * map, reiserfs_filsys_t *fs)
 
     if (map->m_page_count != 1)
 	die ("fetch_objectid_map: can not fetch long map");
-    
+
     make_id_space(map, 0);
     memcpy (map->m_begin, sb_objectid_map, get_sb_oid_cursize (fs->fs_ondisk_sb) * sizeof (__u32));
     map->m_used_slot_count = get_sb_oid_cursize (fs->fs_ondisk_sb);
@@ -337,7 +337,7 @@ struct id_map * reiserfs_objectid_map_load (FILE * fp)
 	return 0;
     }
 	
-    // read bit size of objectid map 
+    // read bit size of objectid map
     fread (&v, 4, 1, fp);
 
     id_map = init_id_map (MAP_NOT_PACKED);

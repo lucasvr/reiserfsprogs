@@ -1,15 +1,15 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
 #include "fsck.h"
 
-/* 
- * Pass0 scans the used part of the partition. It creates two maps which will 
- * be used on the pass 1. These are a map of nodes looking like leaves and 
- * a map of "bad" unformatted nodes. After pass 0 we can detect unformatted 
- * node pointers pointing to leaves. 
+/*
+ * Pass0 scans the used part of the partition. It creates two maps which will
+ * be used on the pass 1. These are a map of nodes looking like leaves and
+ * a map of "bad" unformatted nodes. After pass 0 we can detect unformatted
+ * node pointers pointing to leaves.
  */
 
 /* leaves */
@@ -323,7 +323,7 @@ static int verify_directory_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 /*
 	    if (not_of_one_file (&(deh[i].deh2_dir_id), &(ih->ih_key))) {
 		fsck_log ("verify_direntry: block %lu, item %H has entry \".\" "
-			  "pointing to (%K) instead of (%K)\n", 
+			  "pointing to (%K) instead of (%K)\n",
 			  bh->b_blocknr, ih,
 			  &(deh[i].deh2_dir_id), &(ih->ih_key));
 		set_deh_dirid (deh + i, get_key_dirid (&ih->ih_key));
@@ -588,7 +588,7 @@ static int verify_directory_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 
 static __inline__ int does_it_fit_into_dev(__u64 offset, __u64 fs_size)
 {
-/* 
+/*
    Count of unformatted pointers - offset / blocksize
    Count of blocks to store them - UNFM_P_SIZE * offset / blocksize / MAX_ITEM_LEN
    Size to store it              - blocksize * UNFM_P_SIZE * offset / blocksize / MAX_ITEM_LEN
@@ -745,7 +745,7 @@ start_again:
 			      bh->b_blocknr, i, ih);
 		    return;
 		}
-		// delete last item 
+		// delete last item
                 fsck_log ("block %lu: item %d: (%H) id equals 0\n",
 			      bh->b_blocknr, i, ih);
 		delete_item (fs, bh, i - 1);
@@ -1161,7 +1161,7 @@ start_again:
 			}
 		}
 
-		/* this recovers corruptions like the below: 
+		/* this recovers corruptions like the below:
 		   1774 1732 0 0
 		   116262638 1732 1 3
 		   1774 1736 0 0 */

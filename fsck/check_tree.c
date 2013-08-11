@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1999-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -99,7 +99,7 @@ void clear_relocated_list()
 //      not data blocks (journal area, super block, bitmaps)
 // 4. bad formatted node found
 // 5. delimiting keys are incorrect
-//      
+//
 
 /* mark every block we see in the tree in control bitmap, so, when to make
    sure, that no blocks are pointed to from more than one place we use
@@ -143,7 +143,7 @@ static void init_control_bitmap(reiserfs_filsys_t *fs)
 	if (!control_bitmap)
 		die("init_control_bitmap: Failed to allocate a control bitmap.");
 
-	/*printf ("Initially number of zeros in control bitmap %d\n", 
+	/*printf ("Initially number of zeros in control bitmap %d\n",
 	   reiserfs_bitmap_zeros (control_bitmap)); */
 
 	/* skipped and super block */
@@ -214,7 +214,7 @@ static void handle_bitmaps(reiserfs_filsys_t *fs)
 	if (get_sb_free_blocks(fs->fs_ondisk_sb) !=
 	    reiserfs_bitmap_zeros(control_bitmap)) {
 /*	fsck_log ("vpf-10630: The count of free blocks in the on-disk bitmap "
-		  "(%lu) mismatches with the correct one (%lu).\n",  
+		  "(%lu) mismatches with the correct one (%lu).\n",
 		  get_sb_free_blocks (fs->fs_ondisk_sb),
 		  reiserfs_bitmap_zeros (control_bitmap));
 */
@@ -230,11 +230,11 @@ static void handle_bitmaps(reiserfs_filsys_t *fs)
 			    ("vpf-10630: The on-disk and the correct bitmaps differs. "
 			     "Will be fixed later.\n");
 //            fsck_progress ("Trying to fix bitmap ..\n");
-			/* mark blocks as used in source bitmap if they are used in 
+			/* mark blocks as used in source bitmap if they are used in
 			   control bitmap */
 			reiserfs_bitmap_disjunction(source_bitmap,
 						    control_bitmap);
-			/* change used blocks count accordinly source bitmap, copy bitmap 
+			/* change used blocks count accordinly source bitmap, copy bitmap
 			   changes to on_disk bitmap */
 			set_sb_free_blocks(fs->fs_ondisk_sb,
 					   reiserfs_bitmap_zeros
@@ -242,13 +242,13 @@ static void handle_bitmaps(reiserfs_filsys_t *fs)
 			reiserfs_bitmap_copy(fs->fs_bitmap2, source_bitmap);
 			mark_buffer_dirty(fs->fs_super_bh);
 /*
-            // check again 
-            if ((diff = reiserfs_bitmap_compare(source_bitmap, 
-						control_bitmap)) != 0)  
+            // check again
+            if ((diff = reiserfs_bitmap_compare(source_bitmap,
+						control_bitmap)) != 0)
 	    {
-                // do not mark them as fatal or fixable because one can live 
-		// with leaked space. So this is not a fatal corruption, and 
-		// fix-fixable cannot fix it 
+                // do not mark them as fatal or fixable because one can live
+		// with leaked space. So this is not a fatal corruption, and
+		// fix-fixable cannot fix it
                 fsck_progress (" bitmaps were not recovered.\n\tYou can either "
 		"run rebuild-tree or live with %d leaked blocks\n", diff);
             } else {
@@ -259,7 +259,7 @@ static void handle_bitmaps(reiserfs_filsys_t *fs)
 			fsck_log
 			    ("vpf-10640: The on-disk and the correct bitmaps differs.\n");
 			while (problem) {
-				/* fixable corruptions because we can try to recover them 
+				/* fixable corruptions because we can try to recover them
 				   without rebuilding the tree */
 				one_more_corruption(fs, FIXABLE);
 				problem--;
@@ -355,12 +355,12 @@ static int bad_stat_data(reiserfs_filsys_t *fs,
 		     objectid);
 #if 0
 		to_be_relocated(&ih->ih_key);
-//      one_more_corruption (fs, FIXABLE);      
+//      one_more_corruption (fs, FIXABLE);
 #endif
 	}
 
 	return 0;
-/* Check this on semantic_check pass.    
+/* Check this on semantic_check pass.
 
     sd = (struct stat_data *)B_I_PITEM(bh,ih);
     get_sd_nlink (ih, sd, &links);
@@ -420,7 +420,7 @@ static int bad_badblocks_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 		if (!d32_get(ind, i)) {
 /*	    fsck_log ("%s: block %lu: badblocks item (%H) has zero pointer.",
 		      __FUNCTION__, bh->b_blocknr, ih);
-	    
+	
 	    if (fsck_mode(fs) != FSCK_FIX_FIXABLE) {
 		    fsck_log("Not an error, but could be deleted with --fix-fixable\n");
 	    } else {

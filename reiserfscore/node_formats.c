@@ -1,5 +1,5 @@
 /*
- *  Copyright 2000-2004 by Hans Reiser, licensing governed by 
+ *  Copyright 2000-2004 by Hans Reiser, licensing governed by
  *  reiserfsprogs/README
  */
 
@@ -248,9 +248,9 @@ int is_any_reiserfs_magic_string(struct reiserfs_super_block *rs)
 
 int get_reiserfs_format(struct reiserfs_super_block *sb)
 {
-	/* after conversion to 3.6 format we change magic correctly, 
-	   but do not change sb_format. When we create non-standard journal 
-	   field format in sb get adjusted correctly. Thereby, for standard 
+	/* after conversion to 3.6 format we change magic correctly,
+	   but do not change sb_format. When we create non-standard journal
+	   field format in sb get adjusted correctly. Thereby, for standard
 	   journal we should rely on magic and for non-standard - on format */
 	if (is_reiserfs_3_5_magic_string(sb) ||
 	    (is_reiserfs_jr_magic_string(sb) &&
@@ -1015,7 +1015,7 @@ void set_type(int format, struct reiserfs_key *key, int type)
 		set_key_type_v2(key, type);
 }
 
-// 
+//
 void set_offset(int format, struct reiserfs_key *key, loff_t offset)
 {
 	if (format == KEY_FORMAT_1)

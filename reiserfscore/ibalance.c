@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -126,7 +126,7 @@ static void internal_insert_childs(reiserfs_filsys_t *fs,
 		       bh[i]->b_blocknr);
 		/*
 		   set_dc_child_size (new_dc + i,
-		   MAX_CHILD_SIZE(bh[i]->b_size) - 
+		   MAX_CHILD_SIZE(bh[i]->b_size) -
 		   get_blkh_free_space (B_BLK_HEAD (bh[i])));
 		   set_dc_child_blocknr (new_dc + i, bh[i]->b_blocknr); */
 	}
@@ -227,7 +227,7 @@ static void internal_delete_childs(reiserfs_filsys_t *fs,
 
 /* copy cpy_num node pointers and cpy_num - 1 items from buffer src to buffer dest
 * last_first == FIRST_TO_LAST means, that we copy first items from src to tail of dest
- * last_first == LAST_TO_FIRST means, that we copy last items from src to head of dest 
+ * last_first == LAST_TO_FIRST means, that we copy last items from src to head of dest
  */
 static void internal_copy_pointers_items(reiserfs_filsys_t *fs,
 					 struct buffer_info *dest_bi,
@@ -314,7 +314,7 @@ static void internal_move_pointers_items(reiserfs_filsys_t *fs,
 	if (last_first == FIRST_TO_LAST) {	/* shift_left occurs */
 		first_pointer = 0;
 		first_item = 0;
-		/* delete cpy_num - del_par pointers and keys starting for pointers with first_pointer, 
+		/* delete cpy_num - del_par pointers and keys starting for pointers with first_pointer,
 		   for key - with first_item */
 		internal_delete_pointers_items(fs, src_bi, first_pointer,
 					       first_item, cpy_num - del_par);
@@ -367,7 +367,7 @@ static void internal_insert_key(reiserfs_filsys_t *fs, struct buffer_info *dest_
 	}
 }
 
-/* Insert d_key'th (delimiting) key from buffer cfl to tail of dest. 
+/* Insert d_key'th (delimiting) key from buffer cfl to tail of dest.
  * Copy pointer_amount node pointers and pointer_amount - 1 items from buffer src to buffer dest.
  * Replace  d_key'th key in buffer cfl.
  * Delete pointer_amount items and node pointers from buffer src.
@@ -432,7 +432,7 @@ static void internal_shift1_left(struct tree_balance *tb,
 				     FIRST_TO_LAST, pointer_amount, 1);
 }
 
-/* Insert d_key'th (delimiting) key from buffer cfr to head of dest. 
+/* Insert d_key'th (delimiting) key from buffer cfr to head of dest.
  * Copy n node pointers and n - 1 items from buffer src to buffer dest.
  * Replace  d_key'th key in buffer cfr.
  * Delete n items and node pointers from buffer src.
@@ -610,7 +610,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 	   this means that new pointers and items must be inserted AFTER *
 	   child_pos
 	   }
-	   else 
+	   else
 	   {
 	   it is the position of the leftmost pointer that must be deleted (together with
 	   its corresponding key to the left of the pointer)
@@ -691,7 +691,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			set_dc(dc, MAX_CHILD_SIZE(insert_ptr[k]->b_size) -
 			       get_blkh_free_space(B_BLK_HEAD(insert_ptr[k])),
 			       insert_ptr[k]->b_blocknr);
-			/*             
+			/*
 			   set_dc_child_size (dc, MAX_CHILD_SIZE(insert_ptr[k]->b_size) -
 			   get_blkh_free_space (B_BLK_HEAD(insert_ptr[k])));
 			   set_dc_child_blocknr (dc, insert_ptr[k]->b_blocknr);

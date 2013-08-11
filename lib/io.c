@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -653,9 +653,9 @@ void close_rollback_file()
 
 //    fprintf (stdout, "rollback: (%u) blocks saved, \n", rollback_blocks_number);
 
-/*    for (i = 0; i < rollback_blocks_number; i++) 
-        fprintf(stdout, "device (%Lu), block number (%u)\n", 
-                rollback_blocks_array [i].device, 
+/*    for (i = 0; i < rollback_blocks_number; i++)
+        fprintf(stdout, "device (%Lu), block number (%u)\n",
+                rollback_blocks_array [i].device,
                 rollback_blocks_array [i].blocknr);
     fprintf(stdout, "\n");
     */
@@ -765,8 +765,8 @@ void do_fsck_rollback(int fd_device, int fd_journal_device, FILE * progress)
 		} else {
 			count_rollbacked++;
 			/*if you want to know what gets rollbacked, uncomment it */
-/*            if (log_file != 0 && log_file != stdout) 
-                fprintf (log_file, "rollback: block %Lu of device %Lu was restored\n", 
+/*            if (log_file != 0 && log_file != stdout)
+                fprintf (log_file, "rollback: block %Lu of device %Lu was restored\n",
                         (loff_t)offset/rollback_blocksize, b_dev);
 */
 //            fprintf (stdout, "rollback: block (%Ld) written\n", (loff_t)offset/rollback_blocksize);
@@ -783,9 +783,9 @@ void do_fsck_rollback(int fd_device, int fd_journal_device, FILE * progress)
 static void rollback__mark_block_saved (struct block_handler * rb_e) {
     if (rollback_blocks_array == NULL)
         rollback_blocks_array = getmem (ROLLBACK__INCREASE_BLOCK_NUMBER * sizeof (*rb_e));
-    
+
     if (rollback_blocks_number == get_mem_size ((void *)rollback_blocks_array) / sizeof (*rb_e))
-        rollback_blocks_array = expandmem (rollback_blocks_array, get_mem_size((void *)rollback_blocks_array), 
+        rollback_blocks_array = expandmem (rollback_blocks_array, get_mem_size((void *)rollback_blocks_array),
                         ROLLBACK__INCREASE_BLOCK_NUMBER * sizeof (*rb_e));
 
 //    checkmem ((char *)rollback_blocks_array, get_mem_size((char *)rollback_blocks_array));
@@ -793,7 +793,7 @@ static void rollback__mark_block_saved (struct block_handler * rb_e) {
     rollback_blocks_array[rollback_blocks_number] = *rb_e;
     rollback_blocks_number ++;
     qsort (rollback_blocks_array, rollback_blocks_number, sizeof (*rb_e), rollback_compare);
-    
+
 //    printf("\ncheckmem3");
 //    fflush (stdout);
 //   checkmem ((char *)rollback_blocks_array, get_mem_size((char *)rollback_blocks_array));
@@ -955,7 +955,7 @@ static void check_and_free_buffer_mem(void)
 	int count = 0;
 	struct buffer_head *next;
 
-//    printf("check and free buffer mem, hits %d misses %d reads %d writes %d\n", 
+//    printf("check and free buffer mem, hits %d misses %d reads %d writes %d\n",
 //          buffer_hits, buffer_misses, buffer_reads, buffer_writes) ;
 	/*sync_buffers (0, 0); */
 

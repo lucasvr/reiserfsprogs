@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -51,7 +51,7 @@ struct buffer_head {
 #define clear_buffer_do_not_flush(bh) misc_clear_bit(BH_Do_not_flush, &(bh)->b_state)
 
 /*
-printf ("%s:%s:%u %p %p %p\n", 
+printf ("%s:%s:%u %p %p %p\n",
 __FILE__, __FUNCTION__, __LINE__,
 	__builtin_return_address (0),
 	__builtin_return_address (1),

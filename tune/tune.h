@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2004 by Hans Reiser, licensing governed by 
+ * Copyright 2002-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -17,7 +17,7 @@
 #  include <uuid/uuid.h>
 #endif
 
-/* 
+/*
  * options
  */
 #define OPT_SUPER_FORCE  0x0010

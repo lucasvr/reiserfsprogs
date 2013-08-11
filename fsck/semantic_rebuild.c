@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -868,7 +868,7 @@ start_again:			/* when directory was relocated */
 
 	    nlink = 0;
 	    set_sd_nlink (ih, sd, &nlink);
-	    
+	
 	    retval = rebuild_check_regular_file (&path, sd, 0); //no relocate
 	    pathrelse (&path);
 	    return retval;
@@ -1224,7 +1224,7 @@ static void make_sure_lost_found_exists(reiserfs_filsys_t *fs)
 	return;
 }
 
-/* Result of the rebuild pass will be saved in the state file which is needed to start 
+/* Result of the rebuild pass will be saved in the state file which is needed to start
  * fsck again from the next pass. */
 static void save_rebuild_semantic_result(reiserfs_filsys_t *fs)
 {
@@ -1266,7 +1266,7 @@ void load_semantic_result(FILE * file, reiserfs_filsys_t *fs)
 
 	/* we need objectid map on semantic pass to be able to relocate files */
 	proper_id_map(fs) = id_map_init();
-	/* Not implemented yet.    
+	/* Not implemented yet.
 	   fetch_objectid_map (proper_id_map (fs), fs);
 	   semantic_id_map (fs) = reiserfs_objectid_map_load (file);
 	 */

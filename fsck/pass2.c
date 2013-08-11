@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -78,7 +78,7 @@ static __u64 link_one(struct relocated *file)
 	set_key_dirid(&obj_key, file->old_dir_id);
 	set_key_objectid(&obj_key, file->new_objectid);
 
-	/* 0 for fsck_need does not mean too much - it would make effect if there 
+	/* 0 for fsck_need does not mean too much - it would make effect if there
 	 * were no this directory yet. But /lost_found is there already */
 	len = reiserfs_add_entry(fs, &lost_found_dir_key, name,
 				 name_length(name, lost_found_dir_format),
@@ -477,7 +477,7 @@ void load_pass_2_result(reiserfs_filsys_t *fs)
 	/* we need objectid map on semantic pass to be able to relocate files */
 	proper_id_map(fs) = id_map_init();
 	/* Not implemented yet.
-	   fetch_objectid_map (proper_id_map (fs), fs);    
+	   fetch_objectid_map (proper_id_map (fs), fs);
 	 */
 }
 
@@ -556,17 +556,17 @@ static void after_pass_2(reiserfs_filsys_t *fs)
 {
 	time_t t;
 
-	/* we can now flush new_bitmap on disk as tree is built and 
-	   contains all data, which were found on dik at start in 
+	/* we can now flush new_bitmap on disk as tree is built and
+	   contains all data, which were found on dik at start in
 	   used bitmaps */
 	reiserfs_bitmap_copy(fs->fs_bitmap2, fsck_new_bitmap(fs));
 
-	/* we should copy new_bitmap to allocable bitmap, becuase evth what is used 
+	/* we should copy new_bitmap to allocable bitmap, becuase evth what is used
 	   for now (marked as used in new_bitmap) should not be allocablel;
 	   and what is not in tree for now should be allocable.
-	   these bitmaps differ because on pass2 we skip those blocks, whose SD's 
-	   are not in the tree, and therefore indirect items of such bad leaves points 
-	   to not used and not allocable blocks.       
+	   these bitmaps differ because on pass2 we skip those blocks, whose SD's
+	   are not in the tree, and therefore indirect items of such bad leaves points
+	   to not used and not allocable blocks.
 	 */
 
 	/* DEBUG only */

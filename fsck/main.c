@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -56,7 +56,7 @@ fsck_progress ("Usage: %s [mode] [options] "					\
 	badblocks, adds badblocks to badblock list in fs.
     and with --rebuild
         builds the tree without pointers to badblocks (internal,
-	indirect), adds badblocks to badblock list in fs.  
+	indirect), adds badblocks to badblock list in fs.
 */
 
 /*
@@ -273,7 +273,7 @@ static char *parse_options(struct fsck_data *data, int argc, char *argv[])
 
 /*
     if (data->options & OPT_ADJUST_FILE_SIZE) {
-        if ((mode != FSCK_REBUILD) && (mode != FSCK_FIX_FIXABLE)) 
+        if ((mode != FSCK_REBUILD) && (mode != FSCK_FIX_FIXABLE))
             print_usage_and_exit();
     }
 */
@@ -637,7 +637,7 @@ static int where_to_start_from(reiserfs_filsys_t *fs)
 	if (last_run_state == 0 || !fsck_run_one_step(fs))
 		/**/ return START_FROM_THE_BEGINNING;
 
-	/* We are able to perform the next step only if there is a file with the previous 
+	/* We are able to perform the next step only if there is a file with the previous
 	 * step results. */
 	fp = open_file(state_dump_file(fs), "r");
 	if (fp == 0) {
@@ -747,7 +747,7 @@ static void mark_filesystem_consistent(reiserfs_filsys_t *fs)
 		    ("WARNING: You must use reiserfstune to specify a new "
 		     "journal before mounting it.\n");
 
-		/* mark filesystem such that it is not mountable until 
+		/* mark filesystem such that it is not mountable until
 		 * new journaldevice is defined */
 		set_jp_journal_magic(sb_jp(fs->fs_ondisk_sb), NEED_TUNE);
 	}
@@ -764,7 +764,7 @@ static void reiserfsck_replay_journal(reiserfs_filsys_t *fs)
 	struct reiserfs_super_block *on_place_sb;
 	int sb_size = reiserfs_super_block_size(fs->fs_ondisk_sb);
 
-	/* keep the super_block in the separate memory to avoid problems with replaying 
+	/* keep the super_block in the separate memory to avoid problems with replaying
 	 * broken parameters. */
 	on_place_sb = (struct reiserfs_super_block *)fs->fs_super_bh->b_data;
 	fs->fs_ondisk_sb = getmem(sb_size);
@@ -1197,7 +1197,7 @@ static void check_fs(reiserfs_filsys_t *fs)
 	} else if (fsck_data(fs)->check.fixable_corruptions) {
 		/* fixable corruptions found */
 		if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
-			/* fixable corruptions found and fix-fixable has not fixed them, 
+			/* fixable corruptions found and fix-fixable has not fixed them,
 			 * do rebuild-tree */
 
 			fsck_progress
@@ -1240,7 +1240,7 @@ static void check_fs(reiserfs_filsys_t *fs)
 	id_map_free(proper_id_map(fs));
 	clean_after_dma_check(fs->fs_dev, &dma_info);
 
-	//clear_relocated_list();    
+	//clear_relocated_list();
 
 	time(&t);
 	fsck_progress("###########\n"

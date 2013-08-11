@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -11,7 +11,7 @@
    g_new_bitmap initially has marked only super block, bitmap blocks
    and bits after the end of bitmap
 
-   in pass 1 we go through g_disk_bitmap. 
+   in pass 1 we go through g_disk_bitmap.
 
    If block does not look like formatted node, we skip it.
 
@@ -37,7 +37,7 @@
    Allocating of new blocks: look for 0 bit in g_disk_bitmap
    (find_zero_bit_in_bitmap), make sure, that g_new_bitmap contains 0
    at the corresponding bit (is_block_used).
-      
+
  */
 
 /* is blocks used (marked by 1 in new bitmap) in the tree which is being built

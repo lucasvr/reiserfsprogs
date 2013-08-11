@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2004 by Hans Reiser, licensing governed by 
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -166,7 +166,7 @@ static void read_map (FILE * fp)
 	if (v32 != MAP_MAGIC)
 	    reiserfs_panic ("read_map: no magic found");
 
-	// device name length and name itself 
+	// device name length and name itself
 	fread (&v32, sizeof (v32), 1, fp);
 	buf = realloc (buf, v32);
 	if (!buf)
@@ -181,7 +181,7 @@ static void read_map (FILE * fp)
 	    reiserfs_panic ("realloc failed");
 	fread (buf, v32, 1, fp);
 
-	// read directory key and poined object key 
+	// read directory key and poined object key
 	fread (ids, sizeof (ids), 1, fp);
 	reiserfs_warning (stdout, "[%K]:\"%s\"-->[%K]\n",
 			  &ids[0], buf, &ids[2]);
@@ -192,16 +192,16 @@ static void read_map (FILE * fp)
 	//    reiserfs_warning (stderr, "recovering not ready\n");
 	
 
-	// how many data blocks are there 
+	// how many data blocks are there
 	fread (&v32, sizeof (v32), 1, fp);
 	if (v32) {
 	    buf = realloc (buf, v32 * 4);
 	    if (!buf)
 		reiserfs_panic ("realloc failed (%u)", v32);
-	    
-	    // read list of data block numbers 
+	
+	    // read list of data block numbers
 	    fread (buf, 4, v32, fp);
-	    
+	
 	    if (!do_recover) {
 		for (i = 0; i < v32; i ++)
 		    reiserfs_warning (stdout, "%d ", ((__u32 *)buf)[i]);
@@ -209,10 +209,10 @@ static void read_map (FILE * fp)
 	    }
 	}
 	
-	// main tail length 
+	// main tail length
 	fread (&v32, sizeof (v32), 1, fp);
 	if (v32) {
-	    // there is tail 
+	    // there is tail
 	    buf = realloc (buf, v32);
 	    if (!buf)
 		reiserfs_panic ("realloc failed");
@@ -253,7 +253,7 @@ void do_recover (reiserfs_filsys_t *fs)
 
     if (fp != stdin)
 	fclose (fp);
-    
+
 }
 */
 

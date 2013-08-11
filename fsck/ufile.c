@@ -1,5 +1,5 @@
 /*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by 
+ * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -77,7 +77,7 @@ static unsigned long indirect_to_direct(struct reiserfs_path *path, __u64 len,
 	    "Cutting it down to %d byte\n", len,  &ih->ih_key, MAX_DIRECT_ITEM_LEN (fs->fs_blocksize) - 8);
 	len = MAX_DIRECT_ITEM_LEN (fs->fs_blocksize) - 8;
     }
-    
+
     if (!len) {
 	buf = bad_link;
 	len = strlen (bad_link);
@@ -464,7 +464,7 @@ int are_file_items_correct(struct item_head *sd_ih, void *sd, __u64 * size,
 /*
 	    if (get_offset (&ih->ih_key) + get_bytes_number (ih, fs->fs_blocksize) != get_offset (next_key))
             {
-		// indirect item free space is not set properly 
+		// indirect item free space is not set properly
 		if (!is_indirect_ih (ih) ) //|| get_ih_free_space(ih) == 0)
 		    fsck_log ("are_file_items_correct: "
 			      "item must be indirect and must have invalid free space (%H)", ih);
@@ -1299,7 +1299,7 @@ check_again:
 			relocated = 1;
 
 			/* object has been relocated but we should not mark it as used in semantic map,
-			   as it does not exist at pass2 and we do not get here for relocation as 
+			   as it does not exist at pass2 and we do not get here for relocation as
 			   was_in_tree == 1 */
 
 			goto check_again;

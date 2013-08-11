@@ -1,12 +1,12 @@
-/* 
- * Copyright 2000-2004 by Hans Reiser, licensing governed by 
+/*
+ * Copyright 2000-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
-/*  
+/*
  * Written by Alexander Zarochentcev.
- * 
- * FS resize utility 
+ *
+ * FS resize utility
  *
  */
 
@@ -38,7 +38,7 @@ static long long int calc_new_fs_size(unsigned long count,
 	rel = bytes_str[0] == '+' || bytes_str[0] == '-';
 	bytes = strtoll(bytes_str, &bytes_str, 10);
 
-	/* Some error occured while convertion or the specified 
+	/* Some error occured while convertion or the specified
 	   string is not valid. */
 	if (bytes == LONG_LONG_MIN || bytes == LONG_LONG_MAX ||
 	    (bytes_str != end && bytes_str != end + 1))
@@ -129,7 +129,7 @@ static int expand_fs(reiserfs_filsys_t *fs, long long int block_count_new)
 	 ** haven't actually added any bitmap blocks, the bitmap won't be dirtied.
 	 **
 	 ** In memory, reiserfsprogs puts zeros for the bits past the end of
-	 ** the old filesystem.  But, on disk that bitmap is full of ones.  
+	 ** the old filesystem.  But, on disk that bitmap is full of ones.
 	 ** we explicitly dirty the bitmap here to make sure the zeros get written
 	 ** to disk
 	 */
@@ -287,7 +287,7 @@ int main(int argc, char *argv[])
 
 	sb = fs->fs_ondisk_sb;
 
-	/* If size change was specified by user, calculate it, 
+	/* If size change was specified by user, calculate it,
 	   otherwise take the whole device. */
 	block_count_new = bytes_count_str ?
 	    calc_new_fs_size(get_sb_block_count(sb),
