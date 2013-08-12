@@ -24,63 +24,41 @@ static void internal_define_dest_src_infos(int shift_mode,
 	/* define dest, src, dest parent, dest position */
 	switch (shift_mode) {
 	case INTERNAL_SHIFT_FROM_S_TO_L:	/* used in internal_shift_left */
-		src_bi->bi_bh = PATH_H_PBUFFER(tb->tb_path, h);
-		src_bi->bi_parent = PATH_H_PPARENT(tb->tb_path, h);
-		src_bi->bi_position = PATH_H_POSITION(tb->tb_path, h + 1);
-		dest_bi->bi_bh = tb->L[h];
-		dest_bi->bi_parent = tb->FL[h];
-		dest_bi->bi_position = get_left_neighbor_position(tb, h);
+		buffer_info_init_tbSh(tb, src_bi, h);
+		buffer_info_init_left(tb, dest_bi, h);
 		*d_key = tb->lkey[h];
 		*cf = tb->CFL[h];
 		break;
 	case INTERNAL_SHIFT_FROM_L_TO_S:
-		src_bi->bi_bh = tb->L[h];
-		src_bi->bi_parent = tb->FL[h];
-		src_bi->bi_position = get_left_neighbor_position(tb, h);
-		dest_bi->bi_bh = PATH_H_PBUFFER(tb->tb_path, h);
-		dest_bi->bi_parent = PATH_H_PPARENT(tb->tb_path, h);
-		dest_bi->bi_position = PATH_H_POSITION(tb->tb_path, h + 1);	/* dest position is analog of dest->b_item_order */
+		buffer_info_init_left(tb, src_bi, h);
+		buffer_info_init_tbSh(tb, dest_bi, h);
 		*d_key = tb->lkey[h];
 		*cf = tb->CFL[h];
 		break;
 
 	case INTERNAL_SHIFT_FROM_R_TO_S:	/* used in internal_shift_left */
-		src_bi->bi_bh = tb->R[h];
-		src_bi->bi_parent = tb->FR[h];
-		src_bi->bi_position = get_right_neighbor_position(tb, h);
-		dest_bi->bi_bh = PATH_H_PBUFFER(tb->tb_path, h);
-		dest_bi->bi_parent = PATH_H_PPARENT(tb->tb_path, h);
-		dest_bi->bi_position = PATH_H_POSITION(tb->tb_path, h + 1);
+		buffer_info_init_right(tb, src_bi, h);
+		buffer_info_init_tbSh(tb, dest_bi, h);
 		*d_key = tb->rkey[h];
 		*cf = tb->CFR[h];
 		break;
 	case INTERNAL_SHIFT_FROM_S_TO_R:
-		src_bi->bi_bh = PATH_H_PBUFFER(tb->tb_path, h);
-		src_bi->bi_parent = PATH_H_PPARENT(tb->tb_path, h);
-		src_bi->bi_position = PATH_H_POSITION(tb->tb_path, h + 1);
-		dest_bi->bi_bh = tb->R[h];
-		dest_bi->bi_parent = tb->FR[h];
-		dest_bi->bi_position = get_right_neighbor_position(tb, h);
+		buffer_info_init_tbSh(tb, src_bi, h);
+		buffer_info_init_right(tb, dest_bi, h);
 		*d_key = tb->rkey[h];
 		*cf = tb->CFR[h];
 		break;
 
 	case INTERNAL_INSERT_TO_L:
-		dest_bi->bi_bh = tb->L[h];
-		dest_bi->bi_parent = tb->FL[h];
-		dest_bi->bi_position = get_left_neighbor_position(tb, h);
+		buffer_info_init_left(tb, dest_bi, h);
 		break;
 
 	case INTERNAL_INSERT_TO_S:
-		dest_bi->bi_bh = PATH_H_PBUFFER(tb->tb_path, h);
-		dest_bi->bi_parent = PATH_H_PPARENT(tb->tb_path, h);
-		dest_bi->bi_position = PATH_H_POSITION(tb->tb_path, h + 1);
+		buffer_info_init_tbSh(tb, dest_bi, h);
 		break;
 
 	case INTERNAL_INSERT_TO_R:
-		dest_bi->bi_bh = tb->R[h];
-		dest_bi->bi_parent = tb->FR[h];
-		dest_bi->bi_position = get_right_neighbor_position(tb, h);
+		buffer_info_init_right(tb, dest_bi, h);
 		break;
 
 	default:
@@ -505,12 +483,7 @@ static void balance_internal_when_delete(struct tree_balance *tb,
 	insert_num = tb->insert_size[h] / ((int)(DC_SIZE + KEY_SIZE));
 
 	/* delete child-node-pointer(s) together with their left item(s) */
-	bi.bi_bh = tbSh;
-
-	bi.bi_parent = PATH_H_PPARENT(tb->tb_path, h);
-
-	bi.bi_position = PATH_H_POSITION(tb->tb_path, h + 1);
-
+	buffer_info_init_tbSh(tb, &bi, h);
 	internal_delete_childs(tb->tb_fs, &bi, child_pos, -insert_num);
 
 	n = B_NR_ITEMS(tbSh);
@@ -657,9 +630,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 					    tb->lnum[h] - insert_num);
 
 			/* insert insert_num keys and node-pointers into L[h] */
-			bi.bi_bh = tb->L[h];
-			bi.bi_parent = tb->FL[h];
-			bi.bi_position = get_left_neighbor_position(tb, h);
+			buffer_info_init_left(tb, &bi, h);
 			internal_insert_childs(tb->tb_fs, &bi,
 					       /*tb->L[h], tb->S[h-1]->b_next */
 					       n + child_pos + 1,
@@ -675,9 +646,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			/* calculate number of new items that fall into L[h] */
 			k = tb->lnum[h] - child_pos - 1;
 
-			bi.bi_bh = tb->L[h];
-			bi.bi_parent = tb->FL[h];
-			bi.bi_position = get_left_neighbor_position(tb, h);
+			buffer_info_init_left(tb, &bi, h);
 			internal_insert_childs(tb->tb_fs, &bi,
 					       /*tb->L[h], tb->S[h-1]->b_next, */
 					       n + child_pos + 1, k,
@@ -721,9 +690,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 					     tb->rnum[h] - insert_num);
 
 			/* insert insert_num keys and node-pointers into R[h] */
-			bi.bi_bh = tb->R[h];
-			bi.bi_parent = tb->FR[h];
-			bi.bi_position = get_right_neighbor_position(tb, h);
+			buffer_info_init_right(tb, &bi, h);
 			internal_insert_childs(tb->tb_fs, &bi,
 					       /*tb->R[h],tb->S[h-1]->b_next */
 					       child_pos - n - insert_num +
@@ -739,9 +706,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			/* calculate number of new items that fall into R[h] */
 			k = tb->rnum[h] - n + child_pos - 1;
 
-			bi.bi_bh = tb->R[h];
-			bi.bi_parent = tb->FR[h];
-			bi.bi_position = get_right_neighbor_position(tb, h);
+			buffer_info_init_right(tb, &bi, h);
 			internal_insert_childs(tb->tb_fs, &bi,
 					       /*tb->R[h], tb->R[h]->b_child, */
 					       0, k, insert_key + 1,
@@ -829,12 +794,8 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 
 		set_blkh_level(B_BLK_HEAD(S_new), h + 1);
 
-		dest_bi.bi_bh = S_new;
-		dest_bi.bi_parent = 0;
-		dest_bi.bi_position = 0;
-		src_bi.bi_bh = tbSh;
-		src_bi.bi_parent = PATH_H_PPARENT(tb->tb_path, h);
-		src_bi.bi_position = PATH_H_POSITION(tb->tb_path, h + 1);
+		buffer_info_init_bh(tb, &dest_bi, S_new);
+		buffer_info_init_tbSh(tb, &src_bi, h);
 
 		n = get_blkh_nr_items(B_BLK_HEAD(tbSh));	/* number of items in S[h] */
 		snum = (insert_num + n + 1) / 2;
@@ -919,9 +880,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 	n = get_blkh_nr_items(B_BLK_HEAD(tbSh));	/*number of items in S[h] */
 
 	if (-1 <= child_pos && child_pos <= n && insert_num > 0) {
-		bi.bi_bh = tbSh;
-		bi.bi_parent = PATH_H_PPARENT(tb->tb_path, h);
-		bi.bi_position = PATH_H_POSITION(tb->tb_path, h + 1);
+		buffer_info_init_tbSh(tb, &bi, h);
 		if (child_pos == -1) {
 			/* this is a little different from original do_balance:
 			   here we insert the minimal keys in the tree, that has never happened when file system works */

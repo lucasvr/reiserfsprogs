@@ -508,52 +508,32 @@ static void leaf_define_dest_src_infos(int shift_mode, struct tree_balance *tb,
 	/* define dest, src, dest parent, dest position */
 	switch (shift_mode) {
 	case LEAF_FROM_S_TO_L:	/* it is used in leaf_shift_left */
-		src_bi->bi_bh = PATH_PLAST_BUFFER(tb->tb_path);
-		src_bi->bi_parent = PATH_H_PPARENT(tb->tb_path, 0);
-		src_bi->bi_position = PATH_H_B_ITEM_ORDER(tb->tb_path, 0);	/* src->b_item_order */
-		dest_bi->bi_bh = tb->L[0];
-		dest_bi->bi_parent = tb->FL[0];
-		dest_bi->bi_position = get_left_neighbor_position(tb, 0);
+		buffer_info_init_last(tb, src_bi);
+		buffer_info_init_left(tb, dest_bi, 0);
 		*first_last = FIRST_TO_LAST;
 		break;
 
 	case LEAF_FROM_S_TO_R:	/* it is used in leaf_shift_right */
-		src_bi->bi_bh = PATH_PLAST_BUFFER(tb->tb_path);
-		src_bi->bi_parent = PATH_H_PPARENT(tb->tb_path, 0);
-		src_bi->bi_position = PATH_H_B_ITEM_ORDER(tb->tb_path, 0);
-		dest_bi->bi_bh = tb->R[0];
-		dest_bi->bi_parent = tb->FR[0];
-		dest_bi->bi_position = get_right_neighbor_position(tb, 0);
+		buffer_info_init_last(tb, src_bi);
+		buffer_info_init_right(tb, dest_bi, 0);
 		*first_last = LAST_TO_FIRST;
 		break;
 
 	case LEAF_FROM_R_TO_L:	/* it is used in balance_leaf_when_delete */
-		src_bi->bi_bh = tb->R[0];
-		src_bi->bi_parent = tb->FR[0];
-		src_bi->bi_position = get_right_neighbor_position(tb, 0);
-		dest_bi->bi_bh = tb->L[0];
-		dest_bi->bi_parent = tb->FL[0];
-		dest_bi->bi_position = get_left_neighbor_position(tb, 0);
+		buffer_info_init_right(tb, src_bi, 0);
+		buffer_info_init_left(tb, dest_bi, 0);
 		*first_last = FIRST_TO_LAST;
 		break;
 
 	case LEAF_FROM_L_TO_R:	/* it is used in balance_leaf_when_delete */
-		src_bi->bi_bh = tb->L[0];
-		src_bi->bi_parent = tb->FL[0];
-		src_bi->bi_position = get_left_neighbor_position(tb, 0);
-		dest_bi->bi_bh = tb->R[0];
-		dest_bi->bi_parent = tb->FR[0];
-		dest_bi->bi_position = get_right_neighbor_position(tb, 0);
+		buffer_info_init_left(tb, src_bi, 0);
+		buffer_info_init_right(tb, dest_bi, 0);
 		*first_last = LAST_TO_FIRST;
 		break;
 
 	case LEAF_FROM_S_TO_SNEW:
-		src_bi->bi_bh = PATH_PLAST_BUFFER(tb->tb_path);
-		src_bi->bi_parent = PATH_H_PPARENT(tb->tb_path, 0);
-		src_bi->bi_position = PATH_H_B_ITEM_ORDER(tb->tb_path, 0);
-		dest_bi->bi_bh = Snew;
-		dest_bi->bi_parent = 0;
-		dest_bi->bi_position = 0;
+		buffer_info_init_last(tb, src_bi);
+		buffer_info_init_bh(tb, dest_bi, Snew);
 		*first_last = LAST_TO_FIRST;
 		break;
 
@@ -1187,9 +1167,9 @@ void delete_item(reiserfs_filsys_t *fs, struct buffer_head *bh, int item_num)
 {
 	struct buffer_info bi;
 
-	bi.bi_bh = bh;
-	bi.bi_parent = 0;
-	bi.bi_position = 0;
+	buffer_info_init_bh(NULL, &bi, bh);
+	bi.bi_fs = fs;
+
 	leaf_delete_items_entirely(fs, &bi, item_num, 1);
 }
 
@@ -1198,8 +1178,8 @@ void cut_entry(reiserfs_filsys_t *fs, struct buffer_head *bh,
 {
 	struct buffer_info bi;
 
-	bi.bi_bh = bh;
-	bi.bi_parent = 0;
-	bi.bi_position = 0;
+	buffer_info_init_bh(NULL, &bi, bh);
+	bi.bi_fs = fs;
+
 	leaf_cut_from_buffer(fs, &bi, item_num, entry_num, del_count);
 }

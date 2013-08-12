@@ -1330,11 +1330,11 @@ struct tree_balance {
 /* used in do_balance for passing parent of node information that has been
    gotten from tb struct */
 struct buffer_info {
+    reiserfs_filsys_t *bi_fs;
     struct buffer_head * bi_bh;
     struct buffer_head * bi_parent;
     int bi_position;
 };
-
 
 /* there are 4 types of items: stat data, directory item, indirect, direct.
    FIXME: This table does not describe new key format
@@ -1533,6 +1533,58 @@ extern unsigned int get_journal_old_start_must (reiserfs_filsys_t *fs);
 extern unsigned int get_journal_new_start_must (reiserfs_filsys_t *fs);
 extern unsigned int get_journal_start_must (reiserfs_filsys_t *fs);
 /*extern hashf_t hashes [];*/
+
+static inline void buffer_info_init_left(struct tree_balance *tb,
+					 struct buffer_info *bi, int h)
+{
+	bi->bi_fs	= tb->tb_fs;
+	bi->bi_bh	= tb->L[h];
+	bi->bi_parent	= tb->FL[h];
+	bi->bi_position = get_left_neighbor_position(tb, h);
+}
+
+static inline void buffer_info_init_right(struct tree_balance *tb,
+					  struct buffer_info *bi, int h)
+{
+	bi->bi_fs	= tb->tb_fs;
+	bi->bi_bh	= tb->R[h];
+	bi->bi_parent	= tb->FR[h];
+	bi->bi_position = get_right_neighbor_position(tb, h);
+}
+
+static inline void buffer_info_init_last(struct tree_balance *tb,
+					 struct buffer_info *bi)
+{
+	bi->bi_fs	= tb->tb_fs;
+	bi->bi_bh	= PATH_PLAST_BUFFER(tb->tb_path);
+	bi->bi_parent	= PATH_H_PPARENT(tb->tb_path, 0);
+	bi->bi_position	= PATH_H_B_ITEM_ORDER(tb->tb_path, 0);
+}
+
+static inline void buffer_info_init_tbSh(struct tree_balance *tb,
+					 struct buffer_info *bi, int h)
+{
+	bi->bi_fs	= tb->tb_fs;
+	bi->bi_bh	= PATH_H_PBUFFER(tb->tb_path, h);
+	bi->bi_parent	= PATH_H_PPARENT(tb->tb_path, h);
+	bi->bi_position = PATH_H_POSITION(tb->tb_path, h + 1);
+}
+
+static inline void buffer_info_init_tbS0(struct tree_balance *tb,
+					 struct buffer_info *bi)
+{
+	buffer_info_init_tbSh(tb, bi, 0);
+}
+
+static inline void buffer_info_init_bh(struct tree_balance *tb,
+				       struct buffer_info *bi,
+				       struct buffer_head *bh)
+{
+	bi->bi_fs	= tb->tb_fs;
+	bi->bi_bh	= bh;
+	bi->bi_parent	= NULL;
+	bi->bi_position = 0;
+}
 
 #endif
 

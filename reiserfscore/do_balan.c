@@ -59,15 +59,13 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 	struct item_head *ih;
 
 	ih = item_head(tbS0, item_pos);
+	buffer_info_init_tbS0(tb, &bi);
 
 	/* Delete or truncate the item */
 
 	switch (flag) {
 	case M_DELETE:		/* delete item in S[0] */
 
-		bi.bi_bh = tbS0;
-		bi.bi_parent = PATH_H_PPARENT(tb->tb_path, 0);
-		bi.bi_position = PATH_H_POSITION(tb->tb_path, 1);
 		leaf_delete_items(tb->tb_fs, &bi, 0, item_pos, 1, -1);
 
 		if (!item_pos) {
@@ -87,9 +85,6 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 		break;
 
 	case M_CUT:{		/* cut item in S[0] */
-			bi.bi_bh = tbS0;
-			bi.bi_parent = PATH_H_PPARENT(tb->tb_path, 0);
-			bi.bi_position = PATH_H_POSITION(tb->tb_path, 1);
 			if (I_IS_DIRECTORY_ITEM(ih)) {
 				/* UFS unlink semantics are such that you can only delete
 				   one directory entry at a time. */
@@ -270,10 +265,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							get_ih_item_len(ih) -
 							new_item_len);
 					/* Insert new item into L[0] */
-					bi.bi_bh = tb->L[0];
-					bi.bi_parent = tb->FL[0];
-					bi.bi_position =
-					    get_left_neighbor_position(tb, 0);
+					buffer_info_init_left(tb, &bi, 0);
 					leaf_insert_into_buf(tb->tb_fs, &bi,
 							     n + item_pos -
 							     ret_val, ih, body,
@@ -307,10 +299,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							    tb->lbytes);
 
 					/* Insert new item into L[0] */
-					bi.bi_bh = tb->L[0];
-					bi.bi_parent = tb->FL[0];
-					bi.bi_position =
-					    get_left_neighbor_position(tb, 0);
+					buffer_info_init_left(tb, &bi, 0);
 					leaf_insert_into_buf(tb->tb_fs, &bi,
 							     n + item_pos -
 							     ret_val, ih, body,
@@ -364,12 +353,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							}
 
 							/* Append given directory entry to directory item */
-							bi.bi_bh = tb->L[0];
-							bi.bi_parent =
-							    tb->FL[0];
-							bi.bi_position =
-							    get_left_neighbor_position
-							    (tb, 0);
+							buffer_info_init_left(tb, &bi, 0);
 							leaf_paste_in_buffer
 							    (tb->tb_fs, &bi,
 							     n + item_pos -
@@ -442,12 +426,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 									     (tbS0,
 									      item_pos)));
 							/* Append to body of item in L[0] */
-							bi.bi_bh = tb->L[0];
-							bi.bi_parent =
-							    tb->FL[0];
-							bi.bi_position =
-							    get_left_neighbor_position
-							    (tb, 0);
+							buffer_info_init_left(tb, &bi, 0);
 							leaf_paste_in_buffer
 							    (tb->tb_fs, &bi,
 							     n + item_pos -
@@ -548,10 +527,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 					    leaf_shift_left(tb, tb->lnum[0],
 							    tb->lbytes);
 					/* Append to body of item in L[0] */
-					bi.bi_bh = tb->L[0];
-					bi.bi_parent = tb->FL[0];
-					bi.bi_position =
-					    get_left_neighbor_position(tb, 0);
+					buffer_info_init_left(tb, &bi, 0);
 					leaf_paste_in_buffer(tb->tb_fs, &bi,
 							     n + item_pos -
 							     ret_val,
@@ -643,10 +619,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 					set_ih_item_len(ih, tb->rbytes);
 					/* Insert part of the item into R[0] */
-					bi.bi_bh = tb->R[0];
-					bi.bi_parent = tb->FR[0];
-					bi.bi_position =
-					    get_right_neighbor_position(tb, 0);
+					buffer_info_init_right(tb, &bi, 0);
 					if (old_len - tb->rbytes > zeros_number) {
 						r_zeros_number = 0;
 						r_body =
@@ -688,10 +661,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							     tb->rbytes);
 
 					/* Insert new item into R[0] */
-					bi.bi_bh = tb->R[0];
-					bi.bi_parent = tb->FR[0];
-					bi.bi_position =
-					    get_right_neighbor_position(tb, 0);
+					buffer_info_init_right(tb, &bi, 0);
 					leaf_insert_into_buf(tb->tb_fs, &bi,
 							     item_pos - n +
 							     tb->rnum[0] - 1,
@@ -748,12 +718,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							    entry_count +
 							    tb->rbytes - 1;
 
-							bi.bi_bh = tb->R[0];
-							bi.bi_parent =
-							    tb->FR[0];
-							bi.bi_position =
-							    get_right_neighbor_position
-							    (tb, 0);
+							buffer_info_init_right(tb, &bi, 0);
 							leaf_paste_in_buffer
 							    (tb->tb_fs, &bi, 0,
 							     paste_entry_position,
@@ -872,11 +837,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 						mark_buffer_dirty(tb->CFR[0]);
 
 						/* Append part of body into R[0] */
-						bi.bi_bh = tb->R[0];
-						bi.bi_parent = tb->FR[0];
-						bi.bi_position =
-						    get_right_neighbor_position
-						    (tb, 0);
+						buffer_info_init_right(tb, &bi, 0);
 						if (n_rem > zeros_number) {
 							r_zeros_number = 0;
 							r_body =
@@ -924,11 +885,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 					/* append item in R[0] */
 					if (pos_in_item >= 0) {
-						bi.bi_bh = tb->R[0];
-						bi.bi_parent = tb->FR[0];
-						bi.bi_position =
-						    get_right_neighbor_position
-						    (tb, 0);
+						buffer_info_init_right(tb, &bi, 0);
 						leaf_paste_in_buffer(tb->tb_fs,
 								     &bi,
 								     item_pos -
@@ -1067,9 +1024,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 					set_ih_item_len(ih, sbytes[i]);
 
 					/* Insert part of the item into S_new[i] before 0-th item */
-					bi.bi_bh = S_new[i];
-					bi.bi_parent = 0;
-					bi.bi_position = 0;
+					buffer_info_init_bh(tb, &bi, S_new[i]);
 
 					if (old_len - sbytes[i] > zeros_number) {
 						r_zeros_number = 0;
@@ -1104,9 +1059,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							S_new[i]);
 
 					/* Insert new item into S_new[i] */
-					bi.bi_bh = S_new[i];
-					bi.bi_parent = 0;
-					bi.bi_position = 0;
+					buffer_info_init_bh(tb, &bi, S_new[i]);
 					leaf_insert_into_buf(tb->tb_fs, &bi,
 							     item_pos - n +
 							     snum[i] - 1, ih,
@@ -1153,9 +1106,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							     S_new[i]);
 
 							/* Paste given directory entry to directory item */
-							bi.bi_bh = S_new[i];
-							bi.bi_parent = 0;
-							bi.bi_position = 0;
+							buffer_info_init_bh(tb, &bi, S_new[i]);
 							leaf_paste_in_buffer
 							    (tb->tb_fs, &bi, 0,
 							     pos_in_item -
@@ -1220,9 +1171,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 						if (n_rem < 0)
 							n_rem = 0;
 						/* Append part of body into S_new[0] */
-						bi.bi_bh = S_new[i];
-						bi.bi_parent = 0;
-						bi.bi_position = 0;
+						buffer_info_init_bh(tb, &bi, S_new[i]);
 
 						if (n_rem > zeros_number) {
 							r_zeros_number = 0;
@@ -1296,9 +1245,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							snum[i], sbytes[i],
 							S_new[i]);
 					/* paste into item */
-					bi.bi_bh = S_new[i];
-					bi.bi_parent = 0;
-					bi.bi_position = 0;
+					buffer_info_init_bh(tb, &bi, S_new[i]);
 					leaf_paste_in_buffer(tb->tb_fs, &bi,
 							     item_pos - n +
 							     snum[i],
@@ -1360,9 +1307,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 		switch (flag) {
 		case M_INSERT:	/* insert item into S[0] */
-			bi.bi_bh = tbS0;
-			bi.bi_parent = PATH_H_PPARENT(tb->tb_path, 0);
-			bi.bi_position = PATH_H_POSITION(tb->tb_path, 1);
+			buffer_info_init_tbS0(tb, &bi);
 			leaf_insert_into_buf(tb->tb_fs, &bi, item_pos, ih, body,
 					     zeros_number);
 
@@ -1384,13 +1329,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 					    && pos_in_item <=
 					    get_ih_entry_count(pasted)) {
 						/* prepare space */
-						bi.bi_bh = tbS0;
-						bi.bi_parent =
-						    PATH_H_PPARENT(tb->tb_path,
-								   0);
-						bi.bi_position =
-						    PATH_H_POSITION(tb->tb_path,
-								    1);
+						buffer_info_init_tbS0(tb, &bi);
 						leaf_paste_in_buffer(tb->tb_fs,
 								     &bi,
 								     item_pos,
@@ -1431,13 +1370,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 				} else {	/* regular object */
 					if (pos_in_item ==
 					    get_ih_item_len(pasted)) {
-						bi.bi_bh = tbS0;
-						bi.bi_parent =
-						    PATH_H_PPARENT(tb->tb_path,
-								   0);
-						bi.bi_position =
-						    PATH_H_POSITION(tb->tb_path,
-								    1);
+						buffer_info_init_tbS0(tb, &bi);
 						leaf_paste_in_buffer(tb->tb_fs,
 								     &bi,
 								     item_pos,
@@ -1491,9 +1424,8 @@ struct buffer_head *get_FEB(struct tree_balance *tb)
 	if (i == MAX_FEB_SIZE)
 		reiserfs_panic("vs-12300: get_FEB: FEB list is empty");
 
-	bi.bi_bh = first_b = tb->FEB[i];
-	bi.bi_parent = 0;
-	bi.bi_position = 0;
+	first_b = tb->FEB[i];
+	buffer_info_init_bh(tb, &bi, first_b);
 	make_empty_node(&bi);
 	misc_set_bit(BH_Uptodate, &first_b->b_state);
 
