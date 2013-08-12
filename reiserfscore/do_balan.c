@@ -66,7 +66,7 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 	switch (flag) {
 	case M_DELETE:		/* delete item in S[0] */
 
-		leaf_delete_items(tb->tb_fs, &bi, 0, item_pos, 1, -1);
+		leaf_delete_items(&bi, 0, item_pos, 1, -1);
 
 		if (!item_pos) {
 			// we have removed first item in the node - update left delimiting key
@@ -91,7 +91,7 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 				/* when we cut a directory tb->insert_size[0] means number
 				   of entries to be cut (always 1) */
 				tb->insert_size[0] = -1;
-				leaf_cut_from_buffer(tb->tb_fs, &bi, item_pos,
+				leaf_cut_from_buffer(&bi, item_pos,
 						     pos_in_item,
 						     -tb->insert_size[0]);
 
@@ -100,7 +100,7 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 						    tb->lkey[0], tbS0, 0);
 				}
 			} else {
-				leaf_cut_from_buffer(tb->tb_fs, &bi, item_pos,
+				leaf_cut_from_buffer(&bi, item_pos,
 						     pos_in_item,
 						     -tb->insert_size[0]);
 			}
@@ -266,7 +266,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							new_item_len);
 					/* Insert new item into L[0] */
 					buffer_info_init_left(tb, &bi, 0);
-					leaf_insert_into_buf(tb->tb_fs, &bi,
+					leaf_insert_into_buf(&bi,
 							     n + item_pos -
 							     ret_val, ih, body,
 							     zeros_number >
@@ -300,7 +300,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 					/* Insert new item into L[0] */
 					buffer_info_init_left(tb, &bi, 0);
-					leaf_insert_into_buf(tb->tb_fs, &bi,
+					leaf_insert_into_buf(&bi,
 							     n + item_pos -
 							     ret_val, ih, body,
 							     zeros_number);
@@ -355,7 +355,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							/* Append given directory entry to directory item */
 							buffer_info_init_left(tb, &bi, 0);
 							leaf_paste_in_buffer
-							    (tb->tb_fs, &bi,
+							    (&bi,
 							     n + item_pos -
 							     ret_val,
 							     l_pos_in_item,
@@ -428,7 +428,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							/* Append to body of item in L[0] */
 							buffer_info_init_left(tb, &bi, 0);
 							leaf_paste_in_buffer
-							    (tb->tb_fs, &bi,
+							    (&bi,
 							     n + item_pos -
 							     ret_val,
 							     get_ih_item_len
@@ -528,7 +528,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							    tb->lbytes);
 					/* Append to body of item in L[0] */
 					buffer_info_init_left(tb, &bi, 0);
-					leaf_paste_in_buffer(tb->tb_fs, &bi,
+					leaf_paste_in_buffer(&bi,
 							     n + item_pos -
 							     ret_val,
 							     pos_in_item,
@@ -633,7 +633,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 						zeros_number -= r_zeros_number;
 					}
 
-					leaf_insert_into_buf(tb->tb_fs, &bi, 0,
+					leaf_insert_into_buf(&bi, 0,
 							     ih, r_body,
 							     r_zeros_number);
 
@@ -662,7 +662,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 					/* Insert new item into R[0] */
 					buffer_info_init_right(tb, &bi, 0);
-					leaf_insert_into_buf(tb->tb_fs, &bi,
+					leaf_insert_into_buf(&bi,
 							     item_pos - n +
 							     tb->rnum[0] - 1,
 							     ih, body,
@@ -720,7 +720,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 							buffer_info_init_right(tb, &bi, 0);
 							leaf_paste_in_buffer
-							    (tb->tb_fs, &bi, 0,
+							    (&bi, 0,
 							     paste_entry_position,
 							     tb->insert_size[0],
 							     body,
@@ -852,8 +852,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							    r_zeros_number;
 						}
 
-						leaf_paste_in_buffer(tb->tb_fs,
-								     &bi, 0,
+						leaf_paste_in_buffer(&bi, 0,
 								     n_shift,
 								     tb->
 								     insert_size
@@ -886,8 +885,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 					/* append item in R[0] */
 					if (pos_in_item >= 0) {
 						buffer_info_init_right(tb, &bi, 0);
-						leaf_paste_in_buffer(tb->tb_fs,
-								     &bi,
+						leaf_paste_in_buffer(&bi,
 								     item_pos -
 								     n +
 								     tb->
@@ -1040,8 +1038,8 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 						zeros_number -= r_zeros_number;
 					}
 
-					leaf_insert_into_buf(tb->tb_fs, &bi, 0,
-							     ih, r_body,
+					leaf_insert_into_buf(&bi, 0, ih,
+							     r_body,
 							     r_zeros_number);
 
 					/* Calculate key component and item length to insert into S[i] */
@@ -1060,7 +1058,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 
 					/* Insert new item into S_new[i] */
 					buffer_info_init_bh(tb, &bi, S_new[i]);
-					leaf_insert_into_buf(tb->tb_fs, &bi,
+					leaf_insert_into_buf(&bi,
 							     item_pos - n +
 							     snum[i] - 1, ih,
 							     body,
@@ -1108,7 +1106,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							/* Paste given directory entry to directory item */
 							buffer_info_init_bh(tb, &bi, S_new[i]);
 							leaf_paste_in_buffer
-							    (tb->tb_fs, &bi, 0,
+							    (&bi, 0,
 							     pos_in_item -
 							     entry_count +
 							     sbytes[i] - 1,
@@ -1187,8 +1185,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							    r_zeros_number;
 						}
 
-						leaf_paste_in_buffer(tb->tb_fs,
-								     &bi, 0,
+						leaf_paste_in_buffer(&bi, 0,
 								     n_shift,
 								     tb->
 								     insert_size
@@ -1246,7 +1243,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 							S_new[i]);
 					/* paste into item */
 					buffer_info_init_bh(tb, &bi, S_new[i]);
-					leaf_paste_in_buffer(tb->tb_fs, &bi,
+					leaf_paste_in_buffer(&bi,
 							     item_pos - n +
 							     snum[i],
 							     pos_in_item,
@@ -1308,7 +1305,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 		switch (flag) {
 		case M_INSERT:	/* insert item into S[0] */
 			buffer_info_init_tbS0(tb, &bi);
-			leaf_insert_into_buf(tb->tb_fs, &bi, item_pos, ih, body,
+			leaf_insert_into_buf(&bi, item_pos, ih, body,
 					     zeros_number);
 
 			/* If we insert the first key change the delimiting key */
@@ -1330,8 +1327,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 					    get_ih_entry_count(pasted)) {
 						/* prepare space */
 						buffer_info_init_tbS0(tb, &bi);
-						leaf_paste_in_buffer(tb->tb_fs,
-								     &bi,
+						leaf_paste_in_buffer(&bi,
 								     item_pos,
 								     pos_in_item,
 								     tb->
@@ -1371,8 +1367,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 					if (pos_in_item ==
 					    get_ih_item_len(pasted)) {
 						buffer_info_init_tbS0(tb, &bi);
-						leaf_paste_in_buffer(tb->tb_fs,
-								     &bi,
+						leaf_paste_in_buffer(&bi,
 								     item_pos,
 								     pos_in_item,
 								     tb->

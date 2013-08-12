@@ -71,8 +71,7 @@ static void internal_define_dest_src_infos(int shift_mode,
  * Insert count items into buffer cur before position to.
  * Items and node pointers are specified by inserted and bh respectively.
  */
-static void internal_insert_childs(reiserfs_filsys_t *fs,
-				   struct buffer_info *cur_bi,
+static void internal_insert_childs(struct buffer_info *cur_bi,
 				   int to, int count,
 				   struct item_head *inserted,
 				   struct buffer_head **bh)
@@ -142,8 +141,7 @@ static void internal_insert_childs(reiserfs_filsys_t *fs,
 
 /* Delete del_num items and node pointers from buffer cur starting from *
  * the first_i'th item and first_p'th pointers respectively.		*/
-static void internal_delete_pointers_items(reiserfs_filsys_t *fs,
-					   struct buffer_info *cur_bi,
+static void internal_delete_pointers_items(struct buffer_info *cur_bi,
 					   int first_p, int first_i,
 					   int del_num)
 {
@@ -190,25 +188,24 @@ static void internal_delete_pointers_items(reiserfs_filsys_t *fs,
 }
 
 /* delete n node pointers and items starting from given position */
-static void internal_delete_childs(reiserfs_filsys_t *fs,
-				   struct buffer_info *cur_bi, int from, int n)
+static void internal_delete_childs(struct buffer_info *cur_bi, int from, int n)
 {
-	int i_from;
+	int i_from = 0;
 
-	i_from = (from == 0) ? from : from - 1;
+	if (from)
+		i_from = from - 1;
 
 	/* delete n pointers starting from `from' position in CUR;
 	   delete n keys starting from 'i_from' position in CUR;
 	 */
-	internal_delete_pointers_items(fs, cur_bi, from, i_from, n);
+	internal_delete_pointers_items(cur_bi, from, i_from, n);
 }
 
 /* copy cpy_num node pointers and cpy_num - 1 items from buffer src to buffer dest
 * last_first == FIRST_TO_LAST means, that we copy first items from src to tail of dest
  * last_first == LAST_TO_FIRST means, that we copy last items from src to head of dest
  */
-static void internal_copy_pointers_items(reiserfs_filsys_t *fs,
-					 struct buffer_info *dest_bi,
+static void internal_copy_pointers_items(struct buffer_info *dest_bi,
 					 struct buffer_head *src,
 					 int last_first, int cpy_num)
 {
@@ -277,8 +274,7 @@ static void internal_copy_pointers_items(reiserfs_filsys_t *fs,
  * last_first == FIRST_TO_LAST means, that we copy/delete first items from src.
  * last_first == LAST_TO_FIRST means, that we copy/delete last items from src.
  */
-static void internal_move_pointers_items(reiserfs_filsys_t *fs,
-					 struct buffer_info *dest_bi,
+static void internal_move_pointers_items(struct buffer_info *dest_bi,
 					 struct buffer_info *src_bi,
 					 int last_first, int cpy_num,
 					 int del_par)
@@ -286,7 +282,7 @@ static void internal_move_pointers_items(reiserfs_filsys_t *fs,
 	int first_pointer;
 	int first_item;
 
-	internal_copy_pointers_items(fs, dest_bi, src_bi->bi_bh, last_first,
+	internal_copy_pointers_items(dest_bi, src_bi->bi_bh, last_first,
 				     cpy_num);
 
 	if (last_first == FIRST_TO_LAST) {	/* shift_left occurs */
@@ -294,7 +290,7 @@ static void internal_move_pointers_items(reiserfs_filsys_t *fs,
 		first_item = 0;
 		/* delete cpy_num - del_par pointers and keys starting for pointers with first_pointer,
 		   for key - with first_item */
-		internal_delete_pointers_items(fs, src_bi, first_pointer,
+		internal_delete_pointers_items(src_bi, first_pointer,
 					       first_item, cpy_num - del_par);
 	} else {		/* shift_right occurs */
 		int i, j;
@@ -304,14 +300,14 @@ static void internal_move_pointers_items(reiserfs_filsys_t *fs,
 		      B_NR_ITEMS(src_bi->bi_bh)) + 1) ? 0 : j - cpy_num +
 		    del_par;
 
-		internal_delete_pointers_items(fs, src_bi,
+		internal_delete_pointers_items(src_bi,
 					       j + 1 - cpy_num + del_par, i,
 					       cpy_num - del_par);
 	}
 }
 
 /* Insert n_src'th key of buffer src before n_dest'th key of buffer dest. */
-static void internal_insert_key(reiserfs_filsys_t *fs, struct buffer_info *dest_bi, int dest_position_before,	/* insert key before key with n_dest number */
+static void internal_insert_key(struct buffer_info *dest_bi, int dest_position_before,	/* insert key before key with n_dest number */
 				struct buffer_head *src, int src_position)
 {
 	struct buffer_head *dest = dest_bi->bi_bh;
@@ -366,8 +362,7 @@ static void internal_shift_left(int mode,	/* INTERNAL_FROM_S_TO_L | INTERNAL_FRO
 
 	if (pointer_amount) {
 		/* insert delimiting key from common father of dest and src to node dest into position B_NR_ITEM(dest) */
-		internal_insert_key(tb->tb_fs, &dest_bi,
-				    B_NR_ITEMS(dest_bi.bi_bh), cf,
+		internal_insert_key(&dest_bi, B_NR_ITEMS(dest_bi.bi_bh), cf,
 				    d_key_position);
 
 		if (B_NR_ITEMS(src_bi.bi_bh) == pointer_amount - 1) {
@@ -380,8 +375,8 @@ static void internal_shift_left(int mode,	/* INTERNAL_FROM_S_TO_L | INTERNAL_FRO
 				    pointer_amount - 1);
 	}
 	/* last parameter is del_parameter */
-	internal_move_pointers_items(tb->tb_fs, &dest_bi, &src_bi,
-				     FIRST_TO_LAST, pointer_amount, 0);
+	internal_move_pointers_items(&dest_bi, &src_bi, FIRST_TO_LAST,
+				     pointer_amount, 0);
 
 }
 
@@ -401,13 +396,12 @@ static void internal_shift1_left(struct tree_balance *tb,
 				       &dest_bi, &src_bi, &d_key_position, &cf);
 
 	if (pointer_amount > 0)	/* insert lkey[h]-th key  from CFL[h] to left neighbor L[h] */
-		internal_insert_key(tb->tb_fs, &dest_bi,
-				    B_NR_ITEMS(dest_bi.bi_bh), cf,
+		internal_insert_key(&dest_bi, B_NR_ITEMS(dest_bi.bi_bh), cf,
 				    d_key_position);
 
 	/* last parameter is del_parameter */
-	internal_move_pointers_items(tb->tb_fs, &dest_bi, &src_bi,
-				     FIRST_TO_LAST, pointer_amount, 1);
+	internal_move_pointers_items(&dest_bi, &src_bi, FIRST_TO_LAST,
+				     pointer_amount, 1);
 }
 
 /* Insert d_key'th (delimiting) key from buffer cfr to head of dest.
@@ -431,7 +425,7 @@ static void internal_shift_right(int mode,	/* INTERNAL_FROM_S_TO_R | INTERNAL_FR
 
 	if (pointer_amount > 0) {
 		/* insert delimiting key from common father of dest and src to dest node into position 0 */
-		internal_insert_key(tb->tb_fs, &dest_bi, 0, cf, d_key_position);
+		internal_insert_key(&dest_bi, 0, cf, d_key_position);
 		if (nr == pointer_amount - 1) {
 			/* when S[h] disappers replace left delemiting key as well */
 			if (tb->CFL[h])
@@ -443,8 +437,8 @@ static void internal_shift_right(int mode,	/* INTERNAL_FROM_S_TO_R | INTERNAL_FR
 	}
 
 	/* last parameter is del_parameter */
-	internal_move_pointers_items(tb->tb_fs, &dest_bi, &src_bi,
-				     LAST_TO_FIRST, pointer_amount, 0);
+	internal_move_pointers_items(&dest_bi, &src_bi, LAST_TO_FIRST,
+				     pointer_amount, 0);
 }
 
 /* Insert delimiting key to R[h].
@@ -463,11 +457,11 @@ static void internal_shift1_right(struct tree_balance *tb,
 				       &dest_bi, &src_bi, &d_key_position, &cf);
 
 	if (pointer_amount > 0)	/* insert rkey from CFR[h] to right neighbor R[h] */
-		internal_insert_key(tb->tb_fs, &dest_bi, 0, cf, d_key_position);
+		internal_insert_key(&dest_bi, 0, cf, d_key_position);
 
 	/* last parameter is del_parameter */
-	internal_move_pointers_items(tb->tb_fs, &dest_bi, &src_bi,
-				     LAST_TO_FIRST, pointer_amount, 1);
+	internal_move_pointers_items(&dest_bi, &src_bi, LAST_TO_FIRST,
+				     pointer_amount, 1);
 }
 
 /* Delete insert_num node pointers together with their left items
@@ -484,7 +478,7 @@ static void balance_internal_when_delete(struct tree_balance *tb,
 
 	/* delete child-node-pointer(s) together with their left item(s) */
 	buffer_info_init_tbSh(tb, &bi, h);
-	internal_delete_childs(tb->tb_fs, &bi, child_pos, -insert_num);
+	internal_delete_childs(&bi, child_pos, -insert_num);
 
 	n = B_NR_ITEMS(tbSh);
 
@@ -631,9 +625,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 
 			/* insert insert_num keys and node-pointers into L[h] */
 			buffer_info_init_left(tb, &bi, h);
-			internal_insert_childs(tb->tb_fs, &bi,
-					       /*tb->L[h], tb->S[h-1]->b_next */
-					       n + child_pos + 1,
+			internal_insert_childs(&bi, n + child_pos + 1,
 					       insert_num, insert_key,
 					       insert_ptr);
 
@@ -647,9 +639,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			k = tb->lnum[h] - child_pos - 1;
 
 			buffer_info_init_left(tb, &bi, h);
-			internal_insert_childs(tb->tb_fs, &bi,
-					       /*tb->L[h], tb->S[h-1]->b_next, */
-					       n + child_pos + 1, k,
+			internal_insert_childs(&bi, n + child_pos + 1, k,
 					       insert_key, insert_ptr);
 
 			replace_lkey(tb, h, insert_key + k);
@@ -691,8 +681,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 
 			/* insert insert_num keys and node-pointers into R[h] */
 			buffer_info_init_right(tb, &bi, h);
-			internal_insert_childs(tb->tb_fs, &bi,
-					       /*tb->R[h],tb->S[h-1]->b_next */
+			internal_insert_childs(&bi,
 					       child_pos - n - insert_num +
 					       tb->rnum[h] - 1,
 					       insert_num, insert_key,
@@ -707,9 +696,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			k = tb->rnum[h] - n + child_pos - 1;
 
 			buffer_info_init_right(tb, &bi, h);
-			internal_insert_childs(tb->tb_fs, &bi,
-					       /*tb->R[h], tb->R[h]->b_child, */
-					       0, k, insert_key + 1,
+			internal_insert_childs(&bi, 0, k, insert_key + 1,
 					       insert_ptr + 1);
 
 			replace_rkey(tb, h, insert_key + insert_num - k - 1);
@@ -806,8 +793,8 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			memcpy(&new_insert_key, internal_key(tbSh, n - snum),
 			       KEY_SIZE);
 			/* last parameter is del_par */
-			internal_move_pointers_items(tb->tb_fs, &dest_bi,
-						     &src_bi, LAST_TO_FIRST,
+			internal_move_pointers_items(&dest_bi, &src_bi,
+						     LAST_TO_FIRST,
 						     snum, 0);
 		} else if (n + insert_num - snum < child_pos) {
 			/* all new items fall into S_new */
@@ -817,14 +804,13 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			       internal_key(tbSh, n + insert_num - snum),
 			       KEY_SIZE);
 			/* last parameter is del_par */
-			internal_move_pointers_items(tb->tb_fs, &dest_bi,
-						     &src_bi, LAST_TO_FIRST,
+			internal_move_pointers_items(&dest_bi, &src_bi,
+						     LAST_TO_FIRST,
 						     snum - insert_num, 0);
 			/*                  internal_move_pointers_items(S_new,tbSh,1,snum - insert_num,0); */
 
 			/* insert insert_num keys and node-pointers into S_new */
-			internal_insert_childs(tb->tb_fs, &dest_bi,
-					       /*S_new,tb->S[h-1]->b_next, */
+			internal_insert_childs(&dest_bi,
 					       child_pos - n - insert_num +
 					       snum - 1,
 					       insert_num, insert_key,
@@ -836,15 +822,14 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 
 			/* some items fall into S_new, but some don't fall */
 			/* last parameter is del_par */
-			internal_move_pointers_items(tb->tb_fs, &dest_bi,
-						     &src_bi, LAST_TO_FIRST,
+			internal_move_pointers_items(&dest_bi, &src_bi,
+						     LAST_TO_FIRST,
 						     n - child_pos + 1, 1);
 			/*                  internal_move_pointers_items(S_new,tbSh,1,n - child_pos + 1,1); */
 			/* calculate number of new items that fall into S_new */
 			k = snum - n + child_pos - 1;
 
-			internal_insert_childs(tb->tb_fs, &dest_bi, /*S_new, */
-					       0, k, insert_key + 1,
+			internal_insert_childs(&dest_bi, 0, k, insert_key + 1,
 					       insert_ptr + 1);
 
 			/* new_insert_key = insert_key[insert_num - k - 1] */
@@ -887,15 +872,13 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
 			if (tb->CFL[h - 1] || insert_num != 1 || h != 1)
 				die("balance_internal: invalid child_pos");
 			/* insert_child (tb->S[h], tb->S[h-1], child_pos, insert_num, B_N_ITEM_HEAD(tb->S[0],0), insert_ptr); */
-			internal_insert_childs(tb->tb_fs, &bi, child_pos,
-					       insert_num,
+			internal_insert_childs(&bi, child_pos, insert_num,
 					       item_head(PATH_PLAST_BUFFER
 							      (tb->tb_path), 0),
 					       insert_ptr);
 		} else
-			internal_insert_childs(tb->tb_fs, &bi, child_pos,
-					       insert_num, insert_key,
-					       insert_ptr);
+			internal_insert_childs(&bi, child_pos, insert_num,
+					       insert_key, insert_ptr);
 	}
 
 	memcpy(new_insert_key_addr, &new_insert_key, KEY_SIZE);

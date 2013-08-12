@@ -1481,14 +1481,15 @@ int leaf_move_items (int shift_mode, struct tree_balance * tb,
                      int mov_num, int mov_bytes, struct buffer_head * Snew);
 int leaf_shift_left (struct tree_balance * tb, int shift_num, int shift_bytes);
 int leaf_shift_right (struct tree_balance * tb, int shift_num, int shift_bytes);
-void leaf_delete_items (reiserfs_filsys_t *, struct buffer_info * cur_bi,
-                        int last_first, int first, int del_num, int del_bytes);
-void leaf_insert_into_buf (reiserfs_filsys_t *, struct buffer_info * bi,
-			   int before, struct item_head * inserted_item_ih, const char * inserted_item_body,
-			   int zeros_number);
-void leaf_paste_in_buffer (reiserfs_filsys_t *, struct buffer_info * bi, int pasted_item_num,
-			   int pos_in_item, int paste_size, const char * body, int zeros_number);
-void leaf_cut_from_buffer (reiserfs_filsys_t *, struct buffer_info * bi, int cut_item_num,
+void leaf_delete_items(struct buffer_info *cur_bi, int last_first, int first,
+		       int del_num, int del_bytes);
+void leaf_insert_into_buf(struct buffer_info *bi, int before,
+			  struct item_head * inserted_item_ih,
+			  const char * inserted_item_body, int zeros_number);
+void leaf_paste_in_buffer(struct buffer_info *bi, int pasted_item_num,
+			  int pos_in_item, int paste_size, const char * body,
+			  int zeros_number);
+void leaf_cut_from_buffer(struct buffer_info *bi, int cut_item_num,
                            int pos_in_item, int cut_size);
 void leaf_paste_entries (struct buffer_head * bh, int item_num, int before, int new_entry_count,
 			 struct reiserfs_de_head * new_dehs, const char * records,

@@ -23,8 +23,7 @@ extern int init_pos_in_item;
 extern int init_mode;
 
 /* copy copy_count entries from source directory item to dest buffer (creating new item if needed) */
-static void leaf_copy_dir_entries(reiserfs_filsys_t *fs,
-				  struct buffer_info *dest_bi,
+static void leaf_copy_dir_entries(struct buffer_info *dest_bi,
 				  struct buffer_head *source, int last_first,
 				  int item_num, int from, int copy_count)
 {
@@ -98,13 +97,13 @@ static void leaf_copy_dir_entries(reiserfs_filsys_t *fs,
 		set_ih_flags(&new_ih, get_ih_flags(ih));
 
 		/* insert item into dest buffer */
-		leaf_insert_into_buf(fs, dest_bi,
+		leaf_insert_into_buf(dest_bi,
 				     (last_first ==
 				      LAST_TO_FIRST) ? 0 : B_NR_ITEMS(dest),
 				     &new_ih, NULL, 0);
 	} else {
 		/* prepare space for entries */
-		leaf_paste_in_buffer(fs, dest_bi,
+		leaf_paste_in_buffer(dest_bi,
 				     (last_first ==
 				      FIRST_TO_LAST) ? (B_NR_ITEMS(dest) -
 							1) : 0,
@@ -129,8 +128,7 @@ static void leaf_copy_dir_entries(reiserfs_filsys_t *fs,
    part of it or nothing (see the return 0 below) from SOURCE to the end
    (if last_first) or beginning (!last_first) of the DEST */
 /* returns 1 if anything was copied, else 0 */
-static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
-				   struct buffer_info *dest_bi,
+static int leaf_copy_boundary_item(struct buffer_info *dest_bi,
 				   struct buffer_head *src, int last_first,
 				   int bytes_or_entries)
 {
@@ -156,7 +154,7 @@ static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
 			if (bytes_or_entries == -1)
 				/* copy all entries to dest */
 				bytes_or_entries = get_ih_entry_count(ih);
-			leaf_copy_dir_entries(fs, dest_bi, src, FIRST_TO_LAST,
+			leaf_copy_dir_entries(dest_bi, src, FIRST_TO_LAST,
 					      0, 0, bytes_or_entries);
 			return 1;
 		}
@@ -169,7 +167,7 @@ static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
 
 		/* merge first item (or its part) of src buffer with the last
 		   item of dest buffer. Both are of the same file */
-		leaf_paste_in_buffer(fs, dest_bi, dest_nr_item - 1,
+		leaf_paste_in_buffer(dest_bi, dest_nr_item - 1,
 				     get_ih_item_len(dih), bytes_or_entries,
 				     ih_item_body(src, ih), 0);
 
@@ -199,7 +197,7 @@ static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
 			/* bytes_or_entries = entries number in last item body of SOURCE */
 			bytes_or_entries = get_ih_entry_count(ih);
 
-		leaf_copy_dir_entries(fs, dest_bi, src, LAST_TO_FIRST,
+		leaf_copy_dir_entries(dest_bi, src, LAST_TO_FIRST,
 				      src_nr_item - 1,
 				      get_ih_entry_count(ih) - bytes_or_entries,
 				      bytes_or_entries);
@@ -241,7 +239,7 @@ static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
 		}
 	}
 
-	leaf_paste_in_buffer(fs, dest_bi, 0, 0, bytes_or_entries,
+	leaf_paste_in_buffer(dest_bi, 0, 0, bytes_or_entries,
 			     ih_item_body(src,
 				       ih) + get_ih_item_len(ih) -
 			     bytes_or_entries, 0);
@@ -252,8 +250,7 @@ static int leaf_copy_boundary_item(reiserfs_filsys_t *fs,
  * last_first == FIRST_TO_LAST means, that we copy cpy_num  items beginning from first-th item in src to tail of dest
  * last_first == LAST_TO_FIRST means, that we copy cpy_num  items beginning from first-th item in src to head of dest
  */
-static void leaf_copy_items_entirely(reiserfs_filsys_t *fs,
-				     struct buffer_info *dest_bi,
+static void leaf_copy_items_entirely(struct buffer_info *dest_bi,
 				     struct buffer_head *src, int last_first,
 				     int first, int cpy_num)
 {
@@ -329,8 +326,7 @@ static void leaf_copy_items_entirely(reiserfs_filsys_t *fs,
 
 /* This function splits the (liquid) item into two items (useful when
    shifting part of an item into another node.) */
-static void leaf_item_bottle(reiserfs_filsys_t *fs,
-			     struct buffer_info *dest_bi,
+static void leaf_item_bottle(struct buffer_info *dest_bi,
 			     struct buffer_head *src, int last_first,
 			     int item_num, int cpy_bytes)
 {
@@ -340,7 +336,7 @@ static void leaf_item_bottle(reiserfs_filsys_t *fs,
 	if (last_first == FIRST_TO_LAST) {
 		/* if ( if item in position item_num in buffer SOURCE is directory item ) */
 		if (I_IS_DIRECTORY_ITEM(ih = item_head(src, item_num)))
-			leaf_copy_dir_entries(fs, dest_bi, src, FIRST_TO_LAST,
+			leaf_copy_dir_entries(dest_bi, src, FIRST_TO_LAST,
 					      item_num, 0, cpy_bytes);
 		else {
 			struct item_head n_ih;
@@ -358,14 +354,14 @@ static void leaf_item_bottle(reiserfs_filsys_t *fs,
 			//n_ih.ih_version = ih->ih_version;
 			set_ih_key_format(&n_ih, get_ih_key_format(ih));
 			set_ih_flags(&n_ih, get_ih_flags(ih));
-			leaf_insert_into_buf(fs, dest_bi, B_NR_ITEMS(dest),
+			leaf_insert_into_buf(dest_bi, B_NR_ITEMS(dest),
 					     &n_ih, item_body(src, item_num),
 					     0);
 		}
 	} else {
 		/*  if ( if item in position item_num in buffer SOURCE is directory item ) */
 		if (I_IS_DIRECTORY_ITEM(ih = item_head(src, item_num)))
-			leaf_copy_dir_entries(fs, dest_bi, src, LAST_TO_FIRST,
+			leaf_copy_dir_entries(dest_bi, src, LAST_TO_FIRST,
 					      item_num,
 					      get_ih_entry_count(ih) -
 					      cpy_bytes, cpy_bytes);
@@ -410,7 +406,7 @@ static void leaf_item_bottle(reiserfs_filsys_t *fs,
 			//n_ih.ih_version = ih->ih_version;
 			set_ih_key_format(&n_ih, get_ih_key_format(ih));
 			set_ih_flags(&n_ih, get_ih_flags(ih));
-			leaf_insert_into_buf(fs, dest_bi, 0, &n_ih,
+			leaf_insert_into_buf(dest_bi, 0, &n_ih,
 					     item_body(src,
 						       item_num) +
 					     get_ih_item_len(ih) - cpy_bytes,
@@ -423,8 +419,7 @@ static void leaf_item_bottle(reiserfs_filsys_t *fs,
    If cpy_bytes not equal to minus one than copy cpy_num-1 whole items from SOURCE to DEST.
    From last item copy cpy_num bytes for regular item and cpy_num directory entries for
    directory item. */
-static int leaf_copy_items(reiserfs_filsys_t *fs,
-			   struct buffer_info *dest_bi, struct buffer_head *src,
+static int leaf_copy_items(struct buffer_info *dest_bi, struct buffer_head *src,
 			   int last_first, int cpy_num, int cpy_bytes)
 {
 	int pos, i, src_nr_item, bytes;
@@ -441,7 +436,7 @@ static int leaf_copy_items(reiserfs_filsys_t *fs,
 			bytes = -1;
 
 		/* copy the first item or it part or nothing to the end of the DEST (i = leaf_copy_boundary_item(DEST,SOURCE,0,bytes)) */
-		i = leaf_copy_boundary_item(fs, dest_bi, src, FIRST_TO_LAST,
+		i = leaf_copy_boundary_item(dest_bi, src, FIRST_TO_LAST,
 					    bytes);
 		cpy_num -= i;
 		if (cpy_num == 0)
@@ -449,16 +444,16 @@ static int leaf_copy_items(reiserfs_filsys_t *fs,
 		pos += i;
 		if (cpy_bytes == -1)
 			/* copy first cpy_num items starting from position 'pos' of SOURCE to end of DEST */
-			leaf_copy_items_entirely(fs, dest_bi, src,
+			leaf_copy_items_entirely(dest_bi, src,
 						 FIRST_TO_LAST, pos, cpy_num);
 		else {
 			/* copy first cpy_num-1 items starting from position 'pos-1' of the SOURCE to the end of the DEST */
-			leaf_copy_items_entirely(fs, dest_bi, src,
+			leaf_copy_items_entirely(dest_bi, src,
 						 FIRST_TO_LAST, pos,
 						 cpy_num - 1);
 
 			/* copy part of the item which number is cpy_num+pos-1 to the end of the DEST */
-			leaf_item_bottle(fs, dest_bi, src, FIRST_TO_LAST,
+			leaf_item_bottle(dest_bi, src, FIRST_TO_LAST,
 					 cpy_num + pos - 1, cpy_bytes);
 		}
 	} else {
@@ -470,7 +465,7 @@ static int leaf_copy_items(reiserfs_filsys_t *fs,
 			bytes = -1;
 
 		/* copy the last item or it part or nothing to the begin of the DEST (i = leaf_copy_boundary_item(DEST,SOURCE,1,bytes)); */
-		i = leaf_copy_boundary_item(fs, dest_bi, src, LAST_TO_FIRST,
+		i = leaf_copy_boundary_item(dest_bi, src, LAST_TO_FIRST,
 					    bytes);
 
 		cpy_num -= i;
@@ -480,16 +475,16 @@ static int leaf_copy_items(reiserfs_filsys_t *fs,
 		pos = src_nr_item - cpy_num - i;
 		if (cpy_bytes == -1) {
 			/* starting from position 'pos' copy last cpy_num items of SOURCE to begin of DEST */
-			leaf_copy_items_entirely(fs, dest_bi, src,
+			leaf_copy_items_entirely(dest_bi, src,
 						 LAST_TO_FIRST, pos, cpy_num);
 		} else {
 			/* copy last cpy_num-1 items starting from position 'pos+1' of the SOURCE to the begin of the DEST; */
-			leaf_copy_items_entirely(fs, dest_bi, src,
+			leaf_copy_items_entirely(dest_bi, src,
 						 LAST_TO_FIRST, pos + 1,
 						 cpy_num - 1);
 
 			/* copy part of the item which number is pos to the begin of the DEST */
-			leaf_item_bottle(fs, dest_bi, src, LAST_TO_FIRST, pos,
+			leaf_item_bottle(dest_bi, src, LAST_TO_FIRST, pos,
 					 cpy_bytes);
 		}
 	}
@@ -556,11 +551,10 @@ int leaf_move_items(int shift_mode, struct tree_balance *tb,
 	leaf_define_dest_src_infos(shift_mode, tb, &dest_bi, &src_bi,
 				   &first_last, Snew);
 
-	ret_value =
-	    leaf_copy_items(tb->tb_fs, &dest_bi, src_bi.bi_bh, first_last,
-			    mov_num, mov_bytes);
+	ret_value = leaf_copy_items(&dest_bi, src_bi.bi_bh, first_last,
+				    mov_num, mov_bytes);
 
-	leaf_delete_items(tb->tb_fs, &src_bi, first_last,
+	leaf_delete_items(&src_bi, first_last,
 			  (first_last ==
 			   FIRST_TO_LAST) ? 0 : (B_NR_ITEMS(src_bi.bi_bh) -
 						 mov_num), mov_num, mov_bytes);
@@ -613,9 +607,7 @@ int leaf_shift_right(struct tree_balance *tb, int shift_num, int shift_bytes)
 	return ret_value;
 }
 
-static void leaf_delete_items_entirely(reiserfs_filsys_t *sb,
-				       /*struct reiserfs_transaction_handle *th, */
-				       struct buffer_info *bi,
+static void leaf_delete_items_entirely(struct buffer_info *bi,
 				       int first, int del_num);
 /*  If del_bytes == -1, starting from position 'first' delete del_num items in whole in buffer CUR.
     If not.
@@ -624,12 +616,11 @@ static void leaf_delete_items_entirely(reiserfs_filsys_t *sb,
     If last_first == 1. Starting from position 'first+1' delete del_num-1 items in whole. Delete part of body of
     the last item . Part defined by del_bytes. Don't delete last item header.
 */
-void leaf_delete_items(reiserfs_filsys_t *fs,
-		       struct buffer_info *cur_bi,
-		       int last_first, int first, int del_num, int del_bytes)
+void leaf_delete_items(struct buffer_info *cur_bi, int last_first, int first,
+		       int del_num, int del_bytes)
 {
-	struct buffer_head *bh;
-	int item_amount = B_NR_ITEMS(bh = cur_bi->bi_bh);
+	struct buffer_head *bh = cur_bi->bi_bh;;
+	int item_amount = B_NR_ITEMS(bh);
 
 	if (del_num == 0)
 		return;
@@ -642,22 +633,22 @@ void leaf_delete_items(reiserfs_filsys_t *fs,
 
 	if (del_bytes == -1)
 		/* delete del_num items beginning from item in position first */
-		leaf_delete_items_entirely(fs, cur_bi, first, del_num);
+		leaf_delete_items_entirely(cur_bi, first, del_num);
 	else {
 		if (last_first == FIRST_TO_LAST) {
 			/* delete del_num-1 items beginning from item in position first  */
-			leaf_delete_items_entirely(fs, cur_bi, first,
+			leaf_delete_items_entirely(cur_bi, first,
 						   del_num - 1);
 
 			/* delete the part of the first item of the bh do not
 			   delete item header */
-			leaf_cut_from_buffer(fs, cur_bi, 0, 0, del_bytes);
+			leaf_cut_from_buffer(cur_bi, 0, 0, del_bytes);
 		} else {
 			struct item_head *ih;
 			int len;
 
 			/* delete del_num-1 items beginning from item in position first+1  */
-			leaf_delete_items_entirely(fs, cur_bi, first + 1,
+			leaf_delete_items_entirely(cur_bi, first + 1,
 						   del_num - 1);
 
 			if (I_IS_DIRECTORY_ITEM
@@ -672,15 +663,14 @@ void leaf_delete_items(reiserfs_filsys_t *fs,
 			/* delete the part of the last item of the bh
 			   do not delete item header
 			 */
-			leaf_cut_from_buffer(fs, cur_bi, B_NR_ITEMS(bh) - 1,
+			leaf_cut_from_buffer(cur_bi, B_NR_ITEMS(bh) - 1,
 					     len - del_bytes, del_bytes);
 		}
 	}
 }
 
 /* insert item into the leaf node in position before */
-void leaf_insert_into_buf(reiserfs_filsys_t *s,
-			  struct buffer_info *bi,
+void leaf_insert_into_buf(struct buffer_info *bi,
 			  int before,
 			  struct item_head *inserted_item_ih,
 			  const char *inserted_item_body, int zeros_number)
@@ -756,8 +746,7 @@ void leaf_insert_into_buf(reiserfs_filsys_t *s,
 
 /* paste paste_size bytes to affected_item_num-th item.
    When item is a directory, this only prepare space for new entries */
-void leaf_paste_in_buffer(reiserfs_filsys_t *fs,
-			  struct buffer_info *bi,
+void leaf_paste_in_buffer(struct buffer_info *bi,
 			  int affected_item_num,
 			  int pos_in_item,
 			  int paste_size, const char *body, int zeros_number)
@@ -924,8 +913,7 @@ static int leaf_cut_entries(struct buffer_head *bh,
         pos_in_item - number of first deleted entry
         cut_size - count of deleted entries
     */
-void leaf_cut_from_buffer(reiserfs_filsys_t *fs,
-			  struct buffer_info *bi, int cut_item_num,
+void leaf_cut_from_buffer(struct buffer_info *bi, int cut_item_num,
 			  int pos_in_item, int cut_size)
 {
 	int nr;
@@ -1018,8 +1006,7 @@ void leaf_cut_from_buffer(reiserfs_filsys_t *fs,
 }
 
 /* delete del_num items from buffer starting from the first'th item */
-static void leaf_delete_items_entirely(reiserfs_filsys_t *fs,
-				       struct buffer_info *bi,
+static void leaf_delete_items_entirely(struct buffer_info *bi,
 				       int first, int del_num)
 {
 	struct buffer_head *bh = bi->bi_bh;
@@ -1170,7 +1157,7 @@ void delete_item(reiserfs_filsys_t *fs, struct buffer_head *bh, int item_num)
 	buffer_info_init_bh(NULL, &bi, bh);
 	bi.bi_fs = fs;
 
-	leaf_delete_items_entirely(fs, &bi, item_num, 1);
+	leaf_delete_items_entirely(&bi, item_num, 1);
 }
 
 void cut_entry(reiserfs_filsys_t *fs, struct buffer_head *bh,
@@ -1181,5 +1168,5 @@ void cut_entry(reiserfs_filsys_t *fs, struct buffer_head *bh,
 	buffer_info_init_bh(NULL, &bi, bh);
 	bi.bi_fs = fs;
 
-	leaf_cut_from_buffer(fs, &bi, item_num, entry_num, del_count);
+	leaf_cut_from_buffer(&bi, item_num, entry_num, del_count);
 }
