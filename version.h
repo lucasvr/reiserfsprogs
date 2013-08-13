@@ -3,4 +3,4 @@
  */
 
 #define print_banner(prog) \
-fprintf(stderr, "%s %s (2009 www.namesys.com)\n\n", prog, VERSION)
+fprintf(stderr, "%s %s\n\n", prog, VERSION)

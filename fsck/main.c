@@ -312,30 +312,8 @@ static char * parse_options (struct fsck_data * data, int argc, char * argv [])
 ** a working hard drive, copy the file system from the bad **\n\
 ** drive  to the good one -- dd_rescue is  a good tool for **\n\
 ** that -- and only then run this program.                 **\n\
-** If you are using the latest reiserfsprogs and  it fails **\n\
-** please  email bug reports to reiserfs-list@namesys.com, **\n\
-** providing  as  much  information  as  possible --  your **\n\
-** hardware,  kernel,  patches,  settings,  all reiserfsck **\n\
-** messages  (including version),  the reiserfsck logfile, **\n\
-** check  the  syslog file  for  any  related information. **\n\
-** If you would like advice on using this program, support **\n\
-** is available  for $25 at  www.namesys.com/support.html. **\n\
 *************************************************************\n\
 \nWill rebuild the filesystem (%s) tree\n"
-
-#define START_WARNING \
-"*************************************************************\n\
-** If you are using the latest reiserfsprogs and  it fails **\n\
-** please  email bug reports to reiserfs-list@namesys.com, **\n\
-** providing  as  much  information  as  possible --  your **\n\
-** hardware,  kernel,  patches,  settings,  all reiserfsck **\n\
-** messages  (including version),  the reiserfsck logfile, **\n\
-** check  the  syslog file  for  any  related information. **\n\
-** If you would like advice on using this program, support **\n\
-** is available  for $25 at  www.namesys.com/support.html. **\n\
-*************************************************************\n\
-\n"
-
 
 void warn_what_will_be_done (char * file_name, struct fsck_data * data)
 {
@@ -345,8 +323,6 @@ void warn_what_will_be_done (char * file_name, struct fsck_data * data)
 
     if (data->mode == FSCK_REBUILD)
 	reiserfs_warning (warn_to, REBUILD_WARNING, file_name);
-    else
-	reiserfs_warning (warn_to, START_WARNING);
     
     /* warn about fsck mode */
     switch (data->mode) {

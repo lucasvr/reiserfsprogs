@@ -634,8 +634,5 @@ void pass_2 (reiserfs_filsys_t * fs)
 		"start of the partition (a new super block you have just built) and try\n"
 	        "to move the start of the partition a few cylinders aside  and check if\n" 
 		"debugreiserfs /dev/xxx detects a reiserfs super block. If it does this\n"
-	        "is likely to be the right super block version.                        \n"
-		"If this makes you nervous, try  www.namesys.com/support.html,  and for\n"
-		"$25 the author of fsck,  or a colleague  if he is out,  will  step you\n"
-		"through it all.\n");
+	        "is likely to be the right super block version.\n");
 }

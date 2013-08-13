@@ -31,7 +31,7 @@ under  this  license or the GPL.  Further  licensing  options are available for
 commercial and/or other interests directly from reiser@namesys.com<P>
 [END LICENSING]
 
-Send bug reports to reiserfs-dev@namesys.com.
+Send bug reports to reiserfs-devel@vger.kernel.org.
 
 Hideous  Commercial  Pitch: Spread  your  development  costs  across  other  OS
 vendors.  Select from the best in the world,  not the best in your building, by
@@ -45,3 +45,11 @@ do. Send email to reiser@namesys.com.
 
 To understand the code,  after reading the website,  start reading  the code by
 reading reiserfs_fs.h first.
+
+IMPORTANT NOTE: As of approximately October 2007, namesys.com has been
+offline and all of the original Namesys staff have gone on to other ventures
+or are otherwise unavailable. All removals of the namesys.com domain from
+the code and documentation are to avoid confusion by users, not to avoid
+proper attribution. Reiserfsprogs has been maintained by the ReiserFS
+development community for some time and can be reached at
+reiserfs-devel@vger.kernel.org.
