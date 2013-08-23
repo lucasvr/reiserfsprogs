@@ -818,12 +818,11 @@ int replay_journal (reiserfs_filsys_t * fs)
     control.trans_id = get_jh_last_flushed (j_head);
     control.desc_blocknr = get_jh_replay_start_offset (j_head);
 
-    if (!get_boundary_transactions (fs, &cur, &newest)) {
+    trans_count = get_boundary_transactions (fs, &cur, &newest);
+    if (!trans_count) {
 	reiserfs_warning (stderr, "No transactions found\n");
 	return 0;
     }
-
-    trans_count = newest.trans_id - cur.trans_id;
 
     /*  Smth strange with journal header or journal. We cannot say for sure what was the last 
 	replaied transaction, but relying on JH data is preferable. */

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <string.h>
+#include <assert.h>
 
 #include "progbar.h"
 
@@ -37,6 +38,8 @@ int progbar_update(struct progbar * ctx, const char *label, int curr, int max,
 	struct timeval	tv;
 	int dpywidth;
 	int fixed_percent;
+	assert (curr >= 0);
+	assert (max > 0);
 	float percent = ((float) curr) / ((float) max) * 100;
 
 	if (ctx->flags & E2F_FLAG_PROG_SUPPRESS)
