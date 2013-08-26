@@ -1,5 +1,6 @@
 *~
 *.[ao]
+*.8
 
 INSTALL
 Makefile.in
