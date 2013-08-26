@@ -250,13 +250,14 @@ int blockdev_list_compare(const void *block1, const void *block2);
 
 #define set_bit_field_XX(XX,vp,val,from,count) \
 {\
-    __u##XX * p, tmp;\
+    __le##XX * p;\
+    __u##XX tmp;\
 \
     /* make sure that given value can be put in 'count' bits */\
     if (val > (1 << count))\
 	die ("set_bit_field: val %d is too big for %d bits", val, count);\
 \
-    p = (__u##XX *)vp;\
+    p = (__le##XX *)vp;\
     tmp = le##XX##_to_cpu (*p);\
 \
     /* clear 'count' bits starting from 'from'-th one */\
@@ -270,9 +271,10 @@ int blockdev_list_compare(const void *block1, const void *block2);
 
 #define get_bit_field_XX(XX,vp,from,count) \
 \
-    __u##XX * p, tmp;\
+    __le##XX * p;\
+    __u##XX tmp;\
 \
-    p = (__u##XX *)vp;\
+    p = (__le##XX *)vp;\
     tmp = le##XX##_to_cpu (*p);\
 \
     /* clear all bits but 'count' bits starting from 'from'-th one */\

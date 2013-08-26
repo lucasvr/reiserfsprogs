@@ -388,7 +388,8 @@ static int bad_direct_item(reiserfs_filsys_t *fs,
 }
 
 inline void handle_one_pointer(reiserfs_filsys_t *fs,
-			       struct buffer_head *bh, __u32 * item, int offset)
+			       struct buffer_head *bh, __le32 * item,
+			       int offset)
 {
 	if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
 		fsck_log(" - zeroed");
@@ -403,7 +404,7 @@ static int bad_badblocks_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 			      struct item_head *ih)
 {
 	__u32 i;
-	__u32 *ind = (__u32 *) ih_item_body(bh, ih);
+	__le32 *ind = (__le32 *) ih_item_body(bh, ih);
 
 	if (get_ih_item_len(ih) % 4) {
 		fsck_log("%s: block %lu: item (%H) has bad length\n",
@@ -477,7 +478,7 @@ static int bad_badblocks_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 static int bad_indirect_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 			     struct item_head *ih)
 {
-	__u32 *ind = (__u32 *) ih_item_body(bh, ih);
+	__le32 *ind = (__le32 *) ih_item_body(bh, ih);
 	unsigned int i;
 
 	if (get_ih_item_len(ih) % 4) {

@@ -333,14 +333,14 @@ static void start_new_sequence(__u32 * start, int *len, __u32 new)
 
 static int sequence_finished(__u32 start, int *len, __u32 new)
 {
-	if (le32_to_cpu(start) == INT_MAX)
+	if (start == INT_MAX)
 		return 1;
 
 	if (start == 0 && new == 0) {
 		(*len)++;
 		return 0;
 	}
-	if (start != 0 && (le32_to_cpu(start) + *len) == le32_to_cpu(new)) {
+	if (start != 0 && (start + *len) == new) {
 		(*len)++;
 		return 0;
 	}
@@ -353,20 +353,21 @@ static void print_sequence(FILE * fp, __u32 start, int len)
 		return;
 
 	if (len == 1)
-		reiserfs_warning(fp, " %u", le32_to_cpu(start));
+		reiserfs_warning(fp, " %u", start);
 	else
-		reiserfs_warning(fp, " %u(%d)", le32_to_cpu(start), len);
+		reiserfs_warning(fp, " %u(%d)", start, len);
 }
 
 void print_indirect_item(FILE * fp, struct buffer_head *bh, int item_num)
 {
 	struct item_head *ih;
 	unsigned int j;
-	__u32 *unp, prev = INT_MAX;
+	__le32 *unp;
+	__u32 prev = INT_MAX;
 	int num = 0;
 
 	ih = item_head(bh, item_num);
-	unp = (__u32 *) ih_item_body(bh, ih);
+	unp = (__le32 *) ih_item_body(bh, ih);
 
 	if (get_ih_item_len(ih) % UNFM_P_SIZE)
 		reiserfs_warning(fp, "print_indirect_item: invalid item len");
@@ -1016,13 +1017,13 @@ void print_objectid_map(FILE * fp, reiserfs_filsys_t *fs)
 {
 	int i;
 	struct reiserfs_super_block *sb;
-	__u32 *omap;
+	__le32 *omap;
 
 	sb = fs->fs_ondisk_sb;
 	if (fs->fs_format == REISERFS_FORMAT_3_6)
-		omap = (__u32 *) (sb + 1);
+		omap = (__le32 *) (sb + 1);
 	else if (fs->fs_format == REISERFS_FORMAT_3_5)
-		omap = (__u32 *) ((struct reiserfs_super_block_v1 *)sb + 1);
+		omap = (__le32 *) ((struct reiserfs_super_block_v1 *)sb + 1);
 	else {
 		reiserfs_warning(fp,
 				 "print_objectid_map: proper signature is not found\n");

@@ -134,21 +134,21 @@ struct packed_dir_entry {
 
 #define fread_le16(pv)\
 {\
-    __u16 tmp; \
+    __le16 tmp; \
     fread16(&tmp); \
     *pv = le16_to_cpu(tmp); \
 }
 
 #define fread_le32(pv)\
 {\
-    __u32 tmp; \
+    __le32 tmp; \
     fread32(&tmp); \
     *pv = le32_to_cpu(tmp); \
 }
 
 #define fread_le64(pv)\
 {\
-    __u64 tmp; \
+    __le64 tmp; \
     fread64(&tmp); \
     *pv = le64_to_cpu(tmp); \
 }
@@ -160,19 +160,19 @@ struct packed_dir_entry {
 
 #define fwrite_le16(pv)\
 {\
-    __u16 tmp = cpu_to_le16(*(pv));\
+    __le16 tmp = cpu_to_le16(*(pv));\
     fwrite16(&tmp);\
 }
 
 #define fwrite_le32(pv)\
 {\
-    __u32 tmp = cpu_to_le32(*(pv));\
+    __le32 tmp = cpu_to_le32(*(pv));\
     fwrite32(&tmp);\
 }
 
 #define fwrite_le64(pv)\
 {\
-    __u64 tmp = cpu_to_le64(*(pv));\
+    __le64 tmp = cpu_to_le64(*(pv));\
     fwrite64(&tmp);\
 }
 

@@ -523,7 +523,7 @@ void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
 					 "not so many unfm ptrs in it\n");
 			return;
 		}
-		d32_put((__u32 *) ih_item_body(bh, ih), pos_in_item,
+		d32_put((__le32 *) ih_item_body(bh, ih), pos_in_item,
 			get_sb_block_count(fs->fs_ondisk_sb) + 100);
 		break;
 

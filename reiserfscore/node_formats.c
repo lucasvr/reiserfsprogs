@@ -495,7 +495,7 @@ static int is_bad_indirect(reiserfs_filsys_t *fs, struct item_head *ih,
 			   char *item, check_unfm_func_t check_unfm_func)
 {
 	unsigned int i;
-	__u32 *ind = (__u32 *) item;
+	__le32 *ind = (__le32 *) item;
 
 	if (get_ih_item_len(ih) % UNFM_P_SIZE)
 		return 1;
@@ -1147,8 +1147,8 @@ void get_set_sd_field(int field, struct item_head *ih, void *sd,
 
 static int comp_ids(const void *p1, const void *p2)
 {
-	__u32 id1 = le32_to_cpu(*(__u32 *) p1);
-	__u32 id2 = le32_to_cpu(*(__u32 *) p2);
+	__u32 id1 = le32_to_cpu(*(__le32 *) p1);
+	__u32 id2 = le32_to_cpu(*(__le32 *) p2);
 
 	if (id1 < id2)
 		return -1;
@@ -1161,14 +1161,14 @@ static int comp_ids(const void *p1, const void *p2)
 
 int is_objectid_used(reiserfs_filsys_t *fs, __u32 objectid)
 {
-	__u32 *objectid_map;
+	__le32 *objectid_map;
 	__u32 count = get_sb_oid_cursize(fs->fs_ondisk_sb);
 	int ret;
 	__u32 pos;
-	__u32 le_id = cpu_to_le32(objectid);
+	__le32 le_id = cpu_to_le32(objectid);
 
 	objectid_map =
-	    (__u32 *) ((char *)fs->fs_ondisk_sb +
+	    (__le32 *) ((char *)fs->fs_ondisk_sb +
 		       reiserfs_super_block_size(fs->fs_ondisk_sb));
 
 	ret =
@@ -1186,7 +1186,7 @@ int is_objectid_used(reiserfs_filsys_t *fs, __u32 objectid)
 void mark_objectid_used(reiserfs_filsys_t *fs, __u32 objectid)
 {
 	int i;
-	__u32 *objectid_map;
+	__le32 *objectid_map;
 	int cursize;
 
 	if (is_objectid_used(fs, objectid)) {
@@ -1194,7 +1194,7 @@ void mark_objectid_used(reiserfs_filsys_t *fs, __u32 objectid)
 	}
 
 	objectid_map =
-	    (__u32 *) ((char *)fs->fs_ondisk_sb +
+	    (__le32 *) ((char *)fs->fs_ondisk_sb +
 		       reiserfs_super_block_size(fs->fs_ondisk_sb));
 	cursize = get_sb_oid_cursize(fs->fs_ondisk_sb);
 

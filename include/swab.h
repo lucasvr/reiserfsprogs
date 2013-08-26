@@ -7,7 +7,7 @@
 #define REISERFSPROGS_SWAB_H
 
 #include <endian.h>
-#include <asm/types.h>
+#include <linux/types.h>
 
 #define __swab16(x) \
 ({ \
@@ -42,23 +42,27 @@
 })
 
 #ifndef le32_to_cpu
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#ifdef __CHECKER__
+#define __force		__attribute__((force))
+#else
+#define __force
+#endif
 
-# define cpu_to_le16(val)                 (val)
-# define le16_to_cpu(val)                 (val)
-# define cpu_to_le32(val)                 (val)
-# define le32_to_cpu(val)                 (val)
-# define cpu_to_le64(val)                 (val)
-# define le64_to_cpu(val)                 (val)
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define cpu_to_le64(x) ((__force __le64)(__u64)(x))
+#define le64_to_cpu(x) ((__force __u64)(__le64)(x))
+#define cpu_to_le32(x) ((__force __le32)(__u32)(x))
+#define le32_to_cpu(x) ((__force __u32)(__le32)(x))
+#define cpu_to_le16(x) ((__force __le16)(__u16)(x))
+#define le16_to_cpu(x) ((__force __u16)(__le16)(x))
 
 #elif __BYTE_ORDER == __BIG_ENDIAN
-
-# define cpu_to_le16(val)                 __swab16(val)
-# define le16_to_cpu(val)                 __swab16(val)
-# define cpu_to_le32(val)                 __swab32(val)
-# define le32_to_cpu(val)                 __swab32(val)
-# define cpu_to_le64(val)                 __swab64(val)
-# define le64_to_cpu(val)                 __swab64(val)
+#define cpu_to_le64(x) ((__force __le64)__swab64((x)))
+#define le64_to_cpu(x) __swab64((__force __u64)(__le64)(x))
+#define cpu_to_le32(x) ((__force __le32)__swab32((x)))
+#define le32_to_cpu(x) __swab32((__force __u32)(__le32)(x))
+#define cpu_to_le16(x) ((__force __le16)__swab16((x)))
+#define le16_to_cpu(x) __swab16((__force __u16)(__le16)(x))
 
 #else
 # error "nuxi/pdp-endian archs are not supported"

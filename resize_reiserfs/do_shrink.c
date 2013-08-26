@@ -127,9 +127,9 @@ static unsigned long move_formatted_block(reiserfs_filsys_t *fs,
 				continue;
 
 			if (is_indirect_ih(ih)) {
-				__u32 *indirect;
+				__le32 *indirect;
 
-				indirect = (__u32 *) ih_item_body(bh, ih);
+				indirect = (__le32 *) ih_item_body(bh, ih);
 				for (j = 0; j < I_UNFM_NUM(ih); j++) {
 					unsigned long unfm_block;
 

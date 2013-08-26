@@ -100,14 +100,14 @@ static void pack_direct(struct packed_item *pi, struct buffer_head *bh,
 
 	if (get_pi_mask(pi) & SAFE_LINK)
 		set_key_dirid(&ih->ih_key,
-			      d32_get((__u32 *) ih_item_body(bh, ih), 0));
+			      d32_get((__le32 *) ih_item_body(bh, ih), 0));
 
 	/* send key components which are to be sent */
 	pack_ih(pi, ih);
 }
 
 /* if there is at least one extent longer than 2 - it is worth packing */
-static int should_pack_indirect(__u32 * ind_item, int unfm_num)
+static int should_pack_indirect(__le32 * ind_item, int unfm_num)
 {
 	int i, len;
 
@@ -132,13 +132,13 @@ static void pack_indirect(struct packed_item *pi, struct buffer_head *bh,
 			  struct item_head *ih)
 {
 	unsigned int i;
-	__u32 *ind_item;
+	__le32 *ind_item;
 	__u16 len;
 
 	if (get_ih_entry_count(ih))
 		set_pi_mask(pi, get_pi_mask(pi) | IH_FREE_SPACE);
 
-	ind_item = (__u32 *) ih_item_body(bh, ih);
+	ind_item = (__le32 *) ih_item_body(bh, ih);
 	if (!should_pack_indirect(ind_item, I_UNFM_NUM(ih)))
 		set_pi_mask(pi, get_pi_mask(pi) | WHOLE_INDIRECT);
 
@@ -275,8 +275,8 @@ static void pack_stat_data(struct packed_item *pi, struct buffer_head *bh,
 		 */
 		struct stat_data *sd;
 		/* these will maintain disk-order values */
-		__u16 nlink16;
-		__u32 nlink32, size32;
+		__le16 nlink16;
+		__le32 nlink32, size32;
 		__u64 size64;
 
 		sd = (struct stat_data *)ih_item_body(bh, ih);

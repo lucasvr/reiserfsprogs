@@ -213,10 +213,10 @@ void id_map_flush(struct id_map *map, reiserfs_filsys_t *fs)
 {
 	int size, max, i;
 	__u32 id, prev_id;
-	__u32 *sb_objectid_map;
+	__le32 *sb_objectid_map;
 
 	size = reiserfs_super_block_size(fs->fs_ondisk_sb);
-	sb_objectid_map = (__u32 *) ((char *)(fs->fs_ondisk_sb) + size);
+	sb_objectid_map = (__le32 *) ((char *)(fs->fs_ondisk_sb) + size);
 
 	max = ((fs->fs_blocksize - size) >> 3 << 1);
 	set_sb_oid_maxsize(fs->fs_ondisk_sb, max);
@@ -286,10 +286,10 @@ void id_map_flush(struct id_map *map, reiserfs_filsys_t *fs)
 void fetch_objectid_map (struct id_map * map, reiserfs_filsys_t *fs)
 {
     int sb_size;
-    __u32 * sb_objectid_map;
+    __le32 * sb_objectid_map;
 
     sb_size = reiserfs_super_block_size (fs->fs_ondisk_sb);
-    sb_objectid_map = (__u32 *)((char *)(fs->fs_ondisk_sb) + sb_size);
+    sb_objectid_map = (__le32 *)((char *)(fs->fs_ondisk_sb) + sb_size);
 
     if (map->m_page_count != 1)
 	die ("fetch_objectid_map: can not fetch long map");

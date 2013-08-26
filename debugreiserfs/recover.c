@@ -81,7 +81,7 @@ void do_recover(reiserfs_filsys_t fs)
 
 			ih = item_head(bh, 0);
 			for (i = 0; i < node_item_number(bh); i++, ih++) {
-				__u32 *indirect;
+				__le32 *indirect;
 				struct buffer_head *tmp_bh;
 
 				if (!is_indirect_ih(ih)
@@ -385,7 +385,7 @@ static void recover_items(FILE * fp, reiserfs_filsys_t *fs, FILE * target_file)
 		} else if (is_indirect_ih(ih)) {
 			for (j = 0; j < I_UNFM_NUM(ih); j++) {
 				unfm_ptr =
-				    d32_get((__u32 *) ih_item_body(bh, ih), j);
+				    d32_get((__le32 *) ih_item_body(bh, ih), j);
 				if (!unfm_ptr) {
 					fseek(target_file, fs->fs_blocksize,
 					      SEEK_CUR);

@@ -676,7 +676,7 @@ static void pass0_correct_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 	int file_format = KEY_FORMAT_UNDEFINED;
 	struct item_head *ih;
 
-	__u32 *ind_item;
+	__le32 *ind_item;
 	__u64 fs_size;
 	__u64 offset;
 	int symlnk = 0;
@@ -1607,7 +1607,7 @@ start_again:
 	    }
 	}
 */
-		ind_item = (__u32 *) ih_item_body(bh, ih);
+		ind_item = (__le32 *) ih_item_body(bh, ih);
 		for (j = 0; j < (int)I_UNFM_NUM(ih); j++) {
 			unfm_ptr = d32_get(ind_item, j);
 			if (!unfm_ptr)
@@ -1766,7 +1766,7 @@ static int is_bad_indirect(struct item_head *ih, char *item, int dev,
 	blocks = get_sb_block_count(fs->fs_ondisk_sb);
 
 	for (i = 0; i < I_UNFM_NUM(ih); i++) {
-		__u32 *ind = (__u32 *) item;
+		__le32 *ind = (__le32 *) item;
 
 		if (d32_get(ind, i) >= blocks) {
 			bad++;

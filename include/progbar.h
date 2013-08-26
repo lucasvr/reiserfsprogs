@@ -1,6 +1,9 @@
 #ifndef _PROGBAR_H_
 #define _PROGBAR_H_
 
+#include <time.h>
+#include <stdio.h>
+
 enum {
 	E2F_FLAG_PROG_SUPPRESS = 1,
 	E2F_FLAG_PROG_BAR = 2,

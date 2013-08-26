@@ -630,6 +630,7 @@ int reiserfs_bin_search(void *key, void *base, __u32 num, int width,
 #define BLOCKLIST__ELEMENT_NUMBER 10
 
 /*element is block number and device*/
+/* XXX ENDIAN CHECK */
 int blockdev_list_compare(const void *block1, const void *block2)
 {
 	if (*(__u32 *) block1 < *(__u32 *) block2)

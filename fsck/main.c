@@ -1331,10 +1331,6 @@ int main(int argc, char *argv[])
 	screen_savebuffer = getmem(screen_width + 1);
 	memset(screen_savebuffer, 0, screen_savebuffer_len + 1);
 
-	lost_found_dir_key.k2_dir_id =
-	    cpu_to_le32(lost_found_dir_key.k2_dir_id);
-	lost_found_dir_key.k2_objectid =
-	    cpu_to_le32(lost_found_dir_key.k2_objectid);
 	/* this is only needed (and works) when running under 2.4 on regular files */
 	if (setrlimit(RLIMIT_FSIZE, &rlim) == -1) {
 		reiserfs_warning(stderr,

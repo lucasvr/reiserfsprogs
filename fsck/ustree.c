@@ -40,7 +40,7 @@ void reiserfsck_insert_item(struct reiserfs_path *path, struct item_head *ih,
 
 static void free_unformatted_nodes(struct item_head *ih, struct buffer_head *bh)
 {
-	__u32 *punfm = (__u32 *) ih_item_body(bh, ih);
+	__le32 *punfm = (__le32 *) ih_item_body(bh, ih);
 	unsigned int i;
 
 	for (i = 0; i < I_UNFM_NUM(ih); i++) {
@@ -90,7 +90,7 @@ void reiserfsck_cut_from_item(struct reiserfs_path *path, int cut_size)
 	if (is_indirect_ih(ih = tp_item_head(path))) {
 		struct buffer_head *bh = PATH_PLAST_BUFFER(path);
 		__u32 unfm_ptr =
-		    d32_get((__u32 *) ih_item_body(bh, ih), I_UNFM_NUM(ih) - 1);
+		    d32_get((__le32 *)ih_item_body(bh, ih), I_UNFM_NUM(ih) - 1);
 		if (unfm_ptr != 0) {
 			struct buffer_head *to_be_forgotten;
 

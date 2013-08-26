@@ -57,7 +57,7 @@ static unsigned long indirect_to_direct(struct reiserfs_path *path, __u64 len,
 			    TYPE_DIRECT);
 
 	// we do not know what length this item should be
-	unfm_ptr = d32_get((__u32 *) tp_item_body(path), I_UNFM_NUM(ih) - 1);
+	unfm_ptr = d32_get((__le32 *) tp_item_body(path), I_UNFM_NUM(ih) - 1);
 	if (unfm_ptr && (unfm_bh = bread(bh->b_dev, unfm_ptr, bh->b_size))) {
 		/* we can read the block */
 		buf = unfm_bh->b_data;
@@ -375,8 +375,8 @@ int are_file_items_correct(struct item_head *sd_ih, void *sd, __u64 * size,
 					else
 						for (i = 0; i < I_UNFM_NUM(ih);
 						     i++) {
-							__u32 *ind =
-							    (__u32 *)
+							__le32 *ind =
+							    (__le32 *)
 							    tp_item_body(&path);
 
 							if (d32_get(ind, i) !=
@@ -413,8 +413,8 @@ int are_file_items_correct(struct item_head *sd_ih, void *sd, __u64 * size,
 								    FIXABLE);
 						pathrelse(&path);
 					} else {
-						__u32 *ind =
-						    (__u32 *) tp_item_body(&path);
+						__le32 *ind =
+						    (__le32 *) tp_item_body(&path);
 						/*   DEBUG message.
 						   fsck_log ("are_file_items_correct: The indirect item is converted back to direct %K\n", &ih->ih_key);
 						 */
@@ -647,8 +647,8 @@ static int create_first_item_of_file(struct item_head *ih, char *item,
 				     struct reiserfs_path *path,
 				     int was_in_tree)
 {
-	__u32 unfm_ptr;
-	__u32 *ni = 0;
+	__le32 unfm_ptr;
+	__le32 *ni = 0;
 	struct buffer_head *unbh;
 	struct item_head indih;
 	unsigned int i;
@@ -743,7 +743,7 @@ static unsigned long block_to_start(struct reiserfs_path *path)
 		return bh->b_blocknr;
 
 	ih--;
-	blk = d32_get((__u32 *) ih_item_body(bh, ih), I_UNFM_NUM(ih) - 1);
+	blk = d32_get((__le32 *) ih_item_body(bh, ih), I_UNFM_NUM(ih) - 1);
 	return (blk ? blk : bh->b_blocknr);
 }
 
@@ -752,7 +752,7 @@ static void direct2indirect2(unsigned long unfm, struct reiserfs_path *path)
 	struct item_head *ih;
 	struct reiserfs_key key;
 	struct buffer_head *unbh;
-	__u32 ni;
+	__le32 ni;
 	int copied = 0;
 	int file_format;
 
@@ -856,7 +856,7 @@ static int append_to_unformatted_node(struct item_head *comingih,
 	int zero_number;
 
 	bh = PATH_PLAST_BUFFER(path);
-	unfm_ptr = d32_get((__u32 *) ih_item_body(bh, ih), I_UNFM_NUM(ih) - 1);
+	unfm_ptr = d32_get((__le32 *) ih_item_body(bh, ih), I_UNFM_NUM(ih) - 1);
 
 	/* append to free space of the last unformatted node of indirect item ih */
 	free_space =
@@ -896,7 +896,7 @@ static int append_to_unformatted_node(struct item_head *comingih,
 		/*if (unfm_ptr == 0 || unfm_ptr >= SB_BLOCK_COUNT (fs)) { */
 		unbh = reiserfsck_get_new_buffer(bh->b_blocknr);
 		memset(unbh->b_data, 0, unbh->b_size);
-		d32_put((__u32 *) ih_item_body(bh, ih), I_UNFM_NUM(ih) - 1,
+		d32_put((__le32 *) ih_item_body(bh, ih), I_UNFM_NUM(ih) - 1,
 			unbh->b_blocknr);
 		/*mark_block_unformatted (unbh->b_blocknr); */
 		mark_buffer_dirty(bh);
@@ -924,7 +924,7 @@ static int append_to_unformatted_node(struct item_head *comingih,
 int reiserfsck_append_file(struct item_head *comingih, char *item, int pos,
 			   struct reiserfs_path *path, int was_in_tree)
 {
-	__u32 *ni;
+	__le32 *ni;
 	struct buffer_head *unbh;
 	int retval;
 	struct item_head *ih = tp_item_head(path);
@@ -1023,7 +1023,7 @@ long long int must_there_be_a_hole(struct item_head *comingih,
 int reiserfs_append_zero_unfm_ptr(struct reiserfs_path *path,
 				  long long int p_count)
 {
-	__u32 *ni;
+	__le32 *ni;
 	long long int count;
 
 	if (is_direct_ih(tp_item_head(path)))
@@ -1057,7 +1057,7 @@ static int overwrite_by_direct_item(struct item_head *comingih, char *item,
 	bh = PATH_PLAST_BUFFER(path);
 	ih = tp_item_head(path);
 
-	unfm_ptr = d32_get((__u32 *) ih_item_body(bh, ih), path->pos_in_item);
+	unfm_ptr = d32_get((__le32 *) ih_item_body(bh, ih), path->pos_in_item);
 	unbh = 0;
 
 	if (unfm_ptr != 0 && unfm_ptr < get_sb_block_count(fs->fs_ondisk_sb)) {
@@ -1070,7 +1070,7 @@ static int overwrite_by_direct_item(struct item_head *comingih, char *item,
 	if (unfm_ptr == 0 || unfm_ptr >= get_sb_block_count(fs->fs_ondisk_sb)) {
 		if ((unbh = reiserfsck_get_new_buffer(bh->b_blocknr)) != NULL) {
 			memset(unbh->b_data, 0, unbh->b_size);
-			d32_put((__u32 *) ih_item_body(bh, ih), path->pos_in_item,
+			d32_put((__le32 *) ih_item_body(bh, ih), path->pos_in_item,
 				unbh->b_blocknr);
 			mark_buffer_dirty(bh);
 		} else {
@@ -1151,17 +1151,17 @@ void overwrite_unfm_by_unfm(unsigned long unfm_in_tree,
 
 /* put unformatted node pointers from incoming item over the in-tree ones */
 static int overwrite_by_indirect_item(struct item_head *comingih,
-				      __u32 * coming_item,
+				      __le32 * coming_item,
 				      struct reiserfs_path *path,
 				      int *pos_in_coming_item)
 {
 	struct buffer_head *bh = PATH_PLAST_BUFFER(path);
 	struct item_head *ih = tp_item_head(path);
 	int written;
-	__u32 *item_in_tree;
+	__le32 *item_in_tree;
 	int src_unfm_ptrs, dest_unfm_ptrs, to_copy, i, dirty = 0;
 
-	item_in_tree = (__u32 *) ih_item_body(bh, ih) + path->pos_in_item;
+	item_in_tree = (__le32 *) ih_item_body(bh, ih) + path->pos_in_item;
 	coming_item += *pos_in_coming_item;
 
 	dest_unfm_ptrs = I_UNFM_NUM(ih) - path->pos_in_item;
@@ -1224,7 +1224,7 @@ static int reiserfsck_overwrite_file(struct item_head *comingih, char *item,
 				     " be overwritten by indirect item %k",
 				     &ih->ih_key, &comingih->ih_key);
 			/* use pointer from coming indirect item */
-			unfm_ptr = d32_get((__u32 *) item, *pos_in_coming_item);
+			unfm_ptr = d32_get((__le32 *) item, *pos_in_coming_item);
 			if (!was_in_tree) {
 				if (still_bad_unfm_ptr_2(unfm_ptr))
 					die("reiserfsck_overwrite_file: The pointer to the unformatted block (%u)" " points to the bad area.", unfm_ptr);
@@ -1242,7 +1242,7 @@ static int reiserfsck_overwrite_file(struct item_head *comingih, char *item,
 			     " %k cannot not be in the tree yet", &ih->ih_key,
 			     &comingih->ih_key);
 		written =
-		    overwrite_by_indirect_item(comingih, (__u32 *) item, path,
+		    overwrite_by_indirect_item(comingih, (__le32 *) item, path,
 					       pos_in_coming_item);
 	}
 

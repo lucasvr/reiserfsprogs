@@ -753,7 +753,7 @@ static int check_semantic_pass(struct reiserfs_key *key,
 static int check_safe_links(void)
 {
 	struct reiserfs_path safe_link_path, path;
-	struct reiserfs_key safe_link_key = { -1, 0, {{0, 0}} };
+	struct reiserfs_key safe_link_key = { cpu_to_le32(-1), 0, {{0, 0}} };
 	struct reiserfs_key key = { 0, 0, {{0, 0}} };
 	struct reiserfs_key *rkey;
 	struct item_head *tmp_ih;
@@ -784,7 +784,7 @@ static int check_safe_links(void)
 				       get_ih_item_len(tmp_ih));
 
 		set_key_dirid(&key,
-			      d32_get((__u32 *) tp_item_body(&safe_link_path), 0));
+			      d32_get((__le32 *) tp_item_body(&safe_link_path), 0));
 		set_key_objectid(&key, get_key_objectid(&tmp_ih->ih_key));
 		if ((rkey = reiserfs_next_key(&safe_link_path)) == NULL)
 			set_key_dirid(&safe_link_key, 0);
@@ -803,7 +803,7 @@ static int check_safe_links(void)
 				    ("Invalid safe link %k: cannot find the pointed object (%K) - "
 				     "safe link was deleted\n", &tmp_ih->ih_key,
 				     &key);
-				d32_put((__u32 *) tp_item_body(&safe_link_path), 0,
+				d32_put((__le32 *) tp_item_body(&safe_link_path), 0,
 					0);
 				pathrelse(&path);
 				reiserfsck_delete_item(&safe_link_path, 0);
@@ -825,7 +825,7 @@ static int check_safe_links(void)
 					    ("Invalid 'truncate' safe link %k, cannot happen for "
 					     "a directory (%K) - safe link was deleted\n",
 					     &tmp_ih->ih_key, &key);
-					d32_put((__u32 *)
+					d32_put((__le32 *)
 						tp_item_body(&safe_link_path), 0,
 						0);
 					pathrelse(&path);

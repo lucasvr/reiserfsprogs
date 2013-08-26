@@ -540,7 +540,7 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 				 "generated (%U)\n", sb->s_uuid);
 		}
 #endif
-		if (sb->s_flags != 0 && sb->s_flags != 1) {
+		if (sb->s_flags != 0 && sb->s_flags != cpu_to_le32(1)) {
 			fsck_log
 			    ("rebuild-sb: super block flags found (%u), zeroed\n",
 			     sb->s_flags);

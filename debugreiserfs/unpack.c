@@ -220,7 +220,7 @@ static void unpack_stat_data(struct packed_item *pi, struct buffer_head *bh,
 static void unpack_indirect(struct packed_item *pi, struct buffer_head *bh,
 			    struct item_head *ih)
 {
-	__u32 *ind_item, *end;
+	__le32 *ind_item, *end;
 	int i;
 	__u16 v16;
 
@@ -229,7 +229,7 @@ static void unpack_indirect(struct packed_item *pi, struct buffer_head *bh,
 		set_ih_entry_count(ih, 0);
 	}
 
-	ind_item = (__u32 *) ih_item_body(bh, ih);
+	ind_item = (__le32 *) ih_item_body(bh, ih);
 
 	if (get_pi_mask(pi) & SAFE_LINK) {
 		d32_put(ind_item, 0, get_key_dirid(&ih->ih_key));
@@ -263,7 +263,7 @@ static void unpack_indirect(struct packed_item *pi, struct buffer_head *bh,
 static void unpack_direct(struct packed_item *pi, struct buffer_head *bh,
 			  struct item_head *ih)
 {
-	__u32 *d_item = (__u32 *) ih_item_body(bh, ih);
+	__le32 *d_item = (__le32 *) ih_item_body(bh, ih);
 
 	if (!(get_pi_mask(pi) & IH_FREE_SPACE))
 		/* ih_free_space was not packed - set default */
@@ -285,8 +285,8 @@ static void unpack_leaf(int dev, hashf_t hash_func, __u16 blocksize)
 	struct packed_item pi;
 	struct item_head *ih;
 	int i;
-	__u16 v16;
-	__u32 v32;
+	__le16 v16;
+	__le32 v32;
 
 	/* block number */
 	fread_le32(&v32);
@@ -489,7 +489,7 @@ void unpack_partition(int fd, int jfd)
 {
 	__u32 magic32;
 	long position;
-	__u16 magic16;
+	__le16 magic16;
 	__u16 blocksize;
 	int dev = fd;
 

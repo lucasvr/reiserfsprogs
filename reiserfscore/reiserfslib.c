@@ -13,7 +13,8 @@ struct reiserfs_key root_dir_key = { 0, 0, {{0, 0},} };
 struct reiserfs_key parent_root_dir_key = { 0, 0, {{0, 0},} };
 struct reiserfs_key lost_found_dir_key = { 0, 0, {{0, 0},} };
 static struct reiserfs_key badblock_key =
-    { BADBLOCK_DIRID, BADBLOCK_OBJID, {{0, 0},} };
+    { cpu_to_le32(BADBLOCK_DIRID), cpu_to_le32(BADBLOCK_OBJID),
+      {{cpu_to_le32(0), cpu_to_le32(0)},} };
 
 __u16 root_dir_format = 0;
 __u16 lost_found_dir_format = 0;
@@ -597,7 +598,7 @@ static int comp_dir_entries(const void *p1, const void *p2)
 {
 	__u32 off1, off2;
 
-	off1 = d32_get((__u32 *) p1, 0);
+	off1 = d32_get((__le32 *) p1, 0);
 	off2 = *(__u32 *) p2;
 
 	if (off1 < off2)
@@ -1412,14 +1413,14 @@ void mark_badblock(reiserfs_filsys_t *fs,
 		   struct reiserfs_path *badblock_path, void *data)
 {
 	struct item_head *tmp_ih;
-	__u32 *ind_item;
+	__le32 *ind_item;
 	__u32 i;
 
 	if (!fs->fs_badblocks_bm)
 		create_badblock_bitmap(fs, NULL);
 
 	tmp_ih = tp_item_head(badblock_path);
-	ind_item = (__u32 *) tp_item_body(badblock_path);
+	ind_item = (__le32 *) tp_item_body(badblock_path);
 
 	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++) {
 		reiserfs_bitmap_set_bit(fs->fs_badblocks_bm,
@@ -1434,7 +1435,7 @@ void add_badblock_list(reiserfs_filsys_t *fs, int replace)
 	struct tree_balance tb;
 	struct reiserfs_path badblock_path;
 	struct item_head badblock_ih;
-	__u32 ni;
+	__le32 ni;
 
 	__u64 offset;
 	__u32 i, j;

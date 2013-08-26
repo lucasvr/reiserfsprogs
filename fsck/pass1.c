@@ -94,11 +94,11 @@ static char *still_bad_unfm_ptr_to_string(int val)
 static void indirect_in_tree(struct buffer_head *bh, struct item_head *ih)
 {
 	unsigned int i;
-	__u32 *unp;
+	__le32 *unp;
 	__u32 unfm_ptr;
 	int ret;
 
-	unp = (__u32 *) ih_item_body(bh, ih);
+	unp = (__le32 *) ih_item_body(bh, ih);
 
 	for (i = 0; i < I_UNFM_NUM(ih); i++) {
 		unfm_ptr = d32_get(unp, i);
@@ -344,7 +344,7 @@ static void pass1_correct_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 {
 	unsigned int i, j;
 	struct item_head *ih;
-	__u32 *ind_item;
+	__le32 *ind_item;
 	__u32 unfm_ptr;
 	int dirty = 0;
 
@@ -423,7 +423,7 @@ static void pass1_correct_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 			continue;
 
 		/* correct indirect items */
-		ind_item = (__u32 *) ih_item_body(bh, ih);
+		ind_item = (__le32 *) ih_item_body(bh, ih);
 
 		for (j = 0; j < I_UNFM_NUM(ih); j++) {
 			unfm_ptr = d32_get(ind_item, j);

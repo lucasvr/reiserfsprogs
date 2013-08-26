@@ -290,10 +290,11 @@ static void callback_new_badblocks(reiserfs_filsys_t *fs,
 				   void *data)
 {
 	struct item_head *tmp_ih;
-	__u32 *ind_item, i;
+	__le32 *ind_item;
+	__u32 i;
 
 	tmp_ih = tp_item_head(badblock_path);
-	ind_item = (__u32 *) tp_item_body(badblock_path);
+	ind_item = (__le32 *) tp_item_body(badblock_path);
 
 	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++) {
 		if (reiserfs_bitmap_test_bit(fs->fs_badblocks_bm,
@@ -314,10 +315,11 @@ static void callback_clear_badblocks(reiserfs_filsys_t *fs,
 				     void *data)
 {
 	struct item_head *tmp_ih;
-	__u32 *ind_item, i;
+	__le32 *ind_item;
+	__u32 i;
 
 	tmp_ih = tp_item_head(badblock_path);
-	ind_item = (__u32 *) tp_item_body(badblock_path);
+	ind_item = (__le32 *) tp_item_body(badblock_path);
 
 	for (i = 0; i < I_UNFM_NUM(tmp_ih); i++) {
 		reiserfs_bitmap_clear_bit(fs->fs_bitmap2, d32_get(ind_item, i));
