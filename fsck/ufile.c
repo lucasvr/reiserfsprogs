@@ -219,7 +219,7 @@ int are_file_items_correct(struct item_head *sd_ih, void *sd, __u64 * size,
 	path.path_length = ILLEGAL_PATH_ELEMENT_OFFSET;
 
 	do {
-		retval = usearch_by_position(fs, key, key_version, &path);
+		retval = reiserfs_search_by_position(fs, key, key_version, &path);
 		if (retval == POSITION_FOUND && path.pos_in_item != 0)
 			die("are_file_items_correct: All bytes we look for must be first items byte (position 0).");
 
@@ -800,7 +800,7 @@ static void direct2indirect2(unsigned long unfm, struct reiserfs_path *path)
 //  key.k_offset -= copied;
 	ni = cpu_to_le32(unbh->b_blocknr);
 
-	if (usearch_by_position(fs, &key, file_format, path) == FILE_NOT_FOUND) {
+	if (reiserfs_search_by_position(fs, &key, file_format, path) == FILE_NOT_FOUND) {
 		struct item_head insih;
 
 		copy_key(&(insih.ih_key), &key);
@@ -836,7 +836,7 @@ static void direct2indirect2(unsigned long unfm, struct reiserfs_path *path)
 	mark_buffer_uptodate(unbh, 1);
 	brelse(unbh);
 
-	if (usearch_by_position(fs, &key, file_format, path) != POSITION_FOUND
+	if (reiserfs_search_by_position(fs, &key, file_format, path) != POSITION_FOUND
 	    || !is_indirect_ih(tp_item_head(path)))
 		reiserfs_panic
 		    ("direct2indirect: The data %k, which are supposed to be converted, are not found",
@@ -1326,7 +1326,7 @@ check_again:
 
 	while (count) {
 
-		retval = usearch_by_position(fs, &key, key_format(&key), &path);
+		retval = reiserfs_search_by_position(fs, &key, key_format(&key), &path);
 
 		/*  if there are items of bigger offset than we are looking for and
 		   there is no item between wamted offset and SD, insert first item */

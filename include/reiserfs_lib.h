@@ -129,8 +129,8 @@ int reiserfs_search_by_key_4(reiserfs_filsys_t *, struct reiserfs_key *key,
 			     struct reiserfs_path *path);
 int reiserfs_search_by_entry_key(reiserfs_filsys_t *, struct reiserfs_key *key,
 				 struct reiserfs_path *path);
-int usearch_by_position(reiserfs_filsys_t *, struct reiserfs_key *key,
-			int version, struct reiserfs_path *path);
+int reiserfs_search_by_position(reiserfs_filsys_t *, struct reiserfs_key *key,
+				int version, struct reiserfs_path *path);
 struct reiserfs_key *reiserfs_next_key(struct reiserfs_path *path);
 void copy_key(void *to, const void *from);
 void copy_short_key(void *to, const void *from);

@@ -509,8 +509,8 @@ int reiserfs_search_by_key_4(reiserfs_filsys_t *fs, struct reiserfs_key *key,
 
 /* key is key of byte in the regular file. This searches in tree
    through items and in the found item as well */
-int usearch_by_position(reiserfs_filsys_t *s, struct reiserfs_key *key,
-			int version, struct reiserfs_path *path)
+int reiserfs_search_by_position(reiserfs_filsys_t *s, struct reiserfs_key *key,
+				int version, struct reiserfs_path *path)
 {
 	struct buffer_head *bh;
 	struct item_head *ih;
@@ -561,8 +561,8 @@ int usearch_by_position(reiserfs_filsys_t *s, struct reiserfs_key *key,
 
 		if (is_direntry_key(next_key)) {
 			reiserfs_warning(stderr,
-					 "usearch_by_position: looking for %k found a directory with the same key\n",
-					 next_key);
+					 "%s: looking for %k found a directory with the same key\n",
+					 __func__, next_key);
 			return DIRECTORY_FOUND;
 		}
 
@@ -1468,9 +1468,9 @@ void add_badblock_list(reiserfs_filsys_t *fs, int replace)
 		set_offset(KEY_FORMAT_2, &badblock_ih.ih_key, offset);
 		ni = cpu_to_le32(i);
 
-		retval = usearch_by_position(fs, &badblock_ih.ih_key,
-					     key_format(&badblock_ih.ih_key),
-					     &badblock_path);
+		retval = reiserfs_search_by_position(fs, &badblock_ih.ih_key,
+						key_format(&badblock_ih.ih_key),
+						&badblock_path);
 
 		switch (retval) {
 		case (FILE_NOT_FOUND):
