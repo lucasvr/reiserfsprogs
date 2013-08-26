@@ -1,3 +1,11 @@
+2013-08-25
+	3.6.24 release.
+	reiserfsprogs: autogenerate the version number in the man pages
+	journal: fix division by 0 with one transaction in log (crash)
+	CREDITS/CONTACT: remove non-historical references to namesys.com
+	resize_reiserfs: fix > 8TB printf formatting
+	man: create links to common-prefix command names
+	reiserfsprogs: add symlinks for debugreiserfs and reiserfstune
 2013-07-01
 	3.6.23 release.
 	clean up build environment
