@@ -41,6 +41,7 @@
                 (__u64)(((__u64)(__x) & (__u64)0xff00000000000000ULL) >> 56) )); \
 })
 
+#ifndef le32_to_cpu
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 
 # define cpu_to_le16(val)                 (val)
@@ -61,6 +62,7 @@
 
 #else
 # error "nuxi/pdp-endian archs are not supported"
+#endif
 #endif
 
 #endif /* REISERFS_SWAB_H */
