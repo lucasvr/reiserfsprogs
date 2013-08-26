@@ -504,16 +504,13 @@ struct offset_v1 {
 	__u32 k_uniqueness;
 } __attribute__ ((__packed__));
 
+/*
+ * little endian structure:
+ * bits 0-59 [60]: offset
+ * bits 60-63 [4]: type
+ */
 struct offset_v2 {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	__u64 k_offset:60;
-	__u64 k_type:4;		// TYPE_STAT_DATA | TYPE_INDIRECT | TYPE_DIRECT | TYPE_DIRENTRY
-#elif __BYTE_ORDER == __BIG_ENDIAN
-	__u64 k_type:4;		// TYPE_STAT_DATA | TYPE_INDIRECT | TYPE_DIRECT | TYPE_DIRENTRY
-	__u64 k_offset:60;
-#else
-# error "nuxi/pdp-endian archs are not supported"
-#endif
+	__u64 v;
 } __attribute__ ((__packed__));
 
 /* Key of the object determines object's location in the tree, composed of 4 components */
@@ -571,6 +568,7 @@ struct reiserfs_key {
 #define TYPE_INDIRECT 1
 #define TYPE_DIRECT 2
 #define TYPE_DIRENTRY 3
+#define TYPE_MAXTYPE 4
 
 #define TYPE_UNKNOWN 15
 
@@ -1550,58 +1548,33 @@ static inline void buffer_info_init_bh(struct tree_balance *tb,
 	bi->bi_parent	= NULL;
 	bi->bi_position = 0;
 }
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-# define get_key_offset_v2(key)     (__u64)(((key)->u.k2_offset_v2.k_offset))
-# define set_key_offset_v2(key,val) (void)((key)->u.k2_offset_v2.k_offset = (val))
-# define get_key_type_v2(key)       (__u16)(((key)->u.k2_offset_v2.k_type))
-# define set_key_type_v2(key,val)   (void)((key)->u.k2_offset_v2.k_type = (val))
-#elif __BYTE_ORDER == __BIG_ENDIAN
-typedef union {
-	struct offset_v2 offset_v2;
-	__u64 linear;
-} __attribute__ ((__packed__)) offset_v2_esafe_overlay;
 
 static inline __u64 get_key_offset_v2(const struct reiserfs_key *key)
 {
-	offset_v2_esafe_overlay tmp =
-	    *(offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
-	tmp.linear = le64_to_cpu(tmp.linear);
-	return tmp.offset_v2.k_offset;
+	const struct offset_v2 *v2 = &key->u.k2_offset_v2;
+	return le64_to_cpu(v2->v) & (~0ULL >> 4);
 }
 
 static inline __u32 get_key_type_v2(const struct reiserfs_key *key)
 {
-	offset_v2_esafe_overlay tmp =
-	    *(offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
-	tmp.linear = le64_to_cpu(tmp.linear);
-	return tmp.offset_v2.k_type;
+	const struct offset_v2 *v2 = &key->u.k2_offset_v2;
+	char type = le64_to_cpu(v2->v) >> 60;
+	return (type <= TYPE_MAXTYPE) ? type : TYPE_UNKNOWN;
 }
 
 static inline void set_key_offset_v2(struct reiserfs_key *key, __u64 offset)
 {
-	offset_v2_esafe_overlay *tmp =
-	    (offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
-	tmp->linear = le64_to_cpu(tmp->linear);
-	tmp->offset_v2.k_offset = offset;
-	tmp->linear = cpu_to_le64(tmp->linear);
+	struct offset_v2 *v2 = &key->u.k2_offset_v2;
+	offset &= (~0ULL >> 4);
+	v2->v = (v2->v & cpu_to_le64(15ULL << 60)) | cpu_to_le64(offset);
 }
 
 static inline void set_key_type_v2(struct reiserfs_key *key, __u32 type)
 {
-	offset_v2_esafe_overlay *tmp =
-	    (offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
-	if (type > 15)
-		reiserfs_panic("set_key_type_v2: type is too big %d", type);
-
-	tmp->linear = le64_to_cpu(tmp->linear);
-	tmp->offset_v2.k_type = type;
-	tmp->linear = cpu_to_le64(tmp->linear);
+	struct offset_v2 *v2 = &key->u.k2_offset_v2;
+	__u64 type64 = type;
+	v2->v = (v2->v & cpu_to_le64(~0ULL >> 4)) | cpu_to_le64(type64 << 60);
 }
-#else
-# error "nuxi/pdp-endian archs are not supported"
-#endif
-
-
 #endif
 
 /*
