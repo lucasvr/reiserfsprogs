@@ -83,24 +83,144 @@ __u32 get_random(void);
 
 int user_confirmed(FILE * fp, char *q, char *yes);
 
-extern inline int misc_set_bit(unsigned long long nr, void *addr);
-extern inline int misc_clear_bit(unsigned long long nr, void *addr);
-extern inline int misc_test_bit(unsigned long long nr, const void *addr);
-extern inline unsigned long long misc_find_first_zero_bit(const void *vaddr,
+/* Only le bitops operations are used. */
+static inline int misc_set_bit(unsigned long long nr, void *addr)
+{
+	__u8 *p, mask;
+	int retval;
+
+	p = (__u8 *) addr;
+	p += nr >> 3;
+	mask = 1 << (nr & 0x7);
+	/*cli(); */
+	retval = (mask & *p) != 0;
+	*p |= mask;
+	/*sti(); */
+	return retval;
+}
+
+static inline int misc_clear_bit(unsigned long long nr, void *addr)
+{
+	__u8 *p, mask;
+	int retval;
+
+	p = (__u8 *) addr;
+	p += nr >> 3;
+	mask = 1 << (nr & 0x7);
+	/*cli(); */
+	retval = (mask & *p) != 0;
+	*p &= ~mask;
+	/*sti(); */
+	return retval;
+}
+
+static inline int misc_test_bit(unsigned long long nr, const void *addr)
+{
+	__u8 *p, mask;
+
+	p = (__u8 *) addr;
+	p += nr >> 3;
+	mask = 1 << (nr & 0x7);
+	return ((mask & *p) != 0);
+}
+
+static inline unsigned long long misc_find_first_zero_bit(const void *vaddr,
 							  unsigned long long
-							  size);
-extern inline unsigned long long misc_find_next_zero_bit(const void *vaddr,
+							  size)
+{
+	const __u8 *p = vaddr, *addr = vaddr;
+	unsigned long long res;
+
+	if (!size)
+		return 0;
+
+	size = (size >> 3) + ((size & 0x7) > 0);
+	while (*p++ == 255) {
+		if (--size == 0)
+			return (unsigned long long)(p - addr) << 3;
+	}
+
+	--p;
+	for (res = 0; res < 8; res++)
+		if (!misc_test_bit(res, p))
+			break;
+	return res + (p - addr) * 8;
+}
+
+static inline unsigned long long misc_find_next_zero_bit(const void *vaddr,
 							 unsigned long long
 							 size,
 							 unsigned long long
-							 offset);
-extern inline unsigned long long misc_find_next_set_bit(const void *vaddr,
+							 offset)
+{
+	const __u8 *addr = vaddr;
+	const __u8 *p = addr + (offset >> 3);
+	int bit = offset & 7;
+	unsigned long long res;
+
+	if (offset >= size)
+		return size;
+
+	if (bit) {
+		/* Look for zero in first char */
+		for (res = bit; res < 8; res++)
+			if (!misc_test_bit(res, p))
+				return res + (p - addr) * 8;
+		p++;
+	}
+	/* No zero yet, search remaining full bytes for a zero */
+	res = misc_find_first_zero_bit(p, size - 8 * (p - addr));
+	return res + (p - addr) * 8;
+}
+
+static inline unsigned long long misc_find_first_set_bit(const void *vaddr,
+							 unsigned long long
+							 size)
+{
+	const __u8 *p = vaddr, *addr = vaddr;
+	unsigned long long res;
+
+	if (!size)
+		return 0;
+
+	size = (size >> 3) + ((size & 0x7) > 0);
+	while (*p++ == 0) {
+		if (--size == 0)
+			return (unsigned long long)(p - addr) << 3;
+	}
+
+	--p;
+	for (res = 0; res < 8; res++)
+		if (misc_test_bit(res, p))
+			break;
+
+	return res + (p - addr) * 8;
+}
+
+static inline unsigned long long misc_find_next_set_bit(const void *vaddr,
 							unsigned long long size,
 							unsigned long long
-							offset);
-extern inline unsigned long long misc_find_first_set_bit(const void *vaddr,
-							 unsigned long long
-							 size);
+							offset)
+{
+	const __u8 *addr = vaddr;
+	const __u8 *p = addr + (offset >> 3);
+	int bit = offset & 7;
+	unsigned long long res;
+
+	if (offset >= size)
+		return size;
+
+	if (bit) {
+		/* Look for zero in first char */
+		for (res = bit; res < 8; res++)
+			if (misc_test_bit(res, p))
+				return res + (p - addr) * 8;
+		p++;
+	}
+	/* No set bit yet, search remaining full bytes for a 1 */
+	res = misc_find_first_set_bit(p, size - 8 * (p - addr));
+	return res + (p - addr) * 8;
+}
 
 #define STAT_FIELD_H(Field, Type)	\
 inline Type misc_device_##Field(char *device);
