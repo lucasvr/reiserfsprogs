@@ -360,8 +360,8 @@ int misc_device_mounted(char *device)
 	return hasmntopt(mnt, MNTOPT_RO) ? MF_RO : MF_RW;
 }
 
-char buf1[100];
-char buf2[100];
+static char buf1[100];
+static char buf2[100];
 
 void print_how_fast(unsigned long passed, unsigned long total,
 		    int cursor_pos, int reset_time)

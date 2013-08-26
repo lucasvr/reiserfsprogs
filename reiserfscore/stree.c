@@ -173,10 +173,10 @@ int bin_search(void *p_v_key,	/* Key to search for.                   */
 }
 
 /* Minimal possible key. It is never in the tree. */
-struct reiserfs_key MIN_KEY = { 0, 0, {{0, 0},} };
+const struct reiserfs_key MIN_KEY = { 0, 0, {{0, 0},} };
 
 /* Maximal possible key. It is never in the tree. */
-struct reiserfs_key MAX_KEY =
+const struct reiserfs_key MAX_KEY =
     { 0xffffffff, 0xffffffff, {{0xffffffff, 0xffffffff},} };
 
 /* Get delimiting key of the buffer by looking for it in the buffers in the
@@ -185,8 +185,8 @@ struct reiserfs_key MAX_KEY =
    there is no delimiting key in the tree (buffer is first or last buffer in
    tree), and in this case we return a special key, either MIN_KEY or
    MAX_KEY. */
-struct reiserfs_key *get_lkey(struct reiserfs_path *p_s_chk_path,
-			      reiserfs_filsys_t *fs)
+static const struct reiserfs_key *get_lkey(const struct reiserfs_path *p_s_chk_path,
+				    const reiserfs_filsys_t *fs)
 {
 	struct reiserfs_super_block *sb;
 	int n_position, n_path_offset = p_s_chk_path->path_length;
@@ -224,8 +224,8 @@ struct reiserfs_key *get_lkey(struct reiserfs_path *p_s_chk_path,
 }
 
 /* Get delimiting key of the buffer at the path and its right neighbor. */
-struct reiserfs_key *get_rkey(struct reiserfs_path *p_s_chk_path,
-			      reiserfs_filsys_t *fs)
+const struct reiserfs_key *get_rkey(const struct reiserfs_path *p_s_chk_path,
+				    const reiserfs_filsys_t *fs)
 {
 	struct reiserfs_super_block *sb;
 	int n_position, n_path_offset = p_s_chk_path->path_length;
@@ -268,8 +268,8 @@ struct reiserfs_key *get_rkey(struct reiserfs_path *p_s_chk_path,
    the first or last node in the tree order then one of the delimiting keys
    may be absent, and in this case get_lkey and get_rkey return a special key
    which is MIN_KEY or MAX_KEY. */
-static inline int key_in_buffer(struct reiserfs_path *p_s_chk_path,	/* Path which should be checked.  */
-				struct reiserfs_key *p_s_key,	/* Key which should be checked.   */
+static inline int key_in_buffer(const struct reiserfs_path *p_s_chk_path,	/* Path which should be checked.  */
+				const struct reiserfs_key *p_s_key,	/* Key which should be checked.   */
 				reiserfs_filsys_t *fs	/* Super block pointer.           */
     )
 {
@@ -406,8 +406,9 @@ int search_by_key(reiserfs_filsys_t *fs, struct reiserfs_key *p_s_key,	/* Key to
 	}
 }
 
-int bin_search_in_dir_item(struct item_head *ih, struct reiserfs_de_head *deh,
-			   struct reiserfs_key *key, int *pos_in_item)
+static int bin_search_in_dir_item(struct item_head *ih,
+				  struct reiserfs_de_head *deh,
+				  struct reiserfs_key *key, int *pos_in_item)
 {
 	int rbound, lbound, j;
 

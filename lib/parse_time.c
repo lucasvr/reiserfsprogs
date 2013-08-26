@@ -3,6 +3,7 @@
 #include <config.h>
 #endif
 
+#include "parse_time.h"
 #include "misc.h"
 #include "reiserfs_lib.h"
 

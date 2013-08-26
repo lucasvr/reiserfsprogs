@@ -238,10 +238,10 @@ static void print_one_block(reiserfs_filsys_t *fs, unsigned long block)
    "bitmap" saved in that file and build the tree of blocks marked used in
    that "bitmap"
 */
-char *where_to_save;
-char *badblocks_file;
-char *corruption_list_file;
-char *program_name;
+static char *where_to_save;
+static char *badblocks_file;
+static char *corruption_list_file;
+static char *program_name;
 
 static char *parse_options(struct debugreiserfs_data *data,
 			   int argc, char *argv[])
@@ -583,7 +583,7 @@ static void callback_badblock_print(reiserfs_filsys_t *fs,
 	pathrelse(badblock_path);
 }
 
-void extract_badblock_list()
+static void extract_badblock_list(void)
 {
 	FILE *fd;
 
@@ -610,7 +610,7 @@ static int str2int(char *str, int *res)
 	return 1;
 }
 
-void do_corrupt_blocks(reiserfs_filsys_t *fs)
+static void do_corrupt_blocks(reiserfs_filsys_t *fs)
 {
 	char *line;
 	FILE *fd;
@@ -647,7 +647,7 @@ void do_corrupt_blocks(reiserfs_filsys_t *fs)
 	return;
 }
 
-void debugreiserfs_zero_reiserfs(reiserfs_filsys_t *fs)
+static void debugreiserfs_zero_reiserfs(reiserfs_filsys_t *fs)
 {
 	unsigned long done, total, i;
 	struct buffer_head *bh;

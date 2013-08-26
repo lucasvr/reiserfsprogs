@@ -14,7 +14,7 @@
     	fsck_log(fmt, ## list);				\
 }
 
-int what_fs_version()
+static int what_fs_version(void)
 {
 	size_t n = 0;
 	char *answer = NULL;

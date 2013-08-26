@@ -1,5 +1,4 @@
-/*
- * Copyright 1996-2004 by Hans Reiser, licensing governed by
+/* * Copyright 1996-2004 by Hans Reiser, licensing governed by
  * reiserfsprogs/README
  */
 
@@ -34,7 +33,7 @@
 #  include <uuid/uuid.h>
 #endif
 
-char *program_name;
+static char *program_name;
 
 static void message(const char *fmt, ...)
     __attribute__ ((format(printf, 1, 2)));
@@ -84,18 +83,18 @@ static void print_usage_and_exit(void)
 	exit(1);
 }
 
-int Create_default_journal = 1;
-int Block_size = 4096;
+static int Create_default_journal = 1;
+static int Block_size = 4096;
 
 /* size of journal + 1 block for journal header */
-unsigned long Journal_size = 0;
-int Max_trans_size = 0;		//JOURNAL_TRANS_MAX;
-int Hash = DEFAULT_HASH;
-int Offset = 0;
-char *Format;
-unsigned char UUID[16];
-char *LABEL = NULL;
-char *badblocks_file;
+static unsigned long Journal_size = 0;
+static int Max_trans_size = 0;		//JOURNAL_TRANS_MAX;
+static int Hash = DEFAULT_HASH;
+static int Offset = 0;
+static char *Format;
+static unsigned char UUID[16];
+static char *LABEL = NULL;
+static char *badblocks_file;
 
 enum mkfs_mode {
 	DEBUG_MODE = 1 << 0,
@@ -103,7 +102,7 @@ enum mkfs_mode {
 	DO_NOTHING = 1 << 2
 };
 
-int mode;
+static int mode;
 
 /* form super block (old one) */
 static void make_super_block(reiserfs_filsys_t *fs)
@@ -167,7 +166,7 @@ static void invalidate_other_formats(int dev)
 	brelse(bh);
 }
 
-void zero_journal(reiserfs_filsys_t *fs)
+static void zero_journal(reiserfs_filsys_t *fs)
 {
 	unsigned long start, len, done;
 	struct buffer_head *bh;

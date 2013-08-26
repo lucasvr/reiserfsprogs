@@ -15,12 +15,12 @@
 #include "resize.h"
 #include <limits.h>
 
-int opt_banner = 0;
+static int opt_banner = 0;
+static int opt_skipj = 0;
 int opt_force = 0;
 int opt_verbose = 1;		/* now "verbose" option is default */
 int opt_nowrite = 0;
 int opt_safe = 0;
-int opt_skipj = 0;
 
 char *g_progname;
 

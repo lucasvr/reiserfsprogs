@@ -24,7 +24,8 @@ struct buffer_head *make_buffer(int dev, unsigned long blocknr, int size,
 	return bh;
 }
 
-int find_not_of_one_file(struct reiserfs_key *to_find, struct reiserfs_key *key)
+static int find_not_of_one_file(struct reiserfs_key *to_find,
+				struct reiserfs_key *key)
 {
 	if ((get_key_objectid(to_find) != ~(__u32) 0) &&
 	    (get_key_objectid(to_find) != get_key_objectid(key)))
@@ -165,7 +166,8 @@ static void insert_pointer(struct buffer_head *bh, struct reiserfs_path *path)
 }
 
 /* return 1 if left and right can be joined. 0 otherwise */
-int balance_condition_fails(struct buffer_head *left, struct buffer_head *right)
+static int balance_condition_fails(struct buffer_head *left,
+				   struct buffer_head *right)
 {
 	if (B_FREE_SPACE(left) >= B_CHILD_SIZE(right) -
 	    (are_items_mergeable
@@ -177,8 +179,8 @@ int balance_condition_fails(struct buffer_head *left, struct buffer_head *right)
 
 /* return 1 if new can be joined with last node on the path or with
    its right neighbor, 0 otherwise */
-int balance_condition_2_fails(struct buffer_head *new,
-			      struct reiserfs_path *path)
+static int balance_condition_2_fails(struct buffer_head *new,
+				     struct reiserfs_path *path)
 {
 	struct buffer_head *bh;
 	struct reiserfs_key *right_dkey;
@@ -671,8 +673,6 @@ void load_pass_1_result(FILE * fp, reiserfs_filsys_t *fs)
 		      reiserfs_bitmap_zeros(fsck_allocable_bitmap(fs)),
 		      reiserfs_bitmap_zeros(fsck_uninsertables(fs)));
 }
-
-extern reiserfs_bitmap_t *leaves_bitmap;
 
 /* reads blocks marked in leaves_bitmap and tries to insert them into
    tree */

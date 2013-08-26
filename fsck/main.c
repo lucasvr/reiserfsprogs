@@ -15,7 +15,7 @@ extern int screen_savebuffer_len;
 extern char *screen_savebuffer;
 
 reiserfs_filsys_t *fs;
-char *badblocks_file;
+static char *badblocks_file;
 
 #define print_usage_and_exit() {						\
 fsck_progress ("Usage: %s [mode] [options] "					\
@@ -317,7 +317,7 @@ static char *parse_options(struct fsck_data *data, int argc, char *argv[])
 ** that -- and only then run this program.                 **\n\
 *************************************************************\n\
 \nWill rebuild the filesystem (%s) tree\n"
-void warn_what_will_be_done(char *file_name, struct fsck_data *data)
+static void warn_what_will_be_done(char *file_name, struct fsck_data *data)
 {
 	FILE *warn_to;
 
@@ -422,7 +422,7 @@ void warn_what_will_be_done(char *file_name, struct fsck_data *data)
 static dma_info_t dma_info;
 static dma_info_t old_dma_info;
 
-void check_dma()
+static void check_dma(int sig)
 {
 	old_dma_info = dma_info;
 	if (get_dma_info(&dma_info) == -1) {
@@ -476,7 +476,7 @@ void check_dma()
 	alarm(1);
 }
 
-void register_timer()
+static void register_timer(void)
 {
 	memset(&dma_info, 0, sizeof(dma_info));
 	memset(&old_dma_info, 0, sizeof(old_dma_info));
@@ -770,7 +770,7 @@ static void reiserfsck_replay_journal(reiserfs_filsys_t *fs)
 	fs->fs_ondisk_sb = getmem(sb_size);
 	memcpy(fs->fs_ondisk_sb, on_place_sb, sb_size);
 
-	replay_journal(fs);
+	reiserfs_replay_journal(fs);
 
 	/* Copy checked reliable sb fields from backed up sb to a new one. */
 	set_sb_block_count(on_place_sb, get_sb_block_count(fs->fs_ondisk_sb));

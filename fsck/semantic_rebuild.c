@@ -6,7 +6,7 @@
 #include "fsck.h"
 
 int screen_width;
-int screen_curr_pos;
+static int screen_curr_pos;
 char *screen_savebuffer;
 int screen_savebuffer_len;
 
@@ -1138,7 +1138,6 @@ static void make_sure_lost_found_exists(reiserfs_filsys_t *fs)
 	__u64 sd_size;
 	__u32 sd_blocks;
 	struct buffer_head *bh;
-	struct item_head *ih;
 	void *sd;
 	int item_len;
 
@@ -1202,6 +1201,7 @@ static void make_sure_lost_found_exists(reiserfs_filsys_t *fs)
 				      &lost_found_dir_key, 1 << IH_Unreachable);
 
 	if (item_len) {
+		struct item_head *ih;
 		if (reiserfs_search_by_key_4(fs, &root_dir_key, &path) ==
 		    ITEM_NOT_FOUND)
 			reiserfs_panic

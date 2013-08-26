@@ -66,6 +66,7 @@ int main(int argc, char *argv[]);
 #define OPT_FORCE			1 << 11
 
 /* pass0.c */
+extern reiserfs_bitmap_t *leaves_bitmap;
 void pass_0(reiserfs_filsys_t *);
 void load_pass_0_result(FILE *, reiserfs_filsys_t *);
 
@@ -242,9 +243,6 @@ int is_block_used(unsigned long block);
 void mark_block_used(unsigned long block, int check_hardware);
 void mark_block_uninsertable(unsigned long block);
 int is_block_uninsertable(unsigned long block);
-
-/* objectid.c */
-int comp_ids(const void *p1, const void *p2);
 
 typedef struct id_map {
 	void **index;
@@ -468,9 +466,6 @@ struct fsck_data {
 int fsck_user_confirmed(reiserfs_filsys_t *fs, char *q, char *a,
 			int default_answer);
 void stage_report(int, reiserfs_filsys_t *);
-
-/* journal.c */
-int replay_journal(reiserfs_filsys_t *);
 
 /*pass1: rebuild super block*/
 void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data);

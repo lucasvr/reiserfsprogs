@@ -18,13 +18,13 @@ reiserfs_bitmap_t *leaves_bitmap;
 #define pass0_mark_leaf(block) __mark (leaves, block)
 
 /* nodes which are referred to from only one indirect item */
-reiserfs_bitmap_t *good_unfm_bitmap;
+static reiserfs_bitmap_t *good_unfm_bitmap;
 #define pass0_is_good_unfm(block) __is_marked (good_unfm, block)
 #define pass0_mark_good_unfm(block) __mark (good_unfm, block)
 #define pass0_unmark_good_unfm(block) __unmark (good_unfm, block)
 
 /* nodes which are referred to from more than one indirect item */
-reiserfs_bitmap_t *bad_unfm_bitmap;
+static reiserfs_bitmap_t *bad_unfm_bitmap;
 #define pass0_is_bad_unfm(block) __is_marked (bad_unfm, block)
 #define pass0_mark_bad_unfm(block) __mark (bad_unfm, block)
 #define pass0_unmark_bad_unfm(block) __unmark (bad_unfm, block)

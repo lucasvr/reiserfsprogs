@@ -926,12 +926,11 @@ static struct buffer_head *get_left_neighbor(reiserfs_filsys_t *s,
 	return bh;
 }
 
-extern struct reiserfs_key MIN_KEY;
 static struct buffer_head *get_right_neighbor(reiserfs_filsys_t *s,
 					      struct reiserfs_path *path)
 {
 	struct reiserfs_key key;
-	struct reiserfs_key *rkey;
+	const struct reiserfs_key *rkey;
 	struct reiserfs_path path_to_right_neighbor;
 	struct buffer_head *bh;
 

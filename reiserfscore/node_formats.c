@@ -1145,7 +1145,7 @@ void get_set_sd_field(int field, struct item_head *ih, void *sd,
 	}
 }
 
-int comp_ids(const void *p1, const void *p2)
+static int comp_ids(const void *p1, const void *p2)
 {
 	__u32 id1 = le32_to_cpu(*(__u32 *) p1);
 	__u32 id2 = le32_to_cpu(*(__u32 *) p2);

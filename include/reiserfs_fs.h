@@ -489,6 +489,8 @@ struct reiserfs_journal_header {
 	(unsigned long long)((8192 > journal_max_size (block_of_super_block,blocksize)) ? \
 		journal_max_size (block_of_super_block,blocksize) : 8192)
 
+int reiserfs_replay_journal(reiserfs_filsys_t *fs);
+
 //#define JOURNAL_DEFAULT_SIZE 8192  number of blocks in the journal
 //#define JOURNAL_DEFAULT_SIZE_FOR_BS_1024 8125  number of blocks in the journal for block size 1KB
 
@@ -522,6 +524,8 @@ struct reiserfs_key {
 		struct offset_v2 k2_offset_v2;
 	} __attribute__ ((__packed__)) u;
 } __attribute__ ((__packed__));
+
+extern const struct reiserfs_key MIN_KEY, MAX_KEY;
 
 /* set/get fields of keys on disk with these defines */
 #define get_key_dirid(k)		get_le32 (k, k2_dir_id)
@@ -1400,7 +1404,8 @@ struct buffer_info {
 /* stree.c */
 void padd_item (char * item, int total_length, int length);
 int B_IS_IN_TREE(struct buffer_head *);
-struct reiserfs_key *get_rkey (struct reiserfs_path *p_s_chk_path, reiserfs_filsys_t *);
+const struct reiserfs_key *get_rkey(const struct reiserfs_path *p_s_chk_path,
+				    const reiserfs_filsys_t *);
 int bin_search (void * p_v_key, void * p_v_base, int p_n_num, int p_n_width, unsigned int * p_n_pos);
 int search_by_key (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *, int);
 int search_by_entry_key (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *);

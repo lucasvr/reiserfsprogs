@@ -19,7 +19,8 @@ static int does_desc_match_commit(struct buffer_head *d_bh,
 
 /* d_bh is descriptor, return number of block where commit block of this
    transaction is to be */
-unsigned long commit_expected(reiserfs_filsys_t *fs, struct buffer_head *d_bh)
+static unsigned long commit_expected(reiserfs_filsys_t *fs,
+				     struct buffer_head *d_bh)
 {
 	unsigned long offset;
 	struct journal_params *sb_jp;
@@ -34,8 +35,8 @@ unsigned long commit_expected(reiserfs_filsys_t *fs, struct buffer_head *d_bh)
 
 /* d_bh contains journal descriptor, returns number of block where descriptor
    block of next transaction should be */
-unsigned long next_desc_expected(reiserfs_filsys_t *fs,
-				 struct buffer_head *d_bh)
+static unsigned long next_desc_expected(reiserfs_filsys_t *fs,
+					struct buffer_head *d_bh)
 {
 	unsigned long offset;
 	struct journal_params *sb_jp;
@@ -49,7 +50,8 @@ unsigned long next_desc_expected(reiserfs_filsys_t *fs,
 }
 
 /* common checks for validness of a transaction */
-int transaction_check_content(reiserfs_filsys_t *fs, reiserfs_trans_t *trans)
+static int transaction_check_content(reiserfs_filsys_t *fs,
+				     reiserfs_trans_t *trans)
 {
 	struct buffer_head *d_bh, *c_bh;
 	struct reiserfs_journal_desc *desc;
@@ -100,7 +102,8 @@ error_desc_brelse:
 }
 
 /* common checks for validness of a transaction */
-int transaction_check_desc(reiserfs_filsys_t *fs, struct buffer_head *d_bh)
+static int transaction_check_desc(reiserfs_filsys_t *fs,
+				  struct buffer_head *d_bh)
 {
 	struct buffer_head *c_bh;
 	int ret = 1;
@@ -817,7 +820,7 @@ static void update_journal_header(reiserfs_filsys_t *fs,
 }
 
 /* fixme: what should be done when not all transactions can be replayed in proper order? */
-int replay_journal(reiserfs_filsys_t *fs)
+int reiserfs_replay_journal(reiserfs_filsys_t *fs)
 {
 	struct buffer_head *bh;
 	struct reiserfs_journal_header *j_head;

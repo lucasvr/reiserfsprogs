@@ -229,7 +229,7 @@ static char *vi_type(struct virtual_item *vi)
 	return NULL;
 }
 
-void print_virtual_node(struct virtual_node *vn)
+static void print_virtual_node(struct virtual_node *vn)
 {
 	int i, j;
 
@@ -255,7 +255,7 @@ void print_virtual_node(struct virtual_node *vn)
 	}
 }
 
-void print_path(struct tree_balance *tb, struct reiserfs_path *path)
+static void print_path(struct tree_balance *tb, struct reiserfs_path *path)
 {
 	int offset = path->path_length;
 	struct buffer_head *bh;
@@ -272,8 +272,8 @@ void print_path(struct tree_balance *tb, struct reiserfs_path *path)
 	}
 }
 
-void print_directory_item(FILE * fp, reiserfs_filsys_t *fs,
-			  struct buffer_head *bh, struct item_head *ih)
+static void print_directory_item(FILE *fp, reiserfs_filsys_t *fs,
+				 struct buffer_head *bh, struct item_head *ih)
 {
 	int i;
 	int namelen;
@@ -383,9 +383,9 @@ void print_indirect_item(FILE * fp, struct buffer_head *bh, int item_num)
 	reiserfs_warning(fp, "]\n");
 }
 
-char timebuf[256];
+static char timebuf[256];
 
-char *timestamp(time_t t)
+static char *timestamp(time_t t)
 {
 	strftime(timebuf, 256, "%d/%Y %T", localtime(&t));
 	return timebuf;

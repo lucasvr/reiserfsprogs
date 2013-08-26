@@ -738,7 +738,7 @@ int corrupt_block_header(struct block_head *blkh, unsigned int offset,
 
 /* corrupt random number of bytes within block header started from random
    offset */
-void do_one_blkh_random_corrupt(struct buffer_head *bh)
+static void do_one_blkh_random_corrupt(struct buffer_head *bh)
 {
 	struct block_head *blkh;
 	unsigned int from;
@@ -889,7 +889,8 @@ void do_bitmap_corruption(reiserfs_filsys_t *fs)
 }
 
 /* corrupt the random number of item headers in random number of leaves */
-void do_ih_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
+static void do_ih_random_corrupt(reiserfs_filsys_t *fs,
+				 unsigned long nr_leaves_cr)
 {
 	unsigned int nr_ih_cr;
 	unsigned int i, j;
@@ -973,7 +974,8 @@ void do_ih_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 }
 
 /* corrupt item */
-void do_one_item_random_corrupt(struct buffer_head *bh, struct item_head *ih)
+static void do_one_item_random_corrupt(struct buffer_head *bh,
+				       struct item_head *ih)
 {
 	unsigned int i;
 	unsigned int from;
@@ -1001,7 +1003,8 @@ void do_one_item_random_corrupt(struct buffer_head *bh, struct item_head *ih)
 }
 
 /* corrupt the random number of directory items in random number of leaves */
-void do_dir_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
+static void do_dir_random_corrupt(reiserfs_filsys_t *fs,
+				  unsigned long nr_leaves_cr)
 {
 	unsigned int nr_ih_cr;
 	unsigned int i, j;
@@ -1086,7 +1089,8 @@ void do_dir_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 }
 
 /* corrupt the random number of stat data items in random number of leaves */
-void do_sd_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
+static void do_sd_random_corrupt(reiserfs_filsys_t *fs,
+				 unsigned long nr_leaves_cr)
 {
 	unsigned int nr_ih_cr;
 	unsigned int i, j;
@@ -1171,7 +1175,8 @@ void do_sd_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 }
 
 /* corrupt the random number of indierct items in random number of leaves */
-void do_ind_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
+static void do_ind_random_corrupt(reiserfs_filsys_t *fs,
+				  unsigned long nr_leaves_cr)
 {
 	unsigned int nr_ih_cr;
 	unsigned int i, j;
@@ -1268,7 +1273,7 @@ void do_ind_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
                  corrupted
 */
 
-void what_to_corrupt(reiserfs_filsys_t *fs, char *corruption_command)
+static void what_to_corrupt(reiserfs_filsys_t *fs, char *corruption_command)
 {
 	unsigned long nr_leaves_cr;
 	char code;

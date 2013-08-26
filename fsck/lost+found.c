@@ -330,7 +330,7 @@ void load_lost_found_result(reiserfs_filsys_t *fs)
 	 */
 }
 
-void after_lost_found(reiserfs_filsys_t *fs)
+static void after_lost_found(reiserfs_filsys_t *fs)
 {
 	/* update super block: objectid map, fsck state */
 	set_sb_fs_state(fs->fs_ondisk_sb, LOST_FOUND_DONE);

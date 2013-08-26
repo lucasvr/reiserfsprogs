@@ -60,7 +60,7 @@ void mark_block_used(unsigned long block, int check_hardware)
 	reiserfs_bitmap_set_bit(fsck_new_bitmap(fs), block);
 }
 
-void mark_block_free(unsigned long block)
+static void mark_block_free(unsigned long block)
 {
 	if (!is_block_used(block))
 		die("mark_block_free: (%lu) is free already", block);

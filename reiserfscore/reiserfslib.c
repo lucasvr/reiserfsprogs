@@ -12,7 +12,7 @@
 struct reiserfs_key root_dir_key = { 0, 0, {{0, 0},} };
 struct reiserfs_key parent_root_dir_key = { 0, 0, {{0, 0},} };
 struct reiserfs_key lost_found_dir_key = { 0, 0, {{0, 0},} };
-struct reiserfs_key badblock_key =
+static struct reiserfs_key badblock_key =
     { BADBLOCK_DIRID, BADBLOCK_OBJID, {{0, 0},} };
 
 __u16 root_dir_format = 0;
@@ -190,8 +190,8 @@ reiserfs_filsys_t *reiserfs_create(char *filename,
 				   int default_journal, int new_format)
 {
 	reiserfs_filsys_t *fs;
-	unsigned int bmap_nr = reiserfs_bmap_nr(block_count, block_size);;
 	time_t now;
+	unsigned int bmap_nr = reiserfs_bmap_nr(block_count, block_size);;
 
 	/* convert root dir key and parent root dir key to little endian format */
 	make_const_keys();
@@ -320,7 +320,7 @@ int no_reiserfs_found(reiserfs_filsys_t *fs)
 	return (fs == NULL || fs->fs_blocksize == 0) ? 1 : 0;
 }
 
-int new_format(reiserfs_filsys_t *fs)
+static int new_format(reiserfs_filsys_t *fs)
 {
 	return fs->fs_super_bh->b_blocknr != 2;
 }
@@ -1043,8 +1043,8 @@ int reiserfs_find_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
 }
 
 /* compose directory entry: dir entry head and name itself */
-char *make_entry(char *entry, char *name, struct reiserfs_key *key,
-		 __u32 offset)
+static char *make_entry(char *entry, char *name, struct reiserfs_key *key,
+			__u32 offset)
 {
 	struct reiserfs_de_head *deh;
 	__u16 state;
@@ -1142,12 +1142,12 @@ int reiserfs_add_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
 	return item_len;
 }
 
-void copy_key(void *to, void *from)
+void copy_key(void *to, const void *from)
 {
 	memcpy(to, from, KEY_SIZE);
 }
 
-void copy_short_key(void *to, void *from)
+void copy_short_key(void *to, const void *from)
 {
 	memcpy(to, from, SHORT_KEY_SIZE);
 }

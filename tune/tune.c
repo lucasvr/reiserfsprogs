@@ -14,7 +14,7 @@
 #include <limits.h>
 #include "parse_time.h"
 
-char *program_name;
+static char *program_name;
 
 static void message(const char *fmt, ...)
     __attribute__ ((format(printf, 1, 2)));
@@ -34,8 +34,6 @@ static void message(const char *fmt, ...)
 		free(buf);
 	}
 }
-
-reiserfs_filsys_t *fs;
 
 static void print_usage_and_exit(void)
 {
@@ -70,19 +68,19 @@ static void print_usage_and_exit(void)
 	exit(1);
 }
 
-unsigned long Journal_size = 0;
-int Max_trans_size = JOURNAL_TRANS_MAX;
-unsigned short Max_mnt_count = 0;
-unsigned short Mnt_count = 0;
-unsigned int Check_interval = 0;
-time_t Time_last_checked = 0;
-int Offset = 0;
-__u16 Options = 0;
-int Force = 0;
-int Bads = 0;
-char *LABEL;
-unsigned char UUID[16];
-char *badblocks_file;
+static unsigned long Journal_size = 0;
+static int Max_trans_size = JOURNAL_TRANS_MAX;
+static unsigned short Max_mnt_count = 0;
+static unsigned short Mnt_count = 0;
+static unsigned int Check_interval = 0;
+static time_t Time_last_checked = 0;
+static int Offset = 0;
+static __u16 Options = 0;
+static int Force = 0;
+static int Bads = 0;
+static char *LABEL;
+static unsigned char UUID[16];
+static char *badblocks_file;
 
 /* If specified paramenters defines the standard journal, make it standard. */
 static int should_make_journal_standard(reiserfs_filsys_t *fs,
@@ -195,7 +193,7 @@ static int set_standard_journal_params(reiserfs_filsys_t *fs)
 	return 1;
 }
 
-void zero_journal(reiserfs_filsys_t *fs)
+static void zero_journal(reiserfs_filsys_t *fs)
 {
 	unsigned int i;
 	struct buffer_head *bh;

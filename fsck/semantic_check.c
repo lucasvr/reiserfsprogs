@@ -29,8 +29,8 @@ struct reiserfs_path_key {
 	struct reiserfs_path_key *next, *prev;
 };
 
-struct reiserfs_path_key *head_key = NULL;
-struct reiserfs_path_key *tail_key = NULL;
+static struct reiserfs_path_key *head_key = NULL;
+static struct reiserfs_path_key *tail_key = NULL;
 
 static int check_path_key(struct reiserfs_key *key)
 {
@@ -68,7 +68,7 @@ static int add_path_key(struct reiserfs_key *key)
 	return 0;
 }
 
-void del_path_key()
+static void del_path_key(void)
 {
 	if (tail_key == NULL)
 		die("Wrong path_key structure");
@@ -750,7 +750,7 @@ static int check_semantic_pass(struct reiserfs_key *key,
 	return retval;
 }
 
-int check_safe_links()
+static int check_safe_links(void)
 {
 	struct reiserfs_path safe_link_path, path;
 	struct reiserfs_key safe_link_key = { -1, 0, {{0, 0}} };
@@ -858,7 +858,7 @@ int check_safe_links()
 	return OK;
 }
 
-void release_safe_links()
+static void release_safe_links(void)
 {
 	freemem(trunc_links);
 }

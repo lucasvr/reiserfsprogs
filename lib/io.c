@@ -17,7 +17,7 @@ void check_memory_msg(void)
 		"the same place with the same block number.\n");
 }
 
-void check_hd_msg(void)
+static void check_hd_msg(void)
 {
 	fprintf(stderr,
 		"\nThe problem has occurred looks like a hardware problem. If you have\n"
@@ -630,7 +630,7 @@ int open_rollback_file(char *rollback_file, FILE * log)
 	return 0;
 }
 
-void close_rollback_file()
+void close_rollback_file(void)
 {
 	if (!s_rollback_file)
 		return;
