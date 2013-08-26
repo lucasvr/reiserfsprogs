@@ -1,5 +1,9 @@
-noinst_LIBRARIES = libcore.a
+lib_LTLIBRARIES = libreiserfscore.la
 
-libcore_a_SOURCES = do_balan.c fix_node.c hashes.c ibalance.c lbalance.c prints.c \
-stree.c node_formats.c reiserfslib.c bitmap.c journal.c includes.h
+libreiserfscore_la_SOURCES = do_balan.c fix_node.c hashes.c ibalance.c \
+			     lbalance.c prints.c stree.c node_formats.c \
+			     reiserfslib.c bitmap.c journal.c includes.h
+libreiserfscore_la_LIBADD = ../lib/libmisc.la
 
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = reiserfscore.pc

@@ -4,7 +4,7 @@ debugreiserfs_SOURCES = debugreiserfs.c pack.c unpack.c stat.c corruption.c scan
 man_MANS = debugreiserfs.8
 EXTRA_DIST = $(man_MANS)
 
-LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/libmisc.a
+LDADD = $(top_builddir)/reiserfscore/libreiserfscore.la
 
 install-exec-hook:
 	$(LN_S) debugreiserfs $(DESTDIR)$(sbindir)/debugfs.reiserfs

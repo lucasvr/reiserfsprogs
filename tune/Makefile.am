@@ -5,7 +5,7 @@ reiserfstune_SOURCES = tune.c tune.h
 man_MANS = reiserfstune.8
 EXTRA_DIST = $(man_MANS)
 
-LDADD = $(top_builddir)/reiserfscore/libcore.a $(top_builddir)/lib/libmisc.a
+LDADD = $(top_builddir)/reiserfscore/libreiserfscore.la
 
 install-exec-hook:
 	$(LN_S) reiserfstune $(DESTDIR)$(sbindir)/tunefs.reiserfs

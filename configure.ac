@@ -20,7 +20,7 @@ AC_PROG_AWK
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
-AC_PROG_RANLIB
+AC_PROG_LIBTOOL
 
 dnl Checks for libraries.
 
@@ -131,6 +131,7 @@ AC_OUTPUT(
     lib/Makefile 
     Makefile 
     reiserfscore/Makefile 
+    reiserfscore/reiserfscore.pc
     debugreiserfs/Makefile 
     debugreiserfs/debugreiserfs.8
     tune/Makefile

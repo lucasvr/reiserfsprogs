@@ -1,5 +1,5 @@
-noinst_LIBRARIES = libmisc.a
+noinst_LTLIBRARIES = libmisc.la
 
-libmisc_a_SOURCES = io.c misc.c parse_time.c progbar.c
+libmisc_la_SOURCES = io.c misc.c parse_time.c progbar.c
 ##reiserfs.c
 
