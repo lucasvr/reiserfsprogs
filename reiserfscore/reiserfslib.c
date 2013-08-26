@@ -53,7 +53,7 @@ int is_block_count_correct(unsigned long journal_offset,
 /* read super block. fixme: only 4k blocks, pre-journaled format
    is refused. Journal and bitmap are to be opened separately.
    skip_check is set to 1 if checks of openned SB should be omitted.*/
-reiserfs_filsys_t *reiserfs_open(char *filename, int flags,
+reiserfs_filsys_t *reiserfs_open(const char *filename, int flags,
 				 int *error, void *vp, int check)
 {
 	reiserfs_filsys_t *fs;
