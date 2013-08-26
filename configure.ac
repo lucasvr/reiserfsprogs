@@ -123,13 +123,19 @@ CPPFLAGS="-I\$(top_srcdir)/include $CPPFLAGS"
 AC_OUTPUT(
     include/Makefile 
     mkreiserfs/Makefile 
+    mkreiserfs/mkreiserfs.8
     resize_reiserfs/Makefile 
+    resize_reiserfs/resize_reiserfs.8
     fsck/Makefile 
+    fsck/reiserfsck.8
     lib/Makefile 
     Makefile 
     reiserfscore/Makefile 
     debugreiserfs/Makefile 
-    tune/Makefile)
+    debugreiserfs/debugreiserfs.8
+    tune/Makefile
+    tune/reiserfstune.8
+    )
 
 AC_MSG_NOTICE([
 
