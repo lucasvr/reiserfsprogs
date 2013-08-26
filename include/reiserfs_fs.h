@@ -30,7 +30,7 @@
 */
 
 #ifndef REISERFSPROGS_FS_H
-#define REISERFSPRIGS_FS_H
+#define REISERFSPROGS_FS_H
 
 typedef unsigned int blocknr_t;
 
