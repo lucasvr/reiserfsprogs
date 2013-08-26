@@ -17,7 +17,7 @@
 #include <string.h>
 #include <errno.h>
 
-extern reiserfs_filsys_t *fs;
+extern reiserfs_filsys_t fs;
 
 /*
  *  modes
@@ -238,27 +238,27 @@ struct debugreiserfs_data {
 #define be_quiet(fs)  (data(fs)->options & BE_QUIET)
 
 /* stat.c */
-void do_stat(reiserfs_filsys_t *fs);
+void do_stat(reiserfs_filsys_t fs);
 
 /* corruption.c */
-void do_corrupt_one_block(reiserfs_filsys_t *fs, char *fline);
-void do_leaves_corruption(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr);
-void do_bitmap_corruption(reiserfs_filsys_t *fs);
-void do_fs_random_corrupt(reiserfs_filsys_t *fs);
+void do_corrupt_one_block(reiserfs_filsys_t fs, char *fline);
+void do_leaves_corruption(reiserfs_filsys_t fs, unsigned long nr_leaves_cr);
+void do_bitmap_corruption(reiserfs_filsys_t fs);
+void do_fs_random_corrupt(reiserfs_filsys_t fs);
 
 /* recover.c */
-void do_recover(reiserfs_filsys_t *fs);
+void do_recover(reiserfs_filsys_t fs);
 
 /* scan.c */
-void do_scan(reiserfs_filsys_t *fs);
+void do_scan(reiserfs_filsys_t fs);
 
 /* journal.c */
-void scan_journal(reiserfs_filsys_t *fs);
+void scan_journal(reiserfs_filsys_t fs);
 
 /* unpack.c */
 extern int do_unpack(char *host, char *j_filename, char *filename, int verbose);
 
-void print_map(reiserfs_filsys_t *fs);
+void print_map(reiserfs_filsys_t fs);
 
 struct saved_item {
 	struct item_head si_ih;

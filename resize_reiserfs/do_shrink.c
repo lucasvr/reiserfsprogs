@@ -20,7 +20,7 @@ static reiserfs_bitmap_t *bmp;
 static struct reiserfs_super_block *ondisk_sb;
 
 /* abnornal exit from block reallocation process */
-static void quit_resizer(reiserfs_filsys_t *fs)
+static void quit_resizer(reiserfs_filsys_t fs)
 {
 	/* save changes to bitmap blocks */
 	reiserfs_close(fs);
@@ -30,7 +30,7 @@ static void quit_resizer(reiserfs_filsys_t *fs)
 }
 
 /* block moving */
-static unsigned long move_generic_block(reiserfs_filsys_t *fs,
+static unsigned long move_generic_block(reiserfs_filsys_t fs,
 					unsigned long block,
 					unsigned long bnd, int h)
 {
@@ -87,7 +87,7 @@ static unsigned long move_generic_block(reiserfs_filsys_t *fs,
 	return unused_block;
 }
 
-static unsigned long move_unformatted_block(reiserfs_filsys_t *fs,
+static unsigned long move_unformatted_block(reiserfs_filsys_t fs,
 					    unsigned long block,
 					    unsigned long bnd, int h)
 {
@@ -100,7 +100,7 @@ static unsigned long move_unformatted_block(reiserfs_filsys_t *fs,
 }
 
 /* recursive function processing all tree nodes */
-static unsigned long move_formatted_block(reiserfs_filsys_t *fs,
+static unsigned long move_formatted_block(reiserfs_filsys_t fs,
 					  unsigned long block,
 					  unsigned long bnd, int h)
 {
@@ -189,7 +189,7 @@ static unsigned long move_formatted_block(reiserfs_filsys_t *fs,
 	return new_blocknr;
 }
 
-int shrink_fs(reiserfs_filsys_t *fs, long long int blocks)
+int shrink_fs(reiserfs_filsys_t fs, long long int blocks)
 {
 	unsigned long n_root_block;
 	unsigned int bmap_nr_new;

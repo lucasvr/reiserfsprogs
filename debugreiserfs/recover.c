@@ -233,7 +233,7 @@ static void read_map (FILE * fp)
     free (buf);
 }
 
-void do_recover (reiserfs_filsys_t *fs)
+void do_recover (reiserfs_filsys_t fs)
 {
     FILE * fp;
 
@@ -276,7 +276,7 @@ static long int get_answer(long int max)
 	return result;
 }
 
-static void recover_items(FILE * fp, reiserfs_filsys_t *fs, FILE * target_file)
+static void recover_items(FILE * fp, reiserfs_filsys_t fs, FILE * target_file)
 {
 	struct buffer_head *bh, *bh_pointed;
 	struct item_head *ih;
@@ -409,7 +409,7 @@ static void recover_items(FILE * fp, reiserfs_filsys_t *fs, FILE * target_file)
 	free(map);
 }
 
-void do_recover(reiserfs_filsys_t *fs)
+void do_recover(reiserfs_filsys_t fs)
 {
 	FILE *fp, *recovery;
 

@@ -83,7 +83,7 @@ static unsigned char UUID[16];
 static char *badblocks_file;
 
 /* If specified paramenters defines the standard journal, make it standard. */
-static int should_make_journal_standard(reiserfs_filsys_t *fs,
+static int should_make_journal_standard(reiserfs_filsys_t fs,
 					char *j_new_dev_name)
 {
 	if (!is_reiserfs_jr_magic_string(fs->fs_ondisk_sb))
@@ -126,7 +126,7 @@ static int should_make_journal_standard(reiserfs_filsys_t *fs,
 	return 1;
 }
 
-static int set_standard_journal_params(reiserfs_filsys_t *fs)
+static int set_standard_journal_params(reiserfs_filsys_t fs)
 {
 	struct buffer_head *bh;
 
@@ -193,7 +193,7 @@ static int set_standard_journal_params(reiserfs_filsys_t *fs)
 	return 1;
 }
 
-static void zero_journal(reiserfs_filsys_t *fs)
+static void zero_journal(reiserfs_filsys_t fs)
 {
 	unsigned int i;
 	struct buffer_head *bh;
@@ -285,7 +285,7 @@ static void set_time_last_checked(char *str)
 		print_usage_and_exit();
 }
 
-static void callback_new_badblocks(reiserfs_filsys_t *fs,
+static void callback_new_badblocks(reiserfs_filsys_t fs,
 				   struct reiserfs_path *badblock_path,
 				   void *data)
 {
@@ -310,7 +310,7 @@ static void callback_new_badblocks(reiserfs_filsys_t *fs,
 	pathrelse(badblock_path);
 }
 
-static void callback_clear_badblocks(reiserfs_filsys_t *fs,
+static void callback_clear_badblocks(reiserfs_filsys_t fs,
 				     struct reiserfs_path *badblock_path,
 				     void *data)
 {
@@ -328,7 +328,7 @@ static void callback_clear_badblocks(reiserfs_filsys_t *fs,
 	pathrelse(badblock_path);
 }
 
-static void add_badblocks(reiserfs_filsys_t *fs)
+static void add_badblocks(reiserfs_filsys_t fs)
 {
 	unsigned long i, marked = 0;
 
@@ -389,7 +389,7 @@ static void add_badblocks(reiserfs_filsys_t *fs)
 
 int main(int argc, char **argv)
 {
-	reiserfs_filsys_t *fs;
+	reiserfs_filsys_t fs;
 	char *device_name;
 	char *jdevice_name;
 	char *j_new_device_name;

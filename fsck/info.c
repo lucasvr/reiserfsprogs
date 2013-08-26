@@ -5,7 +5,7 @@
 
 #include "fsck.h"
 
-int fsck_user_confirmed(reiserfs_filsys_t *fs, char *q, char *a,
+int fsck_user_confirmed(reiserfs_filsys_t fs, char *q, char *a,
 			int default_answer)
 {
 	if (!fsck_interactive(fs))
@@ -14,7 +14,7 @@ int fsck_user_confirmed(reiserfs_filsys_t *fs, char *q, char *a,
 	return user_confirmed(fsck_progress_file(fs), q, a);
 }
 
-void stage_report(int pass, reiserfs_filsys_t *fs)
+void stage_report(int pass, reiserfs_filsys_t fs)
 {
 	switch (pass) {
 	case 0:

@@ -904,7 +904,7 @@ int are_items_mergeable(struct item_head *left, struct item_head *right,
 }
 
 /* get left neighbor of the leaf node */
-static struct buffer_head *get_left_neighbor(reiserfs_filsys_t *s,
+static struct buffer_head *get_left_neighbor(reiserfs_filsys_t s,
 					     struct reiserfs_path *path)
 {
 	struct reiserfs_key key;
@@ -926,7 +926,7 @@ static struct buffer_head *get_left_neighbor(reiserfs_filsys_t *s,
 	return bh;
 }
 
-static struct buffer_head *get_right_neighbor(reiserfs_filsys_t *s,
+static struct buffer_head *get_right_neighbor(reiserfs_filsys_t s,
 					      struct reiserfs_path *path)
 {
 	struct reiserfs_key key;
@@ -953,7 +953,7 @@ static struct buffer_head *get_right_neighbor(reiserfs_filsys_t *s,
 	return bh;
 }
 
-int is_left_mergeable(reiserfs_filsys_t *s, struct reiserfs_path *path)
+int is_left_mergeable(reiserfs_filsys_t s, struct reiserfs_path *path)
 {
 	struct item_head *right;
 	struct buffer_head *bh;
@@ -972,7 +972,7 @@ int is_left_mergeable(reiserfs_filsys_t *s, struct reiserfs_path *path)
 	return retval;
 }
 
-int is_right_mergeable(reiserfs_filsys_t *s, struct reiserfs_path *path)
+int is_right_mergeable(reiserfs_filsys_t s, struct reiserfs_path *path)
 {
 	struct item_head *left;
 	struct buffer_head *bh;
@@ -1152,7 +1152,7 @@ static int get_empty_nodes(struct tree_balance *p_s_tb, int n_h)
 	unsigned long *p_n_blocknr, a_n_blocknrs[MAX_AMOUNT_NEEDED] = { 0, };
 	int n_counter, n_number_of_freeblk, n_amount_needed,	/* number of needed empty blocks */
 	 n_repeat;
-	reiserfs_filsys_t *fs = p_s_tb->tb_fs;
+	reiserfs_filsys_t fs = p_s_tb->tb_fs;
 
 	if (n_h == 0 && p_s_tb->insert_size[n_h] == 0x7fff)
 		return CARRY_ON;
@@ -1267,7 +1267,7 @@ static int get_rfree(struct tree_balance *tb, int h)
 static int is_left_neighbor_in_cache(struct tree_balance *p_s_tb, int n_h)
 {
 	struct buffer_head *p_s_father;
-	reiserfs_filsys_t *fs = p_s_tb->tb_fs;
+	reiserfs_filsys_t fs = p_s_tb->tb_fs;
 	unsigned long n_left_neighbor_blocknr;
 	int n_left_neighbor_position;
 
@@ -2245,7 +2245,7 @@ static int get_neighbors(struct tree_balance *p_s_tb, int n_h)
 	int n_child_position,
 	    n_path_offset = PATH_H_PATH_OFFSET(p_s_tb->tb_path, n_h + 1);
 	unsigned long n_son_number;
-	reiserfs_filsys_t *fs = p_s_tb->tb_fs;
+	reiserfs_filsys_t fs = p_s_tb->tb_fs;
 	struct buffer_head *p_s_bh;
 	/*struct virtual_node * vn = p_s_tb->tb_vn; */
 

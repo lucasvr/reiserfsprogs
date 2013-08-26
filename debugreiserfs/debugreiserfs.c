@@ -5,7 +5,7 @@
 
 #include "debugreiserfs.h"
 
-reiserfs_filsys_t *fs;
+reiserfs_filsys_t fs;
 
 #define print_usage_and_exit() {\
 fprintf (stderr, "Usage: %s [options] device\n\n\
@@ -67,7 +67,7 @@ struct reiserfs_fsstat {
 } g_stat_info;
 #endif
 
-static void print_disk_tree(reiserfs_filsys_t *fs, unsigned long block_nr)
+static void print_disk_tree(reiserfs_filsys_t fs, unsigned long block_nr)
 {
 	struct buffer_head *bh;
 	int i, j, count;
@@ -132,7 +132,7 @@ static void print_disk_tree(reiserfs_filsys_t *fs, unsigned long block_nr)
 	level++;
 }
 
-static void print_disk_blocks(reiserfs_filsys_t *fs)
+static void print_disk_blocks(reiserfs_filsys_t fs)
 {
 	int type;
 	unsigned long done = 0, total;
@@ -171,8 +171,8 @@ static void print_disk_blocks(reiserfs_filsys_t *fs)
 	fprintf(stderr, "\n");
 }
 
-void pack_one_block(reiserfs_filsys_t *fs, unsigned long block);
-static void print_one_block(reiserfs_filsys_t *fs, unsigned long block)
+void pack_one_block(reiserfs_filsys_t fs, unsigned long block);
+static void print_one_block(reiserfs_filsys_t fs, unsigned long block)
 {
 	struct buffer_head *bh;
 
@@ -427,9 +427,9 @@ static char *parse_options(struct debugreiserfs_data *data,
 	return argv[optind];
 }
 
-void pack_partition(reiserfs_filsys_t *fs);
+void pack_partition(reiserfs_filsys_t fs);
 
-static void do_pack(reiserfs_filsys_t *fs)
+static void do_pack(reiserfs_filsys_t fs)
 {
 	if (certain_block(fs))
 		pack_one_block(fs, certain_block(fs));
@@ -452,7 +452,7 @@ static int comp (const void * vp1, const void * vp2)
 }
 */
 
-static void init_bitmap(reiserfs_filsys_t *fs)
+static void init_bitmap(reiserfs_filsys_t fs)
 {
 	FILE *fp;
 	unsigned long block_count;
@@ -508,7 +508,7 @@ static void init_bitmap(reiserfs_filsys_t *fs)
 }
 
 /* FIXME: statistics does not work */
-static void do_dump_tree(reiserfs_filsys_t *fs)
+static void do_dump_tree(reiserfs_filsys_t fs)
 {
 	if (certain_block(fs)) {
 		print_one_block(fs, certain_block(fs));
@@ -565,7 +565,7 @@ static void do_dump_tree(reiserfs_filsys_t *fs)
 	}
 }
 
-static void callback_badblock_print(reiserfs_filsys_t *fs,
+static void callback_badblock_print(reiserfs_filsys_t fs,
 				    struct reiserfs_path *badblock_path,
 				    void *data)
 {
@@ -610,7 +610,7 @@ static int str2int(char *str, int *res)
 	return 1;
 }
 
-static void do_corrupt_blocks(reiserfs_filsys_t *fs)
+static void do_corrupt_blocks(reiserfs_filsys_t fs)
 {
 	char *line;
 	FILE *fd;
@@ -647,7 +647,7 @@ static void do_corrupt_blocks(reiserfs_filsys_t *fs)
 	return;
 }
 
-static void debugreiserfs_zero_reiserfs(reiserfs_filsys_t *fs)
+static void debugreiserfs_zero_reiserfs(reiserfs_filsys_t fs)
 {
 	unsigned long done, total, i;
 	struct buffer_head *bh;

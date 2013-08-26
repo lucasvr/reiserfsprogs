@@ -21,7 +21,7 @@
 #include "../version.h"
 
 /* main.c */
-extern reiserfs_filsys_t *fs;
+extern reiserfs_filsys_t fs;
 int main(int argc, char *argv[]);
 
 /* Exit codes. */
@@ -67,10 +67,10 @@ int main(int argc, char *argv[]);
 
 /* pass0.c */
 extern reiserfs_bitmap_t *leaves_bitmap;
-void pass_0(reiserfs_filsys_t *);
-void load_pass_0_result(FILE *, reiserfs_filsys_t *);
+void pass_0(reiserfs_filsys_t );
+void load_pass_0_result(FILE *, reiserfs_filsys_t );
 
-int leaf_structure_check(reiserfs_filsys_t *fs, struct buffer_head *bh);
+int leaf_structure_check(reiserfs_filsys_t fs, struct buffer_head *bh);
 
 int is_used_leaf(unsigned long block);
 int is_good_unformatted(unsigned long block);
@@ -84,7 +84,7 @@ void register_uninsertable(unsigned long block);
 void register_saved_item(void);
 int still_bad_unfm_ptr_1(unsigned long block);
 int still_bad_unfm_ptr_2(unsigned long block);
-void make_alloc_bitmap(reiserfs_filsys_t *);
+void make_alloc_bitmap(reiserfs_filsys_t );
 
 void delete_aux_bitmaps();
 void set_aux_bitmaps(reiserfs_bitmap_t *leaves, reiserfs_bitmap_t *good,
@@ -100,8 +100,8 @@ extern reiserfs_bitmap_t *bad_unfm_in_tree_once_bitmap;
 #define mark_bad_unfm_in_tree_once(block) __mark (bad_unfm_in_tree_once, block)
 
 /* pass1.c */
-void pass_1(reiserfs_filsys_t *);
-void load_pass_1_result(FILE *, reiserfs_filsys_t *);
+void pass_1(reiserfs_filsys_t );
+void load_pass_1_result(FILE *, reiserfs_filsys_t );
 struct buffer_head *make_buffer(int dev, unsigned long blocknr, int size,
 				char *data);
 void build_the_tree(void);
@@ -115,8 +115,8 @@ int tree_is_empty(void);
 void make_single_leaf_tree(struct buffer_head *bh);
 
 /* pass2.c */
-void pass_2(reiserfs_filsys_t *);
-void load_pass_2_result(reiserfs_filsys_t *);
+void pass_2(reiserfs_filsys_t );
+void load_pass_2_result(reiserfs_filsys_t );
 void insert_item_separately(struct item_head *ih, char *item, int was_in_tree);
 void save_item(struct si **head, struct item_head *ih, char *item,
 	       __u32 blocknr);
@@ -161,9 +161,9 @@ void rewrite_file(struct item_head *ih, int should_relocate,
 #define RELOCATED -3
 #define LOOP_FOUND -4
 
-void load_semantic_result(FILE *, reiserfs_filsys_t *);
+void load_semantic_result(FILE *, reiserfs_filsys_t );
 
-void pass_3_semantic(reiserfs_filsys_t *);
+void pass_3_semantic(reiserfs_filsys_t );
 void semantic_check(void);
 int check_semantic_tree(struct reiserfs_key *key, struct reiserfs_key *parent,
 			int is_dot_dot, int lost_found,
@@ -174,7 +174,7 @@ int not_a_regfile(void *sd);
 int fix_obviously_wrong_sd_mode(struct reiserfs_path *path);
 int is_dot_dot(char *name, int namelen);
 int is_dot(char *name, int namelen);
-/*void create_dir_sd (reiserfs_filsys_t *fs,
+/*void create_dir_sd (reiserfs_filsys_t fs,
   struct reiserfs_path *path, struct reiserfs_key *key);*/
 int rebuild_check_regular_file(struct reiserfs_path *path, void *sd,
 			       struct item_head *new_ih);
@@ -182,9 +182,9 @@ int rebuild_semantic_pass(struct reiserfs_key *key, struct reiserfs_key *parent,
 			  int is_dot_dot, struct item_head *new_ih);
 
 /* lost+found.c */
-void pass_3a_look_for_lost(reiserfs_filsys_t *);
+void pass_3a_look_for_lost(reiserfs_filsys_t );
 
-void load_lost_found_result(reiserfs_filsys_t *);
+void load_lost_found_result(reiserfs_filsys_t );
 
 /* pass4.c */
 void pass_4_check_unaccessed_items(void);
@@ -201,10 +201,10 @@ int is_bad_directory(struct item_head *ih, char *item, int dev, int blocksize);
 //extern int bad_block_number (struct super_block * s, blocknr_t block);
 
 /* check_tree.c */
-void check_fs_tree(reiserfs_filsys_t *);
-void do_clean_attributes(reiserfs_filsys_t *fs);
-int bad_pair(reiserfs_filsys_t *, struct buffer_head *bh, int i);
-int bad_leaf_2(reiserfs_filsys_t *, struct buffer_head *bh);
+void check_fs_tree(reiserfs_filsys_t );
+void do_clean_attributes(reiserfs_filsys_t fs);
+int bad_pair(reiserfs_filsys_t , struct buffer_head *bh, int i);
+int bad_leaf_2(reiserfs_filsys_t , struct buffer_head *bh);
 
 #if 0
 extern int should_be_relocated(struct reiserfs_key *key);
@@ -227,17 +227,17 @@ void reiserfsck_cut_from_item(struct reiserfs_path *path, int cut_size);
 		      comp3_function_t comp_func, int version);		
 		      int usearch_by_entry_key (struct super_block * s, struct reiserfs_key *key, struct reiserfs_path *path);*/
 
-typedef int do_after_read_t(reiserfs_filsys_t *, struct buffer_head **, int h);
-typedef int do_on_full_path_t(reiserfs_filsys_t *, struct buffer_head **, int);
-void pass_through_tree(reiserfs_filsys_t *, do_after_read_t, do_on_full_path_t,
+typedef int do_after_read_t(reiserfs_filsys_t , struct buffer_head **, int h);
+typedef int do_on_full_path_t(reiserfs_filsys_t , struct buffer_head **, int);
+void pass_through_tree(reiserfs_filsys_t , do_after_read_t, do_on_full_path_t,
 		       int depth);
 
 /* bitmap.c */
-int reiserfsck_reiserfs_new_blocknrs(reiserfs_filsys_t *fs,
+int reiserfsck_reiserfs_new_blocknrs(reiserfs_filsys_t fs,
 				     unsigned long *pblocknrs,
 				     unsigned long start_from,
 				     int amount_needed);
-int reiserfsck_reiserfs_free_block(reiserfs_filsys_t *fs, unsigned long block);
+int reiserfsck_reiserfs_free_block(reiserfs_filsys_t fs, unsigned long block);
 struct buffer_head *reiserfsck_get_new_buffer(unsigned long start);
 int is_block_used(unsigned long block);
 void mark_block_used(unsigned long block, int check_hardware);
@@ -254,10 +254,10 @@ void id_map_free(id_map_t *);
 int id_map_test(id_map_t *map, __u32 id);
 int id_map_mark(id_map_t *map, __u32 id);
 __u32 id_map_alloc(id_map_t *map);
-void id_map_flush(struct id_map *map, reiserfs_filsys_t *fs);
+void id_map_flush(struct id_map *map, reiserfs_filsys_t fs);
 
 /* FIXME: Needs to be implemented
-void fetch_objectid_map (struct id_map * map, reiserfs_filsys_t *fs);
+void fetch_objectid_map (struct id_map * map, reiserfs_filsys_t fs);
 
 void reiserfs_objectid_map_save (FILE * fp, struct id_map * id_map);
 struct id_map * reiserfs_objectid_map_load (FILE * fp);
@@ -463,12 +463,12 @@ struct fsck_data {
 /* name of file where we store rollback data */
 #define state_rollback_file(fs) fsck_data(fs)->rebuild.rollback_file
 
-int fsck_user_confirmed(reiserfs_filsys_t *fs, char *q, char *a,
+int fsck_user_confirmed(reiserfs_filsys_t fs, char *q, char *a,
 			int default_answer);
-void stage_report(int, reiserfs_filsys_t *);
+void stage_report(int, reiserfs_filsys_t );
 
 /*pass1: rebuild super block*/
-void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data);
+void rebuild_sb(reiserfs_filsys_t fs, char *filename, struct fsck_data *data);
 
 #define fsck_log(fmt, list...) \
 {\
@@ -485,8 +485,8 @@ fflush (fsck_progress_file(fs));\
 #define FATAL	1
 #define FIXABLE 2
 
-void one_more_corruption(reiserfs_filsys_t *fs, int kind);
-void one_less_corruption(reiserfs_filsys_t *fs, int kind);
+void one_more_corruption(reiserfs_filsys_t fs, int kind);
+void one_less_corruption(reiserfs_filsys_t fs, int kind);
 
 /*
 #define one_more_corruption(fs,kind) fsck_check_stat (fs)->kind##_corruptions++

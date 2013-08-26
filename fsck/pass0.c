@@ -40,7 +40,7 @@ static int correct_direct_item_offset(__u64 offset, int format)
 }
 
 /* bitmaps which are built on pass 0 and are used on pass 1 */
-static void make_aux_bitmaps(reiserfs_filsys_t *fs)
+static void make_aux_bitmaps(reiserfs_filsys_t fs)
 {
 	struct reiserfs_super_block *sb;
 
@@ -171,7 +171,7 @@ static int correct_key_format(struct item_head *ih, int symlink)
 
 #if 0
 /* fixme: we might try all available hashes */
-static int prob_name(reiserfs_filsys_t *fs,
+static int prob_name(reiserfs_filsys_t fs,
 		     char **name, int max_len, __u32 deh_offset)
 {
 	int start;		/* */
@@ -190,7 +190,7 @@ static int prob_name(reiserfs_filsys_t *fs,
 }
 #endif
 
-static void hash_hits_init(reiserfs_filsys_t *fs)
+static void hash_hits_init(reiserfs_filsys_t fs)
 {
 	fsck_data(fs)->rebuild.hash_amount = known_hashes();
 	fsck_data(fs)->rebuild.hash_hits =
@@ -198,7 +198,7 @@ static void hash_hits_init(reiserfs_filsys_t *fs)
 	return;
 }
 
-static void add_hash_hit(reiserfs_filsys_t *fs, int hash_code)
+static void add_hash_hit(reiserfs_filsys_t fs, int hash_code)
 {
 	fsck_data(fs)->rebuild.hash_hits[hash_code]++;
 }
@@ -226,7 +226,7 @@ static int try_to_get_name_length(struct item_head *ih,
 #undef DEBUG_VERIFY_DENTRY
 
 /* check directory item and try to recover something */
-static int verify_directory_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
+static int verify_directory_item(reiserfs_filsys_t fs, struct buffer_head *bh,
 				 int item_num)
 {
 	struct item_head *ih;
@@ -612,7 +612,7 @@ static int is_wrong_short_key(struct reiserfs_key *key)
 }
 
 /* 1 if some of fields in the block head of bh look bad */
-int leaf_structure_check(reiserfs_filsys_t *fs, struct buffer_head *bh)
+int leaf_structure_check(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	struct block_head *blkh;
 	int free_space, counted;
@@ -671,7 +671,7 @@ int leaf_structure_check(reiserfs_filsys_t *fs, struct buffer_head *bh)
 
 /* FIXME: we can improve fixing of broken keys: we can ssfe direct items which
    go after stat data and have broken keys */
-static void pass0_correct_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static void pass0_correct_leaf(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	int file_format = KEY_FORMAT_UNDEFINED;
 	struct item_head *ih;
@@ -1837,12 +1837,12 @@ int is_leaf_bad(struct buffer_head *bh)
 	return bad;
 }
 
-static int is_to_be_read(reiserfs_filsys_t *fs, unsigned long block)
+static int is_to_be_read(reiserfs_filsys_t fs, unsigned long block)
 {
 	return reiserfs_bitmap_test_bit(fsck_source_bitmap(fs), block);
 }
 
-static void do_pass_0(reiserfs_filsys_t *fs)
+static void do_pass_0(reiserfs_filsys_t fs)
 {
 	struct buffer_head *bh;
 	unsigned long i;
@@ -2028,7 +2028,7 @@ void make_allocable(unsigned long block)
 	reiserfs_bitmap_clear_bit(fsck_allocable_bitmap(fs), block);
 }
 
-static void choose_hash_function(reiserfs_filsys_t *fs)
+static void choose_hash_function(reiserfs_filsys_t fs)
 {
 	unsigned long max;
 	unsigned int hash_code;
@@ -2078,7 +2078,7 @@ static void choose_hash_function(reiserfs_filsys_t *fs)
 /* create bitmap of blocks the tree is to be built off */
 /* debugreiserfs and pass0 should share this code -s should show
 the same as we could recover - test: zero first 32M */
-static void init_source_bitmap(reiserfs_filsys_t *fs)
+static void init_source_bitmap(reiserfs_filsys_t fs)
 {
 	FILE *fp;
 	unsigned long block_count = get_sb_block_count(fs->fs_ondisk_sb);
@@ -2214,7 +2214,7 @@ static void init_source_bitmap(reiserfs_filsys_t *fs)
 
 }
 
-static void before_pass_0(reiserfs_filsys_t *fs)
+static void before_pass_0(reiserfs_filsys_t fs)
 {
 	/* bitmap of blocks to be read */
 	init_source_bitmap(fs);
@@ -2229,7 +2229,7 @@ static void before_pass_0(reiserfs_filsys_t *fs)
 	hash_hits_init(fs);
 }
 
-static void save_pass_0_result(reiserfs_filsys_t *fs)
+static void save_pass_0_result(reiserfs_filsys_t fs)
 {
 	FILE *file;
 	int retval;
@@ -2255,7 +2255,7 @@ static void save_pass_0_result(reiserfs_filsys_t *fs)
 
 /* file 'fp' must contain 3 bitmaps saved during last pass 0: bitmap
    of leaves, bitmaps of good and bad unfms*/
-void load_pass_0_result(FILE * fp, reiserfs_filsys_t *fs)
+void load_pass_0_result(FILE * fp, reiserfs_filsys_t fs)
 {
 	leaves_bitmap = reiserfs_bitmap_load(fp);
 	good_unfm_bitmap = reiserfs_bitmap_load(fp);
@@ -2274,7 +2274,7 @@ void load_pass_0_result(FILE * fp, reiserfs_filsys_t *fs)
 	     reiserfs_bitmap_ones(bad_unfm_bitmap));
 }
 
-static void after_pass_0(reiserfs_filsys_t *fs)
+static void after_pass_0(reiserfs_filsys_t fs)
 {
 	time_t t;
 
@@ -2317,7 +2317,7 @@ static void after_pass_0(reiserfs_filsys_t *fs)
 	exit(0);
 }
 
-void pass_0(reiserfs_filsys_t *fs)
+void pass_0(reiserfs_filsys_t fs)
 {
 	if (get_reiserfs_format(fs->fs_ondisk_sb) != fs->fs_format ||
 	    get_reiserfs_format(fs->fs_ondisk_sb) == REISERFS_FORMAT_UNKNOWN) {

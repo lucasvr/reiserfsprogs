@@ -272,7 +272,7 @@ static void print_path(struct tree_balance *tb, struct reiserfs_path *path)
 	}
 }
 
-static void print_directory_item(FILE *fp, reiserfs_filsys_t *fs,
+static void print_directory_item(FILE *fp, reiserfs_filsys_t fs,
 				 struct buffer_head *bh, struct item_head *ih)
 {
 	int i;
@@ -500,7 +500,7 @@ static int print_internal(FILE * fp, struct buffer_head *bh, int first,
 }
 
 static int is_symlink = 0;
-static int print_leaf(FILE * fp, reiserfs_filsys_t *fs, struct buffer_head *bh,
+static int print_leaf(FILE * fp, reiserfs_filsys_t fs, struct buffer_head *bh,
 		      int print_mode, int first, int last)
 {
 	struct item_head *ih;
@@ -606,7 +606,7 @@ void print_journal_params(FILE * fp, struct journal_params *jp)
 }
 
 /* return 1 if this is not super block */
-int print_super_block(FILE * fp, reiserfs_filsys_t *fs, char *file_name,
+int print_super_block(FILE * fp, reiserfs_filsys_t fs, char *file_name,
 		      struct buffer_head *bh, int short_print)
 {
 	struct reiserfs_super_block *sb =
@@ -730,7 +730,7 @@ int print_super_block(FILE * fp, reiserfs_filsys_t *fs, char *file_name,
 	return 0;
 }
 
-void print_filesystem_state(FILE * fp, reiserfs_filsys_t *fs)
+void print_filesystem_state(FILE * fp, reiserfs_filsys_t fs)
 {
 	reiserfs_warning(fp, "\nFilesystem state: ");
 	if (reiserfs_is_fs_consistent(fs))
@@ -753,7 +753,7 @@ static int print_desc_block(FILE * fp, struct buffer_head *bh)
 	return 0;
 }
 
-void print_block(FILE * fp, reiserfs_filsys_t *fs, struct buffer_head *bh, ...)	//int print_mode, int first, int last)
+void print_block(FILE * fp, reiserfs_filsys_t fs, struct buffer_head *bh, ...)	//int print_mode, int first, int last)
 {
 	va_list args;
 	int mode, first, last;
@@ -970,7 +970,7 @@ end2:
 }
 
 /* read bitmap of disk and print details */
-void print_bmap(FILE * fp, reiserfs_filsys_t *fs, int silent)
+void print_bmap(FILE * fp, reiserfs_filsys_t fs, int silent)
 {
 	struct reiserfs_super_block *sb;
 	int bmap_nr;
@@ -1013,7 +1013,7 @@ void print_bmap(FILE * fp, reiserfs_filsys_t *fs, int silent)
 	}
 }
 
-void print_objectid_map(FILE * fp, reiserfs_filsys_t *fs)
+void print_objectid_map(FILE * fp, reiserfs_filsys_t fs)
 {
 	int i;
 	struct reiserfs_super_block *sb;
@@ -1057,7 +1057,7 @@ void print_objectid_map(FILE * fp, reiserfs_filsys_t *fs)
 
 }
 
-void print_journal_header(reiserfs_filsys_t *fs)
+void print_journal_header(reiserfs_filsys_t fs)
 {
 	struct reiserfs_journal_header *j_head;
 
@@ -1073,7 +1073,7 @@ void print_journal_header(reiserfs_filsys_t *fs)
 	print_journal_params(stdout, &j_head->jh_journal);
 }
 
-static void print_trans_element(reiserfs_filsys_t *fs,
+static void print_trans_element(reiserfs_filsys_t fs,
 				reiserfs_trans_t *trans, unsigned int index,
 				unsigned long in_journal,
 				unsigned long in_place)
@@ -1087,7 +1087,7 @@ static void print_trans_element(reiserfs_filsys_t *fs,
 		reiserfs_warning(stdout, "\n");
 }
 
-void print_one_transaction(reiserfs_filsys_t *fs, reiserfs_trans_t *trans)
+void print_one_transaction(reiserfs_filsys_t fs, reiserfs_trans_t *trans)
 {
 	reiserfs_warning(stdout,
 			 "Mountid %u, transid %u, desc %lu, length %u, commit %lu\n",
@@ -1097,7 +1097,7 @@ void print_one_transaction(reiserfs_filsys_t *fs, reiserfs_trans_t *trans)
 }
 
 /* print all valid transactions and found dec blocks */
-void print_journal(reiserfs_filsys_t *fs)
+void print_journal(reiserfs_filsys_t fs)
 {
 	if (!reiserfs_journal_opened(fs)) {
 		reiserfs_warning(stderr,

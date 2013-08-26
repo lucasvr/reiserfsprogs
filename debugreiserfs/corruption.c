@@ -11,7 +11,7 @@ extern struct reiserfs_fsstat g_stat_info;
 int do_one_ih_corrupt(struct item_head *ih, unsigned int nr_bytes);
 int do_one_ih_random_corrupt(struct item_head *ih);
 
-void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
+void do_one_corruption_in_one_block(reiserfs_filsys_t fs,
 				    struct buffer_head *bh,
 				    char *corruption_command);
 int corrupt_block_header(struct block_head *blkh, unsigned int offset,
@@ -93,7 +93,7 @@ static void edit_journal_params(struct journal_params *jp)
 }
 
 /* this allows to edit all super block fields */
-static void edit_super_block(reiserfs_filsys_t *fs)
+static void edit_super_block(reiserfs_filsys_t fs)
 {
 	char *str;
 	size_t n;
@@ -236,7 +236,7 @@ static void corrupt_clobber_hash(char *name, struct item_head *ih,
                                start from offset
 */
 
-void do_corrupt_one_block(reiserfs_filsys_t *fs, char *fline)
+void do_corrupt_one_block(reiserfs_filsys_t fs, char *fline)
 {
 	struct buffer_head *bh;
 	char *line = NULL;
@@ -341,7 +341,7 @@ void do_corrupt_one_block(reiserfs_filsys_t *fs, char *fline)
 	return;
 }
 
-void do_one_corruption_in_one_block(reiserfs_filsys_t *fs,
+void do_one_corruption_in_one_block(reiserfs_filsys_t fs,
 				    struct buffer_head *bh,
 				    char *corruption_command)
 {
@@ -766,7 +766,7 @@ static void do_one_blkh_random_corrupt(struct buffer_head *bh)
 
 }
 
-void do_leaves_corruption(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
+void do_leaves_corruption(reiserfs_filsys_t fs, unsigned long nr_leaves_cr)
 {
 	struct buffer_head *bh;
 	unsigned long nr_leaves = 0;
@@ -853,7 +853,7 @@ void do_one_block_random_corrupt(struct buffer_head *bh)
 
 }
 
-void do_bitmap_corruption(reiserfs_filsys_t *fs)
+void do_bitmap_corruption(reiserfs_filsys_t fs)
 {
 
 	unsigned long first = fs->fs_super_bh->b_blocknr + 1;
@@ -889,7 +889,7 @@ void do_bitmap_corruption(reiserfs_filsys_t *fs)
 }
 
 /* corrupt the random number of item headers in random number of leaves */
-static void do_ih_random_corrupt(reiserfs_filsys_t *fs,
+static void do_ih_random_corrupt(reiserfs_filsys_t fs,
 				 unsigned long nr_leaves_cr)
 {
 	unsigned int nr_ih_cr;
@@ -1003,7 +1003,7 @@ static void do_one_item_random_corrupt(struct buffer_head *bh,
 }
 
 /* corrupt the random number of directory items in random number of leaves */
-static void do_dir_random_corrupt(reiserfs_filsys_t *fs,
+static void do_dir_random_corrupt(reiserfs_filsys_t fs,
 				  unsigned long nr_leaves_cr)
 {
 	unsigned int nr_ih_cr;
@@ -1089,7 +1089,7 @@ static void do_dir_random_corrupt(reiserfs_filsys_t *fs,
 }
 
 /* corrupt the random number of stat data items in random number of leaves */
-static void do_sd_random_corrupt(reiserfs_filsys_t *fs,
+static void do_sd_random_corrupt(reiserfs_filsys_t fs,
 				 unsigned long nr_leaves_cr)
 {
 	unsigned int nr_ih_cr;
@@ -1175,7 +1175,7 @@ static void do_sd_random_corrupt(reiserfs_filsys_t *fs,
 }
 
 /* corrupt the random number of indierct items in random number of leaves */
-static void do_ind_random_corrupt(reiserfs_filsys_t *fs,
+static void do_ind_random_corrupt(reiserfs_filsys_t fs,
 				  unsigned long nr_leaves_cr)
 {
 	unsigned int nr_ih_cr;
@@ -1273,7 +1273,7 @@ static void do_ind_random_corrupt(reiserfs_filsys_t *fs,
                  corrupted
 */
 
-static void what_to_corrupt(reiserfs_filsys_t *fs, char *corruption_command)
+static void what_to_corrupt(reiserfs_filsys_t fs, char *corruption_command)
 {
 	unsigned long nr_leaves_cr;
 	char code;
@@ -1339,7 +1339,7 @@ static void what_to_corrupt(reiserfs_filsys_t *fs, char *corruption_command)
 	}
 }
 
-void do_fs_random_corrupt(reiserfs_filsys_t *fs)
+void do_fs_random_corrupt(reiserfs_filsys_t fs)
 {
 	char *line = NULL;
 	size_t n = 0;

@@ -340,7 +340,7 @@ out:
    3. what we should do with directory entries hashed by another hash?
    they are deleted for now
 */
-static void pass1_correct_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static void pass1_correct_leaf(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	unsigned int i, j;
 	struct item_head *ih;
@@ -483,7 +483,7 @@ struct si *remove_saved_item(struct si *si)
 
 /* fsck starts creating of this bitmap on pass 1. It will then become
    on-disk bitmap */
-static void init_new_bitmap(reiserfs_filsys_t *fs)
+static void init_new_bitmap(reiserfs_filsys_t fs)
 {
 	unsigned int i;
 	unsigned long block;
@@ -553,7 +553,7 @@ static void init_new_bitmap(reiserfs_filsys_t *fs)
 
 /* this makes a map of blocks which can be allocated when fsck will
    continue */
-static void find_allocable_blocks(reiserfs_filsys_t *fs)
+static void find_allocable_blocks(reiserfs_filsys_t fs)
 {
 	unsigned long i;
 
@@ -596,7 +596,7 @@ static void find_allocable_blocks(reiserfs_filsys_t *fs)
 	fs->block_deallocator = reiserfsck_reiserfs_free_block;
 }
 
-static void before_pass_1(reiserfs_filsys_t *fs)
+static void before_pass_1(reiserfs_filsys_t fs)
 {
 	/* this will become an on-disk bitmap */
 	init_new_bitmap(fs);
@@ -617,7 +617,7 @@ static void before_pass_1(reiserfs_filsys_t *fs)
 	/* pass 1 does not deal with objectid */
 }
 
-static void save_pass_1_result(reiserfs_filsys_t *fs)
+static void save_pass_1_result(reiserfs_filsys_t fs)
 {
 	FILE *file;
 	int retval;
@@ -645,7 +645,7 @@ static void save_pass_1_result(reiserfs_filsys_t *fs)
 		     state_dump_file(fs));
 }
 
-void load_pass_1_result(FILE * fp, reiserfs_filsys_t *fs)
+void load_pass_1_result(FILE * fp, reiserfs_filsys_t fs)
 {
 	fsck_new_bitmap(fs) =
 	    reiserfs_create_bitmap(get_sb_block_count(fs->fs_ondisk_sb));
@@ -676,7 +676,7 @@ void load_pass_1_result(FILE * fp, reiserfs_filsys_t *fs)
 
 /* reads blocks marked in leaves_bitmap and tries to insert them into
    tree */
-static void do_pass_1(reiserfs_filsys_t *fs)
+static void do_pass_1(reiserfs_filsys_t fs)
 {
 	struct buffer_head *bh;
 	unsigned long i;
@@ -775,7 +775,7 @@ static void do_pass_1(reiserfs_filsys_t *fs)
 
 }
 
-static void after_pass_1(reiserfs_filsys_t *fs)
+static void after_pass_1(reiserfs_filsys_t fs)
 {
 	time_t t;
 
@@ -822,7 +822,7 @@ static void after_pass_1(reiserfs_filsys_t *fs)
 	exit(0);
 }
 
-void pass_1(reiserfs_filsys_t *fs)
+void pass_1(reiserfs_filsys_t fs)
 {
 	fsck_progress("\nPass 1 (will try to insert %lu leaves):\n",
 		      reiserfs_bitmap_ones(fsck_source_bitmap(fs)));

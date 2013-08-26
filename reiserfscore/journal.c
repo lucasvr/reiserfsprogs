@@ -19,7 +19,7 @@ static int does_desc_match_commit(struct buffer_head *d_bh,
 
 /* d_bh is descriptor, return number of block where commit block of this
    transaction is to be */
-static unsigned long commit_expected(reiserfs_filsys_t *fs,
+static unsigned long commit_expected(reiserfs_filsys_t fs,
 				     struct buffer_head *d_bh)
 {
 	unsigned long offset;
@@ -35,7 +35,7 @@ static unsigned long commit_expected(reiserfs_filsys_t *fs,
 
 /* d_bh contains journal descriptor, returns number of block where descriptor
    block of next transaction should be */
-static unsigned long next_desc_expected(reiserfs_filsys_t *fs,
+static unsigned long next_desc_expected(reiserfs_filsys_t fs,
 					struct buffer_head *d_bh)
 {
 	unsigned long offset;
@@ -50,7 +50,7 @@ static unsigned long next_desc_expected(reiserfs_filsys_t *fs,
 }
 
 /* common checks for validness of a transaction */
-static int transaction_check_content(reiserfs_filsys_t *fs,
+static int transaction_check_content(reiserfs_filsys_t fs,
 				     reiserfs_trans_t *trans)
 {
 	struct buffer_head *d_bh, *c_bh;
@@ -102,7 +102,7 @@ error_desc_brelse:
 }
 
 /* common checks for validness of a transaction */
-static int transaction_check_desc(reiserfs_filsys_t *fs,
+static int transaction_check_desc(reiserfs_filsys_t fs,
 				  struct buffer_head *d_bh)
 {
 	struct buffer_head *c_bh;
@@ -127,7 +127,7 @@ static int transaction_check_desc(reiserfs_filsys_t *fs,
 
 /* read the journal and find the oldest and newest transactions, return number
    of transactions found */
-int get_boundary_transactions(reiserfs_filsys_t *fs,
+int get_boundary_transactions(reiserfs_filsys_t fs,
 			      reiserfs_trans_t *oldest,
 			      reiserfs_trans_t *newest)
 {
@@ -196,7 +196,7 @@ int get_boundary_transactions(reiserfs_filsys_t *fs,
 
 /* trans is a valid transaction. Look for valid transaction with smallest
    trans id which is greater than the id of the current one */
-int next_transaction(reiserfs_filsys_t *fs, reiserfs_trans_t *trans,
+int next_transaction(reiserfs_filsys_t fs, reiserfs_trans_t *trans,
 		     reiserfs_trans_t break_trans)
 {
 	struct buffer_head *d_bh, *next_d_bh;
@@ -251,7 +251,7 @@ int next_transaction(reiserfs_filsys_t *fs, reiserfs_trans_t *trans,
 	return found;
 }
 
-static void read_journal_write_in_place(reiserfs_filsys_t *fs,
+static void read_journal_write_in_place(reiserfs_filsys_t fs,
 					reiserfs_trans_t *trans,
 					unsigned int index,
 					unsigned long in_journal,
@@ -286,7 +286,7 @@ static void read_journal_write_in_place(reiserfs_filsys_t *fs,
 }
 
 /* go through all blocks of transaction and call 'action' each of them */
-void for_each_block(reiserfs_filsys_t *fs, reiserfs_trans_t *trans,
+void for_each_block(reiserfs_filsys_t fs, reiserfs_trans_t *trans,
 		    action_on_block_t action)
 {
 	struct buffer_head *d_bh, *c_bh;
@@ -338,14 +338,14 @@ void for_each_block(reiserfs_filsys_t *fs, reiserfs_trans_t *trans,
 }
 
 /* transaction is supposed to be valid */
-int replay_one_transaction(reiserfs_filsys_t *fs, reiserfs_trans_t *trans)
+int replay_one_transaction(reiserfs_filsys_t fs, reiserfs_trans_t *trans)
 {
 	for_each_block(fs, trans, read_journal_write_in_place);
 	fsync(fs->fs_dev);
 	return 0;
 }
 
-void for_each_transaction(reiserfs_filsys_t *fs, action_on_trans_t action)
+void for_each_transaction(reiserfs_filsys_t fs, action_on_trans_t action)
 {
 	reiserfs_trans_t oldest, newest;
 	int ret = 0;
@@ -419,7 +419,7 @@ __u32 advise_journal_max_trans_age(void)
 	return JOURNAL_MAX_TRANS_AGE;
 }
 
-int reiserfs_journal_params_check(reiserfs_filsys_t *fs)
+int reiserfs_journal_params_check(reiserfs_filsys_t fs)
 {
 	struct reiserfs_journal_header *j_head;
 	struct reiserfs_super_block *sb = fs->fs_ondisk_sb;
@@ -471,7 +471,7 @@ int reiserfs_journal_params_check(reiserfs_filsys_t *fs)
 
 /* read journal header and make sure that it matches with the filesystem
    opened */
-int reiserfs_open_journal(reiserfs_filsys_t *fs, char *j_filename, int flags)
+int reiserfs_open_journal(reiserfs_filsys_t fs, char *j_filename, int flags)
 {
 	struct reiserfs_super_block *sb;
 	__u64 count;
@@ -551,7 +551,7 @@ int reiserfs_open_journal(reiserfs_filsys_t *fs, char *j_filename, int flags)
 
 /* initialize super block's journal related fields and journal header fields.
  * If len is 0 - make journal of default size */
-int reiserfs_create_journal(reiserfs_filsys_t *fs, char *j_device,	/* journal device name */
+int reiserfs_create_journal(reiserfs_filsys_t fs, char *j_device,	/* journal device name */
 			    unsigned long offset,	/* journal offset on the j_device */
 			    unsigned long len,	/* including journal header */
 			    int transaction_max_size, int force)
@@ -744,7 +744,7 @@ int reiserfs_create_journal(reiserfs_filsys_t *fs, char *j_device,	/* journal de
 
 /* brelse journal header, flush all dirty buffers, close device, open, read
    journal header */
-void reiserfs_reopen_journal(reiserfs_filsys_t *fs, int flag)
+void reiserfs_reopen_journal(reiserfs_filsys_t fs, int flag)
 {
 	unsigned long jh_block;
 
@@ -772,19 +772,19 @@ void reiserfs_reopen_journal(reiserfs_filsys_t *fs, int flag)
 		die("reiserfs_reopen_journal: reading journal header failed");
 }
 
-int reiserfs_journal_opened(reiserfs_filsys_t *fs)
+int reiserfs_journal_opened(reiserfs_filsys_t fs)
 {
 	return fs->fs_jh_bh ? 1 : 0;
 }
 
-void reiserfs_flush_journal(reiserfs_filsys_t *fs)
+void reiserfs_flush_journal(reiserfs_filsys_t fs)
 {
 	if (!reiserfs_journal_opened(fs))
 		return;
 	flush_buffers(fs->fs_journal_dev);
 }
 
-void reiserfs_free_journal(reiserfs_filsys_t *fs)
+void reiserfs_free_journal(reiserfs_filsys_t fs)
 {
 	if (!reiserfs_journal_opened(fs))
 		return;
@@ -794,7 +794,7 @@ void reiserfs_free_journal(reiserfs_filsys_t *fs)
 	fs->fs_j_file_name = NULL;
 }
 
-void reiserfs_close_journal(reiserfs_filsys_t *fs)
+void reiserfs_close_journal(reiserfs_filsys_t fs)
 {
 	reiserfs_flush_journal(fs);
 	reiserfs_free_journal(fs);
@@ -802,7 +802,7 @@ void reiserfs_close_journal(reiserfs_filsys_t *fs)
 }
 
 /* update journal header */
-static void update_journal_header(reiserfs_filsys_t *fs,
+static void update_journal_header(reiserfs_filsys_t fs,
 				  struct buffer_head *bh_jh,
 				  reiserfs_trans_t *trans)
 {
@@ -820,7 +820,7 @@ static void update_journal_header(reiserfs_filsys_t *fs,
 }
 
 /* fixme: what should be done when not all transactions can be replayed in proper order? */
-int reiserfs_replay_journal(reiserfs_filsys_t *fs)
+int reiserfs_replay_journal(reiserfs_filsys_t fs)
 {
 	struct buffer_head *bh;
 	struct reiserfs_journal_header *j_head;

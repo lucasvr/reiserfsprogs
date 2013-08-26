@@ -1150,7 +1150,7 @@ void leaf_paste_entries(struct buffer_head *bh,
 
 /* wrappers for operations on one separated node */
 
-void delete_item(reiserfs_filsys_t *fs, struct buffer_head *bh, int item_num)
+void delete_item(reiserfs_filsys_t fs, struct buffer_head *bh, int item_num)
 {
 	struct buffer_info bi;
 
@@ -1160,7 +1160,7 @@ void delete_item(reiserfs_filsys_t *fs, struct buffer_head *bh, int item_num)
 	leaf_delete_items_entirely(&bi, item_num, 1);
 }
 
-void cut_entry(reiserfs_filsys_t *fs, struct buffer_head *bh,
+void cut_entry(reiserfs_filsys_t fs, struct buffer_head *bh,
 	       int item_num, int entry_num, int del_count)
 {
 	struct buffer_info bi;

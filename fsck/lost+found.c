@@ -11,7 +11,7 @@ void print_name(char *name, int len);
 void modify_item(struct item_head *ih, void *item);
 
 /* fixme: search_by_key is not needed after any add_entry */
-static __u64 _look_for_lost(reiserfs_filsys_t *fs, int link_lost_dirs)
+static __u64 _look_for_lost(reiserfs_filsys_t fs, int link_lost_dirs)
 {
 	struct reiserfs_key key, prev_key, *rdkey;
 	INITIALIZE_REISERFS_PATH(path);
@@ -285,7 +285,7 @@ cont:
 
 }
 
-static void save_lost_found_result(reiserfs_filsys_t *fs)
+static void save_lost_found_result(reiserfs_filsys_t fs)
 {
 	FILE *file;
 	int retval;
@@ -310,7 +310,7 @@ static void save_lost_found_result(reiserfs_filsys_t *fs)
 /* we have nothing to load from a state file, but we have to fetch
    on-disk bitmap, copy it to allocable bitmap, and fetch objectid
    map */
-void load_lost_found_result(reiserfs_filsys_t *fs)
+void load_lost_found_result(reiserfs_filsys_t fs)
 {
 	fsck_new_bitmap(fs) =
 	    reiserfs_create_bitmap(get_sb_block_count(fs->fs_ondisk_sb));
@@ -330,7 +330,7 @@ void load_lost_found_result(reiserfs_filsys_t *fs)
 	 */
 }
 
-static void after_lost_found(reiserfs_filsys_t *fs)
+static void after_lost_found(reiserfs_filsys_t fs)
 {
 	/* update super block: objectid map, fsck state */
 	set_sb_fs_state(fs->fs_ondisk_sb, LOST_FOUND_DONE);
@@ -362,7 +362,7 @@ static void after_lost_found(reiserfs_filsys_t *fs)
 	exit(EXIT_OK);
 }
 
-void pass_3a_look_for_lost(reiserfs_filsys_t *fs)
+void pass_3a_look_for_lost(reiserfs_filsys_t fs)
 {
 	INITIALIZE_REISERFS_PATH(path);
 	struct item_head *ih;

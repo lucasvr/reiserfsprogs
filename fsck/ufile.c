@@ -1397,7 +1397,7 @@ check_again:
 	return get_bytes_number(ih, fs->fs_blocksize);
 }
 
-void one_more_corruption(reiserfs_filsys_t *fs, int kind)
+void one_more_corruption(reiserfs_filsys_t fs, int kind)
 {
 	if (kind == FATAL)
 		fsck_check_stat(fs)->fatal_corruptions++;
@@ -1405,7 +1405,7 @@ void one_more_corruption(reiserfs_filsys_t *fs, int kind)
 		fsck_check_stat(fs)->fixable_corruptions++;
 }
 
-void one_less_corruption(reiserfs_filsys_t *fs, int kind)
+void one_less_corruption(reiserfs_filsys_t fs, int kind)
 {
 	if (kind == FATAL)
 		fsck_check_stat(fs)->fatal_corruptions--;

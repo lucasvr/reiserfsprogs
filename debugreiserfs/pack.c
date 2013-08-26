@@ -184,7 +184,7 @@ static void pack_indirect(struct packed_item *pi, struct buffer_head *bh,
 		maybe gencounter (16)
 		maybe deh_state (16)
 */
-static void pack_direntry(reiserfs_filsys_t *fs, struct packed_item *pi,
+static void pack_direntry(reiserfs_filsys_t fs, struct packed_item *pi,
 			  struct buffer_head *bh, struct item_head *ih)
 {
 	int i;
@@ -315,7 +315,7 @@ static void pack_stat_data(struct packed_item *pi, struct buffer_head *bh,
 	}
 }
 
-static void pack_full_block(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static void pack_full_block(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	__u16 magic;
 	__u32 block;
@@ -338,7 +338,7 @@ static void pack_full_block(reiserfs_filsys_t *fs, struct buffer_head *bh)
 /* unformatted node pointer is considered bad when it points either to blocks
    of journal, bitmap blocks, super block or is transparently out of range of
    disk block numbers */
-static int check_unfm_ptr(reiserfs_filsys_t *fs, __u32 block)
+static int check_unfm_ptr(reiserfs_filsys_t fs, __u32 block)
 {
 	if (block >= SB_BLOCK_COUNT(fs))
 		return 1;
@@ -351,7 +351,7 @@ static int check_unfm_ptr(reiserfs_filsys_t *fs, __u32 block)
 #endif
 
 /* we only pack leaves which do not have any corruptions */
-static int can_pack_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static int can_pack_leaf(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	int i;
 	struct item_head *ih;
@@ -369,7 +369,7 @@ static int can_pack_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 /* pack leaf only if all its items are correct: keys are correct,
    direntries are hashed properly and hash function is defined,
    indirect items are correct, stat data ?, */
-static void pack_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static void pack_leaf(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	int i;
 	struct item_head *ih;
@@ -493,13 +493,13 @@ static void pack_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 	return;
 }
 
-static int can_pack_internal(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static int can_pack_internal(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	return 0;
 }
 
 /* pack internal node as a full block */
-static void pack_internal(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static void pack_internal(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	internals++;
 	if (!can_pack_internal(fs, bh)) {
@@ -511,7 +511,7 @@ static void pack_internal(reiserfs_filsys_t *fs, struct buffer_head *bh)
 }
 
 /* packed blocks are marked free in the bitmap*/
-static void send_block(reiserfs_filsys_t *fs, struct buffer_head *bh,
+static void send_block(reiserfs_filsys_t fs, struct buffer_head *bh,
 		       int send_unknown)
 {
 	int type;
@@ -546,7 +546,7 @@ static void send_block(reiserfs_filsys_t *fs, struct buffer_head *bh,
 }
 
 /* super block, journal, bitmaps */
-static void pack_frozen_data(reiserfs_filsys_t *fs)
+static void pack_frozen_data(reiserfs_filsys_t fs)
 {
 	struct buffer_head *bh;
 	unsigned long block;
@@ -638,7 +638,7 @@ static void pack_frozen_data(reiserfs_filsys_t *fs)
 }
 
 /* pack all "not data blocks" and correct leaf */
-void pack_partition(reiserfs_filsys_t *fs)
+void pack_partition(reiserfs_filsys_t fs)
 {
 	struct buffer_head *bh;
 	__u32 magic32;
@@ -699,7 +699,7 @@ void pack_partition(reiserfs_filsys_t *fs)
 		(double)sent_bytes / had_to_be_sent);
 }
 
-void pack_one_block(reiserfs_filsys_t *fs, unsigned long block)
+void pack_one_block(reiserfs_filsys_t fs, unsigned long block)
 {
 	__u32 magic32;
 	__u16 magic16;

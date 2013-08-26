@@ -432,12 +432,12 @@ static void put_not_stat_data_items(struct buffer_head *bh)
 	}
 }
 
-static void before_pass_2(reiserfs_filsys_t *fs)
+static void before_pass_2(reiserfs_filsys_t fs)
 {
 	/* anything specific for pass 2 ? */
 }
 
-static void save_pass_2_result(reiserfs_filsys_t *fs)
+static void save_pass_2_result(reiserfs_filsys_t fs)
 {
 	FILE *file;
 	int retval;
@@ -461,7 +461,7 @@ static void save_pass_2_result(reiserfs_filsys_t *fs)
 /* we have nothing to load from a state file, but we have to fetch
    on-disk bitmap, copy it to allocable bitmap, and fetch objectid
    map */
-void load_pass_2_result(reiserfs_filsys_t *fs)
+void load_pass_2_result(reiserfs_filsys_t fs)
 {
 	fsck_new_bitmap(fs) =
 	    reiserfs_create_bitmap(get_sb_block_count(fs->fs_ondisk_sb));
@@ -483,7 +483,7 @@ void load_pass_2_result(reiserfs_filsys_t *fs)
 
 /* uninsertable blocks are marked by 0s in uninsertable_leaf_bitmap
    during the pass 1. They must be not in the tree */
-static void do_pass_2(reiserfs_filsys_t *fs)
+static void do_pass_2(reiserfs_filsys_t fs)
 {
 
 	struct buffer_head *bh;
@@ -552,7 +552,7 @@ cont:
 	fsck_progress("\n");
 }
 
-static void after_pass_2(reiserfs_filsys_t *fs)
+static void after_pass_2(reiserfs_filsys_t fs)
 {
 	time_t t;
 
@@ -620,7 +620,7 @@ static void after_pass_2(reiserfs_filsys_t *fs)
 	exit(0);
 }
 
-void pass_2(reiserfs_filsys_t *fs)
+void pass_2(reiserfs_filsys_t fs)
 {
 	if (fsck_log_file(fs) != stderr)
 		fsck_log("####### Pass 2 #######\n");

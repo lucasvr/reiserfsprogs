@@ -496,7 +496,7 @@ struct reiserfs_journal_header {
 	(unsigned long long)((8192 > journal_max_size (block_of_super_block,blocksize)) ? \
 		journal_max_size (block_of_super_block,blocksize) : 8192)
 
-int reiserfs_replay_journal(reiserfs_filsys_t *fs);
+int reiserfs_replay_journal(reiserfs_filsys_t fs);
 
 //#define JOURNAL_DEFAULT_SIZE 8192  number of blocks in the journal
 //#define JOURNAL_DEFAULT_SIZE_FOR_BS_1024 8125  number of blocks in the journal for block size 1KB
@@ -1213,7 +1213,7 @@ struct virtual_node {
 /* someday somebody will prefix every field in this struct with tb_ */
 struct tree_balance {
 	struct reiserfs_transaction_handle *transaction_handle;
-	reiserfs_filsys_t *tb_fs;
+	reiserfs_filsys_t tb_fs;
 	struct reiserfs_path *tb_path;
 	struct buffer_head *L[MAX_HEIGHT];	/* array of left neighbors of nodes in the path */
 	struct buffer_head *R[MAX_HEIGHT];	/* array of right neighbors of nodes in the path */
@@ -1305,7 +1305,7 @@ struct tree_balance {
 /* used in do_balance for passing parent of node information that has been
    gotten from tb struct */
 struct buffer_info {
-    reiserfs_filsys_t *bi_fs;
+    reiserfs_filsys_t bi_fs;
     struct buffer_head * bi_bh;
     struct buffer_head * bi_parent;
     int bi_position;
@@ -1412,18 +1412,18 @@ struct buffer_info {
 void padd_item (char * item, int total_length, int length);
 int B_IS_IN_TREE(struct buffer_head *);
 const struct reiserfs_key *get_rkey(const struct reiserfs_path *p_s_chk_path,
-				    const reiserfs_filsys_t *);
+				    const reiserfs_filsys_t );
 int bin_search (void * p_v_key, void * p_v_base, int p_n_num, int p_n_width, unsigned int * p_n_pos);
-int search_by_key (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *, int);
-int search_by_entry_key (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *);
-int search_for_position_by_key (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *);
-int search_by_objectid (reiserfs_filsys_t *, struct reiserfs_key *, struct reiserfs_path *, int *);
+int search_by_key (reiserfs_filsys_t , struct reiserfs_key *, struct reiserfs_path *, int);
+int search_by_entry_key (reiserfs_filsys_t , struct reiserfs_key *, struct reiserfs_path *);
+int search_for_position_by_key (reiserfs_filsys_t , struct reiserfs_key *, struct reiserfs_path *);
+int search_by_objectid (reiserfs_filsys_t , struct reiserfs_key *, struct reiserfs_path *, int *);
 void decrement_counters_in_path (struct reiserfs_path *p_s_search_path);
 void pathrelse (struct reiserfs_path *p_s_search_path);
 
 
-int is_left_mergeable (reiserfs_filsys_t *s, struct reiserfs_path *path);
-int is_right_mergeable (reiserfs_filsys_t *s, struct reiserfs_path *path);
+int is_left_mergeable (reiserfs_filsys_t s, struct reiserfs_path *path);
+int is_right_mergeable (reiserfs_filsys_t s, struct reiserfs_path *path);
 int are_items_mergeable (struct item_head * left, struct item_head * right, int bsize);
 
 
@@ -1445,8 +1445,8 @@ void init_path (struct reiserfs_path *);
 void print_tb (int mode, int item_pos, int pos_in_item, struct tree_balance * tb, char * mes);
 
 
-void print_bmap (FILE * fp, reiserfs_filsys_t *fs, int silent);
-void print_objectid_map (FILE * fp, reiserfs_filsys_t *fs);
+void print_bmap (FILE * fp, reiserfs_filsys_t fs, int silent);
+void print_objectid_map (FILE * fp, reiserfs_filsys_t fs);
 
 
 
@@ -1468,8 +1468,8 @@ void leaf_cut_from_buffer(struct buffer_info *bi, int cut_item_num,
 void leaf_paste_entries (struct buffer_head * bh, int item_num, int before, int new_entry_count,
 			 struct reiserfs_de_head * new_dehs, const char * records,
 			 int paste_size);
-void delete_item (reiserfs_filsys_t *, struct buffer_head * bh, int item_num);
-void cut_entry (reiserfs_filsys_t *, struct buffer_head * bh,
+void delete_item (reiserfs_filsys_t , struct buffer_head * bh, int item_num);
+void cut_entry (reiserfs_filsys_t , struct buffer_head * bh,
 		int item_num, int entry_num, int del_count);
 
 
@@ -1483,7 +1483,7 @@ void do_balance (struct tree_balance * tb,
 void reiserfs_invalidate_buffer (struct tree_balance * tb, struct buffer_head * bh);
 int get_left_neighbor_position (struct tree_balance * tb, int h);
 int get_right_neighbor_position (struct tree_balance * tb, int h);
-void replace_key (reiserfs_filsys_t *, struct buffer_head *, int, struct buffer_head *, int);
+void replace_key (reiserfs_filsys_t , struct buffer_head *, int, struct buffer_head *, int);
 void replace_lkey (struct tree_balance *, int, struct item_head *);
 void replace_rkey (struct tree_balance *, int, struct item_head *);
 void make_empty_node (struct buffer_info *);
@@ -1504,9 +1504,9 @@ __u32 r5_hash (const char *msg, int len);
 
 
 /* node_format.c */
-extern unsigned int get_journal_old_start_must (reiserfs_filsys_t *fs);
-extern unsigned int get_journal_new_start_must (reiserfs_filsys_t *fs);
-extern unsigned int get_journal_start_must (reiserfs_filsys_t *fs);
+extern unsigned int get_journal_old_start_must (reiserfs_filsys_t fs);
+extern unsigned int get_journal_new_start_must (reiserfs_filsys_t fs);
+extern unsigned int get_journal_start_must (reiserfs_filsys_t fs);
 /*extern hashf_t hashes [];*/
 
 static inline void buffer_info_init_left(struct tree_balance *tb,

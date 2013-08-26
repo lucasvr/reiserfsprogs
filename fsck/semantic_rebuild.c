@@ -1129,7 +1129,7 @@ void modify_item(struct item_head *ih, void *item)
 }
 
 /* mkreiserfs should have created this */
-static void make_sure_lost_found_exists(reiserfs_filsys_t *fs)
+static void make_sure_lost_found_exists(reiserfs_filsys_t fs)
 {
 	int retval;
 	INITIALIZE_REISERFS_PATH(path);
@@ -1226,7 +1226,7 @@ static void make_sure_lost_found_exists(reiserfs_filsys_t *fs)
 
 /* Result of the rebuild pass will be saved in the state file which is needed to start
  * fsck again from the next pass. */
-static void save_rebuild_semantic_result(reiserfs_filsys_t *fs)
+static void save_rebuild_semantic_result(reiserfs_filsys_t fs)
 {
 	FILE *file;
 	int retval;
@@ -1251,7 +1251,7 @@ static void save_rebuild_semantic_result(reiserfs_filsys_t *fs)
 /* we have nothing to load from a state file, but we have to fetch
    on-disk bitmap, copy it to allocable bitmap, and fetch objectid
    map */
-void load_semantic_result(FILE * file, reiserfs_filsys_t *fs)
+void load_semantic_result(FILE * file, reiserfs_filsys_t fs)
 {
 	fsck_new_bitmap(fs) =
 	    reiserfs_create_bitmap(get_sb_block_count(fs->fs_ondisk_sb));
@@ -1272,12 +1272,12 @@ void load_semantic_result(FILE * file, reiserfs_filsys_t *fs)
 	 */
 }
 
-static void before_pass_3(reiserfs_filsys_t *fs)
+static void before_pass_3(reiserfs_filsys_t fs)
 {
 	semantic_id_map(fs) = id_map_init();
 }
 
-static void after_pass_3(reiserfs_filsys_t *fs)
+static void after_pass_3(reiserfs_filsys_t fs)
 {
 	/* update super block: objectid map, fsck state */
 	set_sb_fs_state(fs->fs_ondisk_sb, SEMANTIC_DONE);
@@ -1310,7 +1310,7 @@ static void after_pass_3(reiserfs_filsys_t *fs)
 }
 
 /* this is part of rebuild tree */
-void pass_3_semantic(reiserfs_filsys_t *fs)
+void pass_3_semantic(reiserfs_filsys_t fs)
 {
 	before_pass_3(fs);
 

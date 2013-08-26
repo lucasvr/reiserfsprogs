@@ -194,7 +194,7 @@ static void erase(void)
 	fflush(stdout);
 }
 
-void pass_through_tree(reiserfs_filsys_t *fs, do_after_read_t action1,
+void pass_through_tree(reiserfs_filsys_t fs, do_after_read_t action1,
 		       do_on_full_path_t action2, int depth)
 {
 	struct buffer_head *path[MAX_HEIGHT] = { 0, };

@@ -209,7 +209,7 @@ start_again:
 	}
 }
 
-void id_map_flush(struct id_map *map, reiserfs_filsys_t *fs)
+void id_map_flush(struct id_map *map, reiserfs_filsys_t fs)
 {
 	int size, max, i;
 	__u32 id, prev_id;
@@ -283,7 +283,7 @@ void id_map_flush(struct id_map *map, reiserfs_filsys_t *fs)
 
 /* FIXME: these 3 methods must be implemented also.
 
-void fetch_objectid_map (struct id_map * map, reiserfs_filsys_t *fs)
+void fetch_objectid_map (struct id_map * map, reiserfs_filsys_t fs)
 {
     int sb_size;
     __le32 * sb_objectid_map;

@@ -105,7 +105,7 @@ static int is_unique_item(struct obstack *ostack, void **tree, void *ih)
 	return 1;
 }
 
-static void stat1_the_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static void stat1_the_leaf(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	int i, i_num;
 	struct item_head *ih;
@@ -152,7 +152,7 @@ static void stat2_the_leaf (struct buffer_head * bh)
 }
 */
 
-void do_stat(reiserfs_filsys_t *fs)
+void do_stat(reiserfs_filsys_t fs)
 {
 	unsigned long i;
 	unsigned long done, total;

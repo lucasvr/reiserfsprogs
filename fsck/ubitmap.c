@@ -86,7 +86,7 @@ void mark_block_uninsertable(unsigned long block)
 }
 
 /* FIXME: should be able to work around no disk space */
-int reiserfsck_reiserfs_new_blocknrs(reiserfs_filsys_t *fs,
+int reiserfsck_reiserfs_new_blocknrs(reiserfs_filsys_t fs,
 				     unsigned long *free_blocknrs,
 				     unsigned long start, int amount_needed)
 {
@@ -119,7 +119,7 @@ struct buffer_head *reiserfsck_get_new_buffer(unsigned long start)
 }
 
 /* free block in new bitmap */
-int reiserfsck_reiserfs_free_block(reiserfs_filsys_t *fs, unsigned long block)
+int reiserfsck_reiserfs_free_block(reiserfs_filsys_t fs, unsigned long block)
 {
 	mark_block_free(block);
 

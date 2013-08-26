@@ -344,7 +344,7 @@ char *which_block(int code)
 }
 
 /** */
-int block_of_journal(reiserfs_filsys_t *fs, unsigned long block)
+int block_of_journal(reiserfs_filsys_t fs, unsigned long block)
 {
 	if (!is_reiserfs_jr_magic_string(fs->fs_ondisk_sb)) {
 		/* standard journal */
@@ -367,7 +367,7 @@ int block_of_journal(reiserfs_filsys_t *fs, unsigned long block)
 	return 0;
 }
 
-int block_of_bitmap(reiserfs_filsys_t *fs, unsigned long block)
+int block_of_bitmap(reiserfs_filsys_t fs, unsigned long block)
 {
 	if (spread_bitmaps(fs)) {
 		if (!(block % (fs->fs_blocksize * 8)))
@@ -384,7 +384,7 @@ int block_of_bitmap(reiserfs_filsys_t *fs, unsigned long block)
 }
 
 /* check whether 'block' can be pointed to by an indirect item */
-int not_data_block(reiserfs_filsys_t *fs, unsigned long block)
+int not_data_block(reiserfs_filsys_t fs, unsigned long block)
 {
 	if (block_of_bitmap(fs, block))
 		/* it is one of bitmap blocks */
@@ -403,7 +403,7 @@ int not_data_block(reiserfs_filsys_t *fs, unsigned long block)
 }
 
 /* check whether 'block' can be logged */
-int not_journalable(reiserfs_filsys_t *fs, unsigned long block)
+int not_journalable(reiserfs_filsys_t fs, unsigned long block)
 {
 	/* we should not update SB with journal copy during fsck */
 	if (block < fs->fs_super_bh->b_blocknr)
@@ -420,18 +420,18 @@ int not_journalable(reiserfs_filsys_t *fs, unsigned long block)
 
 // in reiserfs version 0 (undistributed bitmap)
 // FIXME: what if number of bitmaps is 15?
-unsigned int get_journal_old_start_must(reiserfs_filsys_t *fs)
+unsigned int get_journal_old_start_must(reiserfs_filsys_t fs)
 {
 	return (REISERFS_OLD_DISK_OFFSET_IN_BYTES / fs->fs_blocksize) + 1 +
 	    get_sb_bmap_nr(fs->fs_ondisk_sb);
 }
 
-unsigned int get_journal_new_start_must(reiserfs_filsys_t *fs)
+unsigned int get_journal_new_start_must(reiserfs_filsys_t fs)
 {
 	return (REISERFS_DISK_OFFSET_IN_BYTES / fs->fs_blocksize) + 2;
 }
 
-unsigned int get_journal_start_must(reiserfs_filsys_t *fs)
+unsigned int get_journal_start_must(reiserfs_filsys_t fs)
 {
 	if (is_old_sb_location(fs->fs_super_bh->b_blocknr, fs->fs_blocksize))
 		return get_journal_old_start_must(fs);
@@ -456,7 +456,7 @@ __u32 get_bytes_number(struct item_head * ih, int blocksize)
 	return 0;
 }
 
-int check_item_f(reiserfs_filsys_t *fs, struct item_head *ih, char *item);
+int check_item_f(reiserfs_filsys_t fs, struct item_head *ih, char *item);
 
 /* ih_key, ih_location and ih_item_len seem correct, check other fields */
 static int does_ih_look_correct(struct item_head *ih)
@@ -491,7 +491,7 @@ static int does_ih_look_correct(struct item_head *ih)
 
 /* check item length, ih_free_space for pure 3.5 format, unformatted node
    pointers */
-static int is_bad_indirect(reiserfs_filsys_t *fs, struct item_head *ih,
+static int is_bad_indirect(reiserfs_filsys_t fs, struct item_head *ih,
 			   char *item, check_unfm_func_t check_unfm_func)
 {
 	unsigned int i;
@@ -536,7 +536,7 @@ int known_hashes(void)
 (hash_value (hashfn, name, namelen) == GET_HASH_VALUE (deh_offset))
 
 /* this also sets hash function */
-int is_properly_hashed(reiserfs_filsys_t *fs,
+int is_properly_hashed(reiserfs_filsys_t fs,
 		       char *name, int namelen, __u32 offset)
 {
 	unsigned int i;
@@ -665,7 +665,7 @@ int dir_entry_bad_location(struct reiserfs_de_head *deh, struct item_head *ih,
 
 /* the only corruption which is not considered fatal - is hash mismatching. If
    bad_dir is set - directory item having such names is considered bad */
-static int is_bad_directory(reiserfs_filsys_t *fs, struct item_head *ih,
+static int is_bad_directory(reiserfs_filsys_t fs, struct item_head *ih,
 			    char *item, int bad_dir)
 {
 	int i;
@@ -702,7 +702,7 @@ static int is_bad_directory(reiserfs_filsys_t *fs, struct item_head *ih,
 }
 
 /* used by debugreisrefs -p only yet */
-int is_it_bad_item(reiserfs_filsys_t *fs, struct item_head *ih, char *item,
+int is_it_bad_item(reiserfs_filsys_t fs, struct item_head *ih, char *item,
 		   check_unfm_func_t check_unfm, int bad_dir)
 {
 	int retval;
@@ -1159,7 +1159,7 @@ static int comp_ids(const void *p1, const void *p2)
 
 /* functions to manipulate with super block's objectid map */
 
-int is_objectid_used(reiserfs_filsys_t *fs, __u32 objectid)
+int is_objectid_used(reiserfs_filsys_t fs, __u32 objectid)
 {
 	__le32 *objectid_map;
 	__u32 count = get_sb_oid_cursize(fs->fs_ondisk_sb);
@@ -1183,7 +1183,7 @@ int is_objectid_used(reiserfs_filsys_t *fs, __u32 objectid)
 	return !(pos & 1);
 }
 
-void mark_objectid_used(reiserfs_filsys_t *fs, __u32 objectid)
+void mark_objectid_used(reiserfs_filsys_t fs, __u32 objectid)
 {
 	int i;
 	__le32 *objectid_map;

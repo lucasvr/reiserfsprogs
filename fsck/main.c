@@ -14,7 +14,7 @@ extern int screen_width;
 extern int screen_savebuffer_len;
 extern char *screen_savebuffer;
 
-reiserfs_filsys_t *fs;
+reiserfs_filsys_t fs;
 static char *badblocks_file;
 
 #define print_usage_and_exit() {						\
@@ -508,7 +508,7 @@ static void register_timer(void)
 	alarm(1);
 }
 
-static void reset_super_block(reiserfs_filsys_t *fs)
+static void reset_super_block(reiserfs_filsys_t fs)
 {
 	struct reiserfs_super_block *sb;
 	struct reiserfs_journal_header *jh;
@@ -627,7 +627,7 @@ static void reset_super_block(reiserfs_filsys_t *fs)
 #define START_FROM_PASS_4 		6
 
 /* this decides where to start from  */
-static int where_to_start_from(reiserfs_filsys_t *fs)
+static int where_to_start_from(reiserfs_filsys_t fs)
 {
 	int ret;
 	FILE *fp = NULL;
@@ -714,7 +714,7 @@ static int where_to_start_from(reiserfs_filsys_t *fs)
 	return START_FROM_THE_BEGINNING;
 }
 
-static void reiserfs_update_interval_fields(reiserfs_filsys_t *fs)
+static void reiserfs_update_interval_fields(reiserfs_filsys_t fs)
 {
 	/* Not supported on v3.5 */
 	if (get_sb_version(fs->fs_ondisk_sb) == REISERFS_FORMAT_3_5)
@@ -731,7 +731,7 @@ static void reiserfs_update_interval_fields(reiserfs_filsys_t *fs)
 					 DEFAULT_CHECK_INTERVAL);
 }
 
-static void mark_filesystem_consistent(reiserfs_filsys_t *fs)
+static void mark_filesystem_consistent(reiserfs_filsys_t fs)
 {
 	if (!is_opened_rw(fs))
 		return;
@@ -759,7 +759,7 @@ static void mark_filesystem_consistent(reiserfs_filsys_t *fs)
 	mark_buffer_dirty(fs->fs_super_bh);
 }
 
-static void reiserfsck_replay_journal(reiserfs_filsys_t *fs)
+static void reiserfsck_replay_journal(reiserfs_filsys_t fs)
 {
 	struct reiserfs_super_block *on_place_sb;
 	int sb_size = reiserfs_super_block_size(fs->fs_ondisk_sb);
@@ -797,7 +797,7 @@ static void reiserfsck_replay_journal(reiserfs_filsys_t *fs)
 	fs->fs_ondisk_sb = on_place_sb;
 }
 
-static int the_end(reiserfs_filsys_t *fs)
+static int the_end(reiserfs_filsys_t fs)
 {
 	int ret = EXIT_FIXED;
 
@@ -834,7 +834,7 @@ static int the_end(reiserfs_filsys_t *fs)
 }
 
 /* check umounted or read-only mounted filesystems only */
-static void prepare_fs_for_check(reiserfs_filsys_t *fs)
+static void prepare_fs_for_check(reiserfs_filsys_t fs)
 {
 	/* The method could be called from auto_check already. */
 	if (fs->fs_flags == O_RDWR)
@@ -890,7 +890,7 @@ static void prepare_fs_for_check(reiserfs_filsys_t *fs)
 	}
 }
 
-static void rebuild_tree(reiserfs_filsys_t *fs)
+static void rebuild_tree(reiserfs_filsys_t fs)
 {
 	time_t t;
 	int ret;
@@ -951,7 +951,7 @@ static void rebuild_tree(reiserfs_filsys_t *fs)
 	exit(ret);
 }
 
-static void clean_attributes(reiserfs_filsys_t *fs)
+static void clean_attributes(reiserfs_filsys_t fs)
 {
 	time_t t;
 
@@ -997,7 +997,7 @@ static void clean_attributes(reiserfs_filsys_t *fs)
 
 }
 
-static int reiserfs_check_auto_state(reiserfs_filsys_t *fs)
+static int reiserfs_check_auto_state(reiserfs_filsys_t fs)
 {
 	time_t now = time(NULL);
 	time_t lastcheck = get_sb_v2_lastcheck(fs->fs_ondisk_sb);
@@ -1038,7 +1038,7 @@ static int reiserfs_check_auto_state(reiserfs_filsys_t *fs)
 	return 0;
 }
 
-static int auto_check(reiserfs_filsys_t *fs)
+static int auto_check(reiserfs_filsys_t fs)
 {
 	__u16 state;
 	int retval = 0;
@@ -1137,7 +1137,7 @@ error:
 }
 
 /* check umounted or read-only mounted filesystems only */
-static void check_fs(reiserfs_filsys_t *fs)
+static void check_fs(reiserfs_filsys_t fs)
 {
 	int retval = EXIT_OK;
 	time_t t;
@@ -1285,7 +1285,7 @@ static int open_devices_for_rollback(char *file_name, struct fsck_data *data)
 	return 0;
 }
 
-static void fsck_rollback(reiserfs_filsys_t *fs)
+static void fsck_rollback(reiserfs_filsys_t fs)
 {
 	time_t t;
 

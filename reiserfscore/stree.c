@@ -189,7 +189,7 @@ const struct reiserfs_key MAX_KEY =
    tree), and in this case we return a special key, either MIN_KEY or
    MAX_KEY. */
 static const struct reiserfs_key *get_lkey(const struct reiserfs_path *p_s_chk_path,
-				    const reiserfs_filsys_t *fs)
+				    const reiserfs_filsys_t fs)
 {
 	struct reiserfs_super_block *sb;
 	int n_position, n_path_offset = p_s_chk_path->path_length;
@@ -228,7 +228,7 @@ static const struct reiserfs_key *get_lkey(const struct reiserfs_path *p_s_chk_p
 
 /* Get delimiting key of the buffer at the path and its right neighbor. */
 const struct reiserfs_key *get_rkey(const struct reiserfs_path *p_s_chk_path,
-				    const reiserfs_filsys_t *fs)
+				    const reiserfs_filsys_t fs)
 {
 	struct reiserfs_super_block *sb;
 	int n_position, n_path_offset = p_s_chk_path->path_length;
@@ -273,7 +273,7 @@ const struct reiserfs_key *get_rkey(const struct reiserfs_path *p_s_chk_path,
    which is MIN_KEY or MAX_KEY. */
 static inline int key_in_buffer(const struct reiserfs_path *p_s_chk_path,	/* Path which should be checked.  */
 				const struct reiserfs_key *p_s_key,	/* Key which should be checked.   */
-				reiserfs_filsys_t *fs	/* Super block pointer.           */
+				reiserfs_filsys_t fs	/* Super block pointer.           */
     )
 {
 
@@ -317,7 +317,7 @@ void pathrelse(struct reiserfs_path *p_s_search_path)
    key.  search_by_key returns a path that must be checked for the
    correctness of the top of the path but need not be checked for the
    correctness of the bottom of the path */
-int search_by_key(reiserfs_filsys_t *fs, struct reiserfs_key *p_s_key,	/* Key to search */
+int search_by_key(reiserfs_filsys_t fs, struct reiserfs_key *p_s_key,	/* Key to search */
 		  struct reiserfs_path *p_s_search_path,	/* This structure was
 								   allocated and
 								   initialized by the

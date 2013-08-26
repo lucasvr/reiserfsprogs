@@ -111,7 +111,7 @@ static reiserfs_bitmap_t *source_bitmap;
 static int tree_scanning_failed = 0;
 
 /* 1 if block is not marked as used in the bitmap */
-static int is_block_free(reiserfs_filsys_t *fs, unsigned long block)
+static int is_block_free(reiserfs_filsys_t fs, unsigned long block)
 {
 	return !reiserfs_bitmap_test_bit(source_bitmap, block);
 }
@@ -132,7 +132,7 @@ static int did_we_meet_it(unsigned long block)
 	return reiserfs_bitmap_test_bit(control_bitmap, block);
 }
 
-static void init_control_bitmap(reiserfs_filsys_t *fs)
+static void init_control_bitmap(reiserfs_filsys_t fs)
 {
 	unsigned int i;
 	unsigned long block;
@@ -197,7 +197,7 @@ static void init_control_bitmap(reiserfs_filsys_t *fs)
 /* if we managed to complete tree scanning and if control bitmap and/or proper
    amount of free blocks mismatch with bitmap on disk and super block's
    s_free_blocks - we can fix that */
-static void handle_bitmaps(reiserfs_filsys_t *fs)
+static void handle_bitmaps(reiserfs_filsys_t fs)
 {
 	int problem = 0;
 
@@ -271,7 +271,7 @@ static void handle_bitmaps(reiserfs_filsys_t *fs)
 	return;
 }
 
-static int auto_handle_bitmaps(reiserfs_filsys_t *fs)
+static int auto_handle_bitmaps(reiserfs_filsys_t fs)
 {
 	unsigned long i;
 
@@ -288,7 +288,7 @@ static int auto_handle_bitmaps(reiserfs_filsys_t *fs)
 }
 
 /* is this block legal to be pointed to by some place of the tree? */
-static int bad_block_number(reiserfs_filsys_t *fs, unsigned long block)
+static int bad_block_number(reiserfs_filsys_t fs, unsigned long block)
 {
 	if (block >= get_sb_block_count(fs->fs_ondisk_sb) ||
 	    not_data_block(fs, block)) {
@@ -317,7 +317,7 @@ static int bad_block_number(reiserfs_filsys_t *fs, unsigned long block)
 	return 0;
 }
 
-static int got_already(reiserfs_filsys_t *fs, unsigned long block)
+static int got_already(reiserfs_filsys_t fs, unsigned long block)
 {
 	if (did_we_meet_it(block)) {
 		/* block is in tree at least twice */
@@ -328,7 +328,7 @@ static int got_already(reiserfs_filsys_t *fs, unsigned long block)
 }
 
 /* 1 if it does not look like reasonable stat data */
-static int bad_stat_data(reiserfs_filsys_t *fs,
+static int bad_stat_data(reiserfs_filsys_t fs,
 			 struct buffer_head *bh, struct item_head *ih)
 {
 	unsigned long objectid;
@@ -381,13 +381,13 @@ static int bad_stat_data(reiserfs_filsys_t *fs,
 }
 
 /* it looks like we can check item length only */
-static int bad_direct_item(reiserfs_filsys_t *fs,
+static int bad_direct_item(reiserfs_filsys_t fs,
 			   struct buffer_head *bh, struct item_head *ih)
 {
 	return 0;
 }
 
-inline void handle_one_pointer(reiserfs_filsys_t *fs,
+inline void handle_one_pointer(reiserfs_filsys_t fs,
 			       struct buffer_head *bh, __le32 * item,
 			       int offset)
 {
@@ -400,7 +400,7 @@ inline void handle_one_pointer(reiserfs_filsys_t *fs,
 	}
 }
 
-static int bad_badblocks_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
+static int bad_badblocks_item(reiserfs_filsys_t fs, struct buffer_head *bh,
 			      struct item_head *ih)
 {
 	__u32 i;
@@ -475,7 +475,7 @@ static int bad_badblocks_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 
 /* for each unformatted node pointer: make sure it points to data area and
    that it is not in the tree yet */
-static int bad_indirect_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
+static int bad_indirect_item(reiserfs_filsys_t fs, struct buffer_head *bh,
 			     struct item_head *ih)
 {
 	__le32 *ind = (__le32 *) ih_item_body(bh, ih);
@@ -541,7 +541,7 @@ static int bad_indirect_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 }
 
 /* FIXME: this was is_bad_directory from pass0.c */
-static int bad_directory_item(reiserfs_filsys_t *fs,
+static int bad_directory_item(reiserfs_filsys_t fs,
 			      struct buffer_head *bh, struct item_head *ih)
 {
 	char *name, *prev_name;
@@ -644,7 +644,7 @@ static int bad_directory_item(reiserfs_filsys_t *fs,
 	return 0;
 }
 
-static int bad_item(reiserfs_filsys_t *fs, struct buffer_head *bh, int num)
+static int bad_item(reiserfs_filsys_t fs, struct buffer_head *bh, int num)
 {
 	struct item_head *ih;
 	int format;
@@ -752,7 +752,7 @@ error:
 }
 
 /* 1 if i-th and (i-1)-th items can not be neighbors in a leaf */
-int bad_pair(reiserfs_filsys_t *fs, struct buffer_head *bh, int pos)
+int bad_pair(reiserfs_filsys_t fs, struct buffer_head *bh, int pos)
 {
 	struct item_head *ih;
 
@@ -831,7 +831,7 @@ int bad_pair(reiserfs_filsys_t *fs, struct buffer_head *bh, int pos)
 }
 
 /* 1 if block head or any of items is bad */
-static int bad_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static int bad_leaf(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	int i;
 
@@ -857,7 +857,7 @@ static int bad_leaf(reiserfs_filsys_t *fs, struct buffer_head *bh)
 }
 
 /* 1 if bh does not look like internal node */
-static int bad_internal(reiserfs_filsys_t *fs, struct buffer_head *bh)
+static int bad_internal(reiserfs_filsys_t fs, struct buffer_head *bh)
 {
 	int i;
 
@@ -895,7 +895,7 @@ static int bad_internal(reiserfs_filsys_t *fs, struct buffer_head *bh)
 }
 
 /* h == 0 for root level. block head's level == 1 for leaf level  */
-static inline int h_to_level(reiserfs_filsys_t *fs, int h)
+static inline int h_to_level(reiserfs_filsys_t fs, int h)
 {
 	return get_sb_tree_height(fs->fs_ondisk_sb) - h - 1;
 }
@@ -968,7 +968,7 @@ int leaf_fix_key_oid(struct buffer_head *bh, int pos, __u32 oid)
 #endif
 
 /* bh must be formatted node. blk_level must be tree_height - h + 1 */
-static int bad_node(reiserfs_filsys_t *fs, struct buffer_head **path, int h)
+static int bad_node(reiserfs_filsys_t fs, struct buffer_head **path, int h)
 {
 	struct buffer_head **pbh = &path[h];
 
@@ -1049,7 +1049,7 @@ static struct reiserfs_key *rkey(struct buffer_head **path, int h)
 }
 
 /* are all delimiting keys correct */
-static int bad_path(reiserfs_filsys_t *fs, struct buffer_head **path, int h1)
+static int bad_path(reiserfs_filsys_t fs, struct buffer_head **path, int h1)
 {
 	int h = 0;
 	struct reiserfs_key *dk;
@@ -1132,7 +1132,7 @@ static int bad_path(reiserfs_filsys_t *fs, struct buffer_head **path, int h1)
 	return 0;
 }
 
-static void before_check_fs_tree(reiserfs_filsys_t *fs)
+static void before_check_fs_tree(reiserfs_filsys_t fs)
 {
 	init_control_bitmap(fs);
 
@@ -1143,7 +1143,7 @@ static void before_check_fs_tree(reiserfs_filsys_t *fs)
 	proper_id_map(fs) = id_map_init();
 }
 
-static void after_check_fs_tree(reiserfs_filsys_t *fs)
+static void after_check_fs_tree(reiserfs_filsys_t fs)
 {
 	if (fsck_mode(fs) == FSCK_FIX_FIXABLE) {
 		reiserfs_flush_to_ondisk_bitmap(fs->fs_bitmap2, fs);
@@ -1159,7 +1159,7 @@ static void after_check_fs_tree(reiserfs_filsys_t *fs)
 }
 
 /* pass internal tree of filesystem */
-void check_fs_tree(reiserfs_filsys_t *fs)
+void check_fs_tree(reiserfs_filsys_t fs)
 {
 	before_check_fs_tree(fs);
 
@@ -1183,7 +1183,7 @@ void check_fs_tree(reiserfs_filsys_t *fs)
 	after_check_fs_tree(fs);
 }
 
-static int clean_attributes_handler(reiserfs_filsys_t *fs,
+static int clean_attributes_handler(reiserfs_filsys_t fs,
 				    struct buffer_head **path, int h)
 {
 	struct buffer_head *bh = path[h];
@@ -1211,7 +1211,7 @@ static int clean_attributes_handler(reiserfs_filsys_t *fs,
 	return 0;
 }
 
-void do_clean_attributes(reiserfs_filsys_t *fs)
+void do_clean_attributes(reiserfs_filsys_t fs)
 {
 	pass_through_tree(fs, clean_attributes_handler, NULL, -1);
 	set_sb_v2_flag(fs->fs_ondisk_sb, reiserfs_attrs_cleared);

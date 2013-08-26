@@ -38,7 +38,7 @@ static int what_fs_version(void)
     return exit_code;			\
 }
 
-int check_sb (reiserfs_filsys_t *fs) {
+int check_sb (reiserfs_filsys_t fs) {
     int magic = 0, version = 0;
 
     if (!is_blocksize_correct (fs->fs_blocksize))
@@ -168,7 +168,7 @@ int check_sb (reiserfs_filsys_t *fs) {
 }
 */
 
-void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
+void rebuild_sb(reiserfs_filsys_t fs, char *filename, struct fsck_data *data)
 {
 	int version = 0;
 	struct reiserfs_super_block *ondisk_sb = NULL;

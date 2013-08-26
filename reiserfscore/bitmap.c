@@ -231,7 +231,7 @@ int reiserfs_bitmap_find_zero_bit(reiserfs_bitmap_t *bm, unsigned long *first)
 
 /* read every bitmap block and copy their content into bitmap 'bm' */
 static int reiserfs_fetch_ondisk_bitmap(reiserfs_bitmap_t *bm,
-					reiserfs_filsys_t *fs)
+					reiserfs_filsys_t fs)
 {
 	unsigned int last_byte_unused_bits;
 	unsigned long block, to_copy;
@@ -318,7 +318,7 @@ static int reiserfs_fetch_ondisk_bitmap(reiserfs_bitmap_t *bm,
 /* copy bitmap 'bm' to buffers which hold on-disk bitmap if bitmap was ever
    changed and return 1. Otherwise - return 0 */
 int reiserfs_flush_to_ondisk_bitmap(reiserfs_bitmap_t *bm,
-				    reiserfs_filsys_t *fs)
+				    reiserfs_filsys_t fs)
 {
 	unsigned int last_byte_unused_bits, i;
 	unsigned long to_copy, copied, block;
@@ -688,7 +688,7 @@ void reiserfs_bitmap_invert(reiserfs_bitmap_t *bm)
 	/*reiserfs_warning (stderr, "done\n"); */
 }
 
-void reiserfs_free_ondisk_bitmap(reiserfs_filsys_t *fs)
+void reiserfs_free_ondisk_bitmap(reiserfs_filsys_t fs)
 {
 	if (fs->fs_bitmap2) {
 		reiserfs_delete_bitmap(fs->fs_bitmap2);
@@ -697,7 +697,7 @@ void reiserfs_free_ondisk_bitmap(reiserfs_filsys_t *fs)
 }
 
 /* read bitmap blocks */
-int reiserfs_open_ondisk_bitmap(reiserfs_filsys_t *fs)
+int reiserfs_open_ondisk_bitmap(reiserfs_filsys_t fs)
 {
 	unsigned int blocks = get_sb_block_count(fs->fs_ondisk_sb);
 	unsigned int bmap_nr = reiserfs_bmap_nr(blocks, fs->fs_blocksize);
@@ -731,7 +731,7 @@ int reiserfs_open_ondisk_bitmap(reiserfs_filsys_t *fs)
 	return reiserfs_fetch_ondisk_bitmap(fs->fs_bitmap2, fs);
 }
 
-int reiserfs_create_ondisk_bitmap(reiserfs_filsys_t *fs)
+int reiserfs_create_ondisk_bitmap(reiserfs_filsys_t fs)
 {
 	if (fs->fs_bitmap2)
 		reiserfs_panic("bitmap is initiaized already");
@@ -744,7 +744,7 @@ int reiserfs_create_ondisk_bitmap(reiserfs_filsys_t *fs)
 	return 1;
 }
 
-void reiserfs_close_ondisk_bitmap(reiserfs_filsys_t *fs)
+void reiserfs_close_ondisk_bitmap(reiserfs_filsys_t fs)
 {
 	if (!fs->fs_bitmap2)
 		return;

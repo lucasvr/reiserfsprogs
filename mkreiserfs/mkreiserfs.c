@@ -105,7 +105,7 @@ enum mkfs_mode {
 static int mode;
 
 /* form super block (old one) */
-static void make_super_block(reiserfs_filsys_t *fs)
+static void make_super_block(reiserfs_filsys_t fs)
 {
 	set_sb_umount_state(fs->fs_ondisk_sb, FS_CLEANLY_UMOUNTED);
 	set_sb_tree_height(fs->fs_ondisk_sb, 2);
@@ -166,7 +166,7 @@ static void invalidate_other_formats(int dev)
 	brelse(bh);
 }
 
-static void zero_journal(reiserfs_filsys_t *fs)
+static void zero_journal(reiserfs_filsys_t fs)
 {
 	unsigned long start, len, done;
 	struct buffer_head *bh;
@@ -197,7 +197,7 @@ static void zero_journal(reiserfs_filsys_t *fs)
 
 /* this only sets few first bits in bitmap block. Fills not initialized fields
    of super block (root block and bitmap block numbers) */
-static void make_bitmap(reiserfs_filsys_t *fs)
+static void make_bitmap(reiserfs_filsys_t fs)
 {
 	struct reiserfs_super_block *sb = fs->fs_ondisk_sb;
 	unsigned int i;
@@ -279,7 +279,7 @@ static void set_root_dir_nlink(struct item_head *ih, void *sd)
 
 /* form the root block of the tree (the block head, the item head, the
    root directory) */
-static void make_root_block(reiserfs_filsys_t *fs)
+static void make_root_block(reiserfs_filsys_t fs)
 {
 	struct reiserfs_super_block *sb;
 	struct buffer_head *bh;
@@ -302,7 +302,7 @@ static void make_root_block(reiserfs_filsys_t *fs)
 	mark_objectid_used(fs, REISERFS_ROOT_OBJECTID);
 }
 
-static void report(reiserfs_filsys_t *fs, char *j_filename)
+static void report(reiserfs_filsys_t fs, char *j_filename)
 {
 //    print_block (stdout, fs, fs->fs_super_bh);
 	struct reiserfs_super_block *sb =
@@ -545,7 +545,7 @@ static int select_format(void)
 
 int main(int argc, char **argv)
 {
-	reiserfs_filsys_t *fs;
+	reiserfs_filsys_t fs;
 	int force = 0;
 	char *device_name = NULL;
 	char *jdevice_name = NULL;

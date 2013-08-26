@@ -1420,7 +1420,7 @@ struct buffer_head *get_FEB(struct tree_balance *tb)
 }
 
 /* Replace n_dest'th key in buffer dest by n_src'th key of buffer src.*/
-void replace_key(reiserfs_filsys_t *fs,
+void replace_key(reiserfs_filsys_t fs,
 		 struct buffer_head *dest, int n_dest,
 		 struct buffer_head *src, int n_src)
 {

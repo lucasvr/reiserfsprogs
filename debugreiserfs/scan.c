@@ -581,7 +581,7 @@ static void map_one_item(struct saved_item *item)
 }
 
 // flush map which is in variable map
-static void flush_map(reiserfs_filsys_t *fs,
+static void flush_map(reiserfs_filsys_t fs,
 		      struct reiserfs_key *dir,
 		      char *name, struct reiserfs_key *key)
 {
@@ -718,7 +718,7 @@ static void make_file_map (const void *nodep, VISIT value, int level)
 }
 */
 
-static void print_items(FILE * fp, reiserfs_filsys_t *fs)
+static void print_items(FILE * fp, reiserfs_filsys_t fs)
 {
 	struct buffer_head *bh;
 	struct item_head *ih;
@@ -737,7 +737,7 @@ static void print_items(FILE * fp, reiserfs_filsys_t *fs)
 	}
 }
 
-void print_map(reiserfs_filsys_t *fs)
+void print_map(reiserfs_filsys_t fs)
 {
 	FILE *fp;
 
@@ -845,7 +845,7 @@ static void make_map(const void *nodep, VISIT value, int level)
 }
 
 /* store map if it is a regular file */
-static void locate_file(reiserfs_filsys_t *fs, struct reiserfs_key *key)
+static void locate_file(reiserfs_filsys_t fs, struct reiserfs_key *key)
 {
 	INITIALIZE_REISERFS_PATH(path);
 	struct reiserfs_key *next_key;
@@ -880,7 +880,7 @@ static void locate_file(reiserfs_filsys_t *fs, struct reiserfs_key *key)
 }
 
 /* read stdin and look for specified name in the specified directory */
-static void look_for_name(reiserfs_filsys_t *fs)
+static void look_for_name(reiserfs_filsys_t fs)
 {
 	INITIALIZE_REISERFS_PATH(path);
 	char *name, *objectid, *dirid;
@@ -998,7 +998,7 @@ static void scan_for_key(struct buffer_head *bh, struct reiserfs_key *key)
 }
 #endif
 
-void do_scan(reiserfs_filsys_t *fs)
+void do_scan(reiserfs_filsys_t fs)
 {
 	unsigned long i;
 	struct buffer_head *bh;

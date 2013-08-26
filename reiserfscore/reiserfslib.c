@@ -54,10 +54,10 @@ int is_block_count_correct(unsigned long journal_offset,
 /* read super block. fixme: only 4k blocks, pre-journaled format
    is refused. Journal and bitmap are to be opened separately.
    skip_check is set to 1 if checks of openned SB should be omitted.*/
-reiserfs_filsys_t *reiserfs_open(const char *filename, int flags,
+reiserfs_filsys_t reiserfs_open(const char *filename, int flags,
 				 int *error, void *vp, int check)
 {
-	reiserfs_filsys_t *fs;
+	reiserfs_filsys_t fs;
 	struct buffer_head *bh;
 	struct reiserfs_super_block *sb;
 	int fd;
@@ -184,13 +184,13 @@ found:
 
 /* creates buffer for super block and fills it up with fields which are
    constant for given size and version of a filesystem */
-reiserfs_filsys_t *reiserfs_create(char *filename,
+reiserfs_filsys_t reiserfs_create(char *filename,
 				   int version,
 				   unsigned long block_count,
 				   int block_size,
 				   int default_journal, int new_format)
 {
-	reiserfs_filsys_t *fs;
+	reiserfs_filsys_t fs;
 	time_t now;
 	unsigned int bmap_nr = reiserfs_bmap_nr(block_count, block_size);;
 
@@ -316,23 +316,23 @@ reiserfs_filsys_t *reiserfs_create(char *filename,
 	return fs;
 }
 
-int no_reiserfs_found(reiserfs_filsys_t *fs)
+int no_reiserfs_found(reiserfs_filsys_t fs)
 {
 	return (fs == NULL || fs->fs_blocksize == 0) ? 1 : 0;
 }
 
-static int new_format(reiserfs_filsys_t *fs)
+static int new_format(reiserfs_filsys_t fs)
 {
 	return fs->fs_super_bh->b_blocknr != 2;
 }
 
-int spread_bitmaps(reiserfs_filsys_t *fs)
+int spread_bitmaps(reiserfs_filsys_t fs)
 {
 	return fs->fs_super_bh->b_blocknr != 2;
 }
 
 /* 0 means: do not guarantee that fs is consistent */
-int reiserfs_is_fs_consistent(reiserfs_filsys_t *fs)
+int reiserfs_is_fs_consistent(reiserfs_filsys_t fs)
 {
 	if (get_sb_umount_state(fs->fs_ondisk_sb) == FS_CLEANLY_UMOUNTED &&
 	    get_sb_fs_state(fs->fs_ondisk_sb) == FS_CONSISTENT)
@@ -342,7 +342,7 @@ int reiserfs_is_fs_consistent(reiserfs_filsys_t *fs)
 
 /* flush bitmap, brelse super block, flush all dirty buffers, close and open
    again the device, read super block */
-static void reiserfs_only_reopen(reiserfs_filsys_t *fs, int flag)
+static void reiserfs_only_reopen(reiserfs_filsys_t fs, int flag)
 {
 	unsigned long super_block;
 
@@ -377,13 +377,13 @@ static void reiserfs_only_reopen(reiserfs_filsys_t *fs, int flag)
 		fs->fs_dirt = 0;
 }
 
-void reiserfs_reopen(reiserfs_filsys_t *fs, int flag)
+void reiserfs_reopen(reiserfs_filsys_t fs, int flag)
 {
 	reiserfs_only_reopen(fs, flag);
 	reiserfs_reopen_journal(fs, flag);
 }
 
-int is_opened_rw(reiserfs_filsys_t *fs)
+int is_opened_rw(reiserfs_filsys_t fs)
 {
 	if ((fs->fs_flags) & O_RDWR)
 		return 1;
@@ -391,7 +391,7 @@ int is_opened_rw(reiserfs_filsys_t *fs)
 }
 
 /* flush all changes made on a filesystem */
-void reiserfs_flush(reiserfs_filsys_t *fs)
+void reiserfs_flush(reiserfs_filsys_t fs)
 {
 	if (fs->fs_dirt) {
 		reiserfs_flush_journal(fs);
@@ -401,7 +401,7 @@ void reiserfs_flush(reiserfs_filsys_t *fs)
 }
 
 /* free all memory involved into manipulating with filesystem */
-void reiserfs_free(reiserfs_filsys_t *fs)
+void reiserfs_free(reiserfs_filsys_t fs)
 {
 	reiserfs_free_journal(fs);
 	reiserfs_free_ondisk_bitmap(fs);
@@ -418,7 +418,7 @@ void reiserfs_free(reiserfs_filsys_t *fs)
 }
 
 /* this closes everything: journal. bitmap and the fs itself */
-void reiserfs_close(reiserfs_filsys_t *fs)
+void reiserfs_close(reiserfs_filsys_t fs)
 {
 	reiserfs_close_journal(fs);
 	reiserfs_close_ondisk_bitmap(fs);
@@ -428,7 +428,7 @@ void reiserfs_close(reiserfs_filsys_t *fs)
 	fsync(fs->fs_dev);
 }
 
-int reiserfs_new_blocknrs(reiserfs_filsys_t *fs,
+int reiserfs_new_blocknrs(reiserfs_filsys_t fs,
 			  unsigned long *free_blocknrs,
 			  unsigned long start, int amount_needed)
 {
@@ -439,7 +439,7 @@ int reiserfs_new_blocknrs(reiserfs_filsys_t *fs,
 	return 0;
 }
 
-int reiserfs_free_block(reiserfs_filsys_t *fs, unsigned long block)
+int reiserfs_free_block(reiserfs_filsys_t fs, unsigned long block)
 {
 	if (fs->block_deallocator)
 		return fs->block_deallocator(fs, block);
@@ -447,7 +447,7 @@ int reiserfs_free_block(reiserfs_filsys_t *fs, unsigned long block)
 	return 0;
 }
 
-static int reiserfs_search_by_key_x(reiserfs_filsys_t *fs,
+static int reiserfs_search_by_key_x(reiserfs_filsys_t fs,
 				    struct reiserfs_key *key,
 				    struct reiserfs_path *path, int key_length)
 {
@@ -496,13 +496,13 @@ static int reiserfs_search_by_key_x(reiserfs_filsys_t *fs,
 	return ITEM_NOT_FOUND;
 }
 
-int reiserfs_search_by_key_3(reiserfs_filsys_t *fs, struct reiserfs_key *key,
+int reiserfs_search_by_key_3(reiserfs_filsys_t fs, struct reiserfs_key *key,
 			     struct reiserfs_path *path)
 {
 	return reiserfs_search_by_key_x(fs, key, path, 3);
 }
 
-int reiserfs_search_by_key_4(reiserfs_filsys_t *fs, struct reiserfs_key *key,
+int reiserfs_search_by_key_4(reiserfs_filsys_t fs, struct reiserfs_key *key,
 			     struct reiserfs_path *path)
 {
 	return reiserfs_search_by_key_x(fs, key, path, 4);
@@ -510,7 +510,7 @@ int reiserfs_search_by_key_4(reiserfs_filsys_t *fs, struct reiserfs_key *key,
 
 /* key is key of byte in the regular file. This searches in tree
    through items and in the found item as well */
-int reiserfs_search_by_position(reiserfs_filsys_t *s, struct reiserfs_key *key,
+int reiserfs_search_by_position(reiserfs_filsys_t s, struct reiserfs_key *key,
 				int version, struct reiserfs_path *path)
 {
 	struct buffer_head *bh;
@@ -692,7 +692,7 @@ struct reiserfs_key *reiserfs_next_key(struct reiserfs_path *path)
 }
 
 /* NOTE: this only should be used to look for keys who exists */
-int reiserfs_search_by_entry_key(reiserfs_filsys_t *fs,
+int reiserfs_search_by_entry_key(reiserfs_filsys_t fs,
 				 struct reiserfs_key *key,
 				 struct reiserfs_path *path)
 {
@@ -795,7 +795,7 @@ int reiserfs_search_by_entry_key(reiserfs_filsys_t *fs,
 	return POSITION_NOT_FOUND;
 }
 
-void init_tb_struct(struct tree_balance *tb, reiserfs_filsys_t *fs,
+void init_tb_struct(struct tree_balance *tb, reiserfs_filsys_t fs,
 		    struct reiserfs_path *path, int size)
 {
 	memset(tb, '\0', sizeof(struct tree_balance));
@@ -807,7 +807,7 @@ void init_tb_struct(struct tree_balance *tb, reiserfs_filsys_t *fs,
 	tb->insert_size[0] = size;
 }
 
-int reiserfs_remove_entry(reiserfs_filsys_t *fs, struct reiserfs_key *key)
+int reiserfs_remove_entry(reiserfs_filsys_t fs, struct reiserfs_key *key)
 {
 	struct reiserfs_path path;
 	struct tree_balance tb;
@@ -842,7 +842,7 @@ int reiserfs_remove_entry(reiserfs_filsys_t *fs, struct reiserfs_key *key)
 	return 0;
 }
 
-void reiserfs_paste_into_item(reiserfs_filsys_t *fs,
+void reiserfs_paste_into_item(reiserfs_filsys_t fs,
 			      struct reiserfs_path *path, const void *body,
 			      int size)
 {
@@ -856,7 +856,7 @@ void reiserfs_paste_into_item(reiserfs_filsys_t *fs,
 	do_balance(&tb, NULL, body, M_PASTE, 0 /* zero num */ );
 }
 
-void reiserfs_insert_item(reiserfs_filsys_t *fs, struct reiserfs_path *path,
+void reiserfs_insert_item(reiserfs_filsys_t fs, struct reiserfs_path *path,
 			  struct item_head *ih, const void *body)
 {
 	struct tree_balance tb;
@@ -884,7 +884,7 @@ __u32 hash_value(hashf_t func, char *name, int namelen)
 
 /* if name is found in a directory - return 1 and set path to the name,
    otherwise return 0 and pathrelse path */
-int reiserfs_locate_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
+int reiserfs_locate_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
 			  char *name, struct reiserfs_path *path)
 {
 	struct reiserfs_key entry_key;
@@ -947,7 +947,7 @@ int reiserfs_locate_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
    found. Stores key found in the entry in 'key'. Returns minimal not used
    generation counter in 'min_gen_counter'. dies if found object is not a
    directory. */
-int reiserfs_find_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
+int reiserfs_find_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
 			char *name, unsigned int *min_gen_counter,
 			struct reiserfs_key *key)
 {
@@ -1071,7 +1071,7 @@ static char *make_entry(char *entry, char *name, struct reiserfs_key *key,
 
 /* add new name into a directory. If it exists in a directory - do
    nothing */
-int reiserfs_add_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
+int reiserfs_add_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
 		       char *name, int name_len, struct reiserfs_key *key,
 		       __u16 fsck_need)
 {
@@ -1154,7 +1154,7 @@ void copy_short_key(void *to, const void *from)
 }
 
 /* inserts new or old stat data of a directory (unreachable, nlinks == 0) */
-int create_dir_sd(reiserfs_filsys_t *fs,
+int create_dir_sd(reiserfs_filsys_t fs,
 		  struct reiserfs_path *path, struct reiserfs_key *key,
 		  void (*modify_item) (struct item_head *, void *))
 {
@@ -1195,7 +1195,7 @@ int create_dir_sd(reiserfs_filsys_t *fs,
 	return key_format;
 }
 
-void make_sure_root_dir_exists(reiserfs_filsys_t *fs,
+void make_sure_root_dir_exists(reiserfs_filsys_t fs,
 			       void (*modify_item) (struct item_head *, void *),
 			       int ih_flags)
 {
@@ -1290,7 +1290,7 @@ int can_we_format_it(char *device_name, int force)
 	return 1;
 }
 
-int create_badblock_bitmap(reiserfs_filsys_t *fs, char *badblocks_file)
+int create_badblock_bitmap(reiserfs_filsys_t fs, char *badblocks_file)
 {
 	FILE *fd;
 	char buf[128];
@@ -1342,7 +1342,7 @@ int create_badblock_bitmap(reiserfs_filsys_t *fs, char *badblocks_file)
 	return 0;
 }
 
-void badblock_list(reiserfs_filsys_t *fs, badblock_func_t action, void *data)
+void badblock_list(reiserfs_filsys_t fs, badblock_func_t action, void *data)
 {
 	struct reiserfs_path badblock_path;
 	struct reiserfs_key rd_key = badblock_key;
@@ -1389,7 +1389,7 @@ void badblock_list(reiserfs_filsys_t *fs, badblock_func_t action, void *data)
 	}
 }
 
-static void callback_badblock_rm(reiserfs_filsys_t *fs,
+static void callback_badblock_rm(reiserfs_filsys_t fs,
 				 struct reiserfs_path *badblock_path,
 				 void *data)
 {
@@ -1409,7 +1409,7 @@ static void callback_badblock_rm(reiserfs_filsys_t *fs,
 	do_balance(&tb, NULL, NULL, M_DELETE, 0 /* zero num */);
 }
 
-void mark_badblock(reiserfs_filsys_t *fs,
+void mark_badblock(reiserfs_filsys_t fs,
 		   struct reiserfs_path *badblock_path, void *data)
 {
 	struct item_head *tmp_ih;
@@ -1430,7 +1430,7 @@ void mark_badblock(reiserfs_filsys_t *fs,
 	pathrelse(badblock_path);
 }
 
-void add_badblock_list(reiserfs_filsys_t *fs, int replace)
+void add_badblock_list(reiserfs_filsys_t fs, int replace)
 {
 	struct tree_balance tb;
 	struct reiserfs_path badblock_path;

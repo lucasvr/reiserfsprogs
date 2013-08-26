@@ -88,7 +88,7 @@ static int bwrite_cond(struct buffer_head *bh)
 }
 
 /* the first one of the most important functions */
-static int expand_fs(reiserfs_filsys_t *fs, long long int block_count_new)
+static int expand_fs(reiserfs_filsys_t fs, long long int block_count_new)
 {
 	unsigned int bmap_nr_new, bmap_nr_old;
 	struct reiserfs_super_block *sb;
@@ -138,7 +138,7 @@ static int expand_fs(reiserfs_filsys_t *fs, long long int block_count_new)
 	return 0;
 }
 
-static int resizer_check_fs_size(reiserfs_filsys_t *fs, long long int new_size)
+static int resizer_check_fs_size(reiserfs_filsys_t fs, long long int new_size)
 {
 	if (new_size < 0) {
 		reiserfs_warning(stderr, "\nresizer_reiserfs: the new size "
@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
 	char *bytes_count_str = NULL;
 	char *devname;
 	char *jdevice_name = NULL;
-	reiserfs_filsys_t *fs;
+	reiserfs_filsys_t fs;
 	struct reiserfs_super_block *sb;
 
 	int c;
