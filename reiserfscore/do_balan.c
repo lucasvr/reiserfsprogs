@@ -137,14 +137,8 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 							B_NR_ITEMS(tb->R[0]),
 							-1, 0);
 
-					reiserfs_invalidate_buffer(tb, tbS0,
-								   1
-								   /*do_free_block */
-								   );
-					reiserfs_invalidate_buffer(tb, tb->R[0],
-								   1
-								   /*do_free_block */
-								   );
+					reiserfs_invalidate_buffer(tb, tbS0);
+					reiserfs_invalidate_buffer(tb, tb->R[0]);
 
 					return 0;
 				}
@@ -157,12 +151,8 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 				replace_key(tb->tb_fs, tb->CFR[0], tb->rkey[0],
 					    tb->R[0], 0);
 
-				reiserfs_invalidate_buffer(tb, tbS0,
-							   1 /*do_free_block */
-							   );
-				reiserfs_invalidate_buffer(tb, tb->L[0],
-							   1 /*do_free_block */
-							   );
+				reiserfs_invalidate_buffer(tb, tbS0);
+				reiserfs_invalidate_buffer(tb, tb->L[0]);
 
 				return -1;
 			}
@@ -170,8 +160,7 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 			/* all contents of L[0] and S[0] will be in L[0] */
 			leaf_shift_left(tb, n, -1);
 
-			reiserfs_invalidate_buffer(tb, tbS0,
-						   1 /*do_free_block */ );
+			reiserfs_invalidate_buffer(tb, tbS0);
 
 			return 0;
 		}
@@ -180,7 +169,7 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 		leaf_shift_left(tb, tb->lnum[0], tb->lbytes);
 		leaf_shift_right(tb, tb->rnum[0], tb->rbytes);
 
-		reiserfs_invalidate_buffer(tb, tbS0, 1 /*do_free_block */ );
+		reiserfs_invalidate_buffer(tb, tbS0);
 
 		return 0;
 	}
@@ -188,7 +177,7 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 	if (tb->rnum[0] == -1) {
 		/* all contents of R[0] and S[0] will be in R[0] */
 		leaf_shift_right(tb, n, -1);
-		reiserfs_invalidate_buffer(tb, tbS0, 1 /*do_free_block */ );
+		reiserfs_invalidate_buffer(tb, tbS0);
 		return 0;
 	}
 	return 0;
@@ -966,7 +955,7 @@ static int balance_leaf(	/*struct reiserfs_transaction_handle *th, */
 			mark_buffer_dirty(tb->CFL[0]);
 		}
 
-		reiserfs_invalidate_buffer(tb, tbS0, 1);
+		reiserfs_invalidate_buffer(tb, tbS0);
 		return 0;
 	}
 
@@ -1448,24 +1437,19 @@ void replace_key(reiserfs_filsys_t *fs,
 	}
 }
 
-void reiserfs_invalidate_buffer(struct tree_balance *tb, struct buffer_head *bh,
-				int do_free_block)
+void reiserfs_invalidate_buffer(struct tree_balance *tb, struct buffer_head *bh)
 {
+	struct buffer_head *to_be_forgotten;
 	set_blkh_level(B_BLK_HEAD(bh), FREE_LEVEL);
 	misc_clear_bit(BH_Dirty, &bh->b_state);
 
-	if (do_free_block) {
-		struct buffer_head *to_be_forgotten;
-
-		to_be_forgotten =
-		    find_buffer(bh->b_dev, bh->b_blocknr, bh->b_size);
-		if (to_be_forgotten) {
-			to_be_forgotten->b_count++;
-			bforget(to_be_forgotten);
-		}
-
-		reiserfs_free_block(tb->tb_fs, bh->b_blocknr);
+	to_be_forgotten = find_buffer(bh->b_dev, bh->b_blocknr, bh->b_size);
+	if (to_be_forgotten) {
+		to_be_forgotten->b_count++;
+		bforget(to_be_forgotten);
 	}
+
+	reiserfs_free_block(tb->tb_fs, bh->b_blocknr);
 }
 
 int get_left_neighbor_position(struct tree_balance *tb, int h)

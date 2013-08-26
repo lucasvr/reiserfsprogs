@@ -503,7 +503,7 @@ static void balance_internal_when_delete(struct tree_balance *tb,
 			tb->tb_fs->fs_dirt = 1;
 
 			/* mark buffer S[h] not uptodate and put it in free list */
-			reiserfs_invalidate_buffer(tb, tbSh, 1);
+			reiserfs_invalidate_buffer(tb, tbSh);
 			return;
 		}
 		return;
@@ -511,14 +511,14 @@ static void balance_internal_when_delete(struct tree_balance *tb,
 
 	if (tb->L[h] && tb->lnum[h] == -B_NR_ITEMS(tb->L[h]) - 1) {	/* join S[h] with L[h] */
 		internal_shift_left(INTERNAL_SHIFT_FROM_S_TO_L, tb, h, n + 1);	/*tb->L[h], tb->CFL[h], tb->lkey[h], tb->S[h], n+1); */
-		reiserfs_invalidate_buffer(tb, tbSh, 1);	/* preserve not needed, internal, 1 mean free block */
+		reiserfs_invalidate_buffer(tb, tbSh);	/* preserve not needed, internal, 1 mean free block */
 
 		return;
 	}
 
 	if (tb->R[h] && tb->rnum[h] == -B_NR_ITEMS(tb->R[h]) - 1) {	/* join S[h] with R[h] */
 		internal_shift_right(INTERNAL_SHIFT_FROM_S_TO_R, tb, h, n + 1);
-		reiserfs_invalidate_buffer(tb, tbSh, 1);
+		reiserfs_invalidate_buffer(tb, tbSh);
 		return;
 	}
 
@@ -537,7 +537,7 @@ static void balance_internal_when_delete(struct tree_balance *tb,
 		internal_shift_left(INTERNAL_SHIFT_FROM_S_TO_L, tb, h, tb->lnum[h]);	/*tb->L[h], tb->CFL[h], tb->lkey[h], tb->S[h], tb->lnum[h]); */
 		internal_shift_right(INTERNAL_SHIFT_FROM_S_TO_R, tb, h,
 				     tb->rnum[h]);
-		reiserfs_invalidate_buffer(tb, tbSh, 1);
+		reiserfs_invalidate_buffer(tb, tbSh);
 
 		return;
 	}
@@ -724,7 +724,7 @@ int balance_internal(struct tree_balance *tb,	/* tree_balance structure         
     /** Fill new node that appears instead of S[h] **/
 	if (!tb->blknum[h]) {	/* node S[h] is empty now */
 		/* Mark buffer as invalid and put it to head of free list. */
-		reiserfs_invalidate_buffer(tb, tbSh, 1);	/* do not preserve, internal node */
+		reiserfs_invalidate_buffer(tb, tbSh);	/* do not preserve, internal node */
 		return order;
 	}
 

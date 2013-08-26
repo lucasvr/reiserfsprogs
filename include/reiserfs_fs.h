@@ -1470,7 +1470,7 @@ int balance_internal (struct tree_balance * , int, int, struct item_head * ,
 /* do_balance.c */
 void do_balance (struct tree_balance * tb,
                  struct item_head * ih, const char * body, int flag, int zeros_num);
-void reiserfs_invalidate_buffer (struct tree_balance * tb, struct buffer_head * bh, int);
+void reiserfs_invalidate_buffer (struct tree_balance * tb, struct buffer_head * bh);
 int get_left_neighbor_position (struct tree_balance * tb, int h);
 int get_right_neighbor_position (struct tree_balance * tb, int h);
 void replace_key (reiserfs_filsys_t *, struct buffer_head *, int, struct buffer_head *, int);
