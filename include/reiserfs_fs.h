@@ -1550,6 +1550,57 @@ static inline void buffer_info_init_bh(struct tree_balance *tb,
 	bi->bi_parent	= NULL;
 	bi->bi_position = 0;
 }
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+# define get_key_offset_v2(key)     (__u64)(((key)->u.k2_offset_v2.k_offset))
+# define set_key_offset_v2(key,val) (void)((key)->u.k2_offset_v2.k_offset = (val))
+# define get_key_type_v2(key)       (__u16)(((key)->u.k2_offset_v2.k_type))
+# define set_key_type_v2(key,val)   (void)((key)->u.k2_offset_v2.k_type = (val))
+#elif __BYTE_ORDER == __BIG_ENDIAN
+typedef union {
+	struct offset_v2 offset_v2;
+	__u64 linear;
+} __attribute__ ((__packed__)) offset_v2_esafe_overlay;
+
+static inline __u64 get_key_offset_v2(const struct reiserfs_key *key)
+{
+	offset_v2_esafe_overlay tmp =
+	    *(offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
+	tmp.linear = le64_to_cpu(tmp.linear);
+	return tmp.offset_v2.k_offset;
+}
+
+static inline __u32 get_key_type_v2(const struct reiserfs_key *key)
+{
+	offset_v2_esafe_overlay tmp =
+	    *(offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
+	tmp.linear = le64_to_cpu(tmp.linear);
+	return tmp.offset_v2.k_type;
+}
+
+static inline void set_key_offset_v2(struct reiserfs_key *key, __u64 offset)
+{
+	offset_v2_esafe_overlay *tmp =
+	    (offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
+	tmp->linear = le64_to_cpu(tmp->linear);
+	tmp->offset_v2.k_offset = offset;
+	tmp->linear = cpu_to_le64(tmp->linear);
+}
+
+static inline void set_key_type_v2(struct reiserfs_key *key, __u32 type)
+{
+	offset_v2_esafe_overlay *tmp =
+	    (offset_v2_esafe_overlay *) (&(key->u.k2_offset_v2));
+	if (type > 15)
+		reiserfs_panic("set_key_type_v2: type is too big %d", type);
+
+	tmp->linear = le64_to_cpu(tmp->linear);
+	tmp->offset_v2.k_type = type;
+	tmp->linear = cpu_to_le64(tmp->linear);
+}
+#else
+# error "nuxi/pdp-endian archs are not supported"
+#endif
+
 
 #endif
 
