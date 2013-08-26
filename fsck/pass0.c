@@ -364,7 +364,7 @@ static int verify_directory_item(reiserfs_filsys_t *fs, struct buffer_head *bh,
 						     get_sb_hash_code(fs->
 								      fs_ondisk_sb));
 /*		add_hash_hit (fs, hash_code);*/
-				if (code2func(hash_code) != 0) {
+				if (code2func(hash_code) != NULL) {
 					/* deh_offset matches to some hash of the name */
 					if (fsck_hash_defined(fs) &&
 					    hash_code !=
@@ -2038,7 +2038,7 @@ static void choose_hash_function(reiserfs_filsys_t *fs)
 		return;
 
 	max = 0;
-	hash_code = func2code(0);
+	hash_code = func2code(NULL);
 
 	for (i = 0; i < fsck_data(fs)->rebuild.hash_amount; i++) {
 		/* remember hash whihc got more hits */
@@ -2294,7 +2294,7 @@ static void after_pass_0(reiserfs_filsys_t *fs)
 
 	/* free what we do not need anymore */
 	reiserfs_delete_bitmap(fsck_source_bitmap(fs));
-	fsck_source_bitmap(fs) = 0;
+	fsck_source_bitmap(fs) = NULL;
 
 	if (!fsck_run_one_step(fs)) {
 		if (fsck_user_confirmed(fs, "Continue? (Yes):", "Yes\n", 1)) {
@@ -2306,7 +2306,7 @@ static void after_pass_0(reiserfs_filsys_t *fs)
 		save_pass_0_result(fs);
 
 	id_map_free(proper_id_map(fs));
-	proper_id_map(fs) = 0;
+	proper_id_map(fs) = NULL;
 
 	time(&t);
 	fsck_progress("###########\n"

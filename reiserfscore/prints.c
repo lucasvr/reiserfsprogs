@@ -456,7 +456,7 @@ void reiserfs_print_item(FILE * fp, struct buffer_head *bh,
 		return;
 	}
 
-	print_directory_item(fp, 0, bh, ih);
+	print_directory_item(fp, NULL, bh, ih);
 }
 
 /* this prints internal nodes (4 keys/items in line) (dc_number,
@@ -813,8 +813,8 @@ void print_tb(int mode, int item_pos, int pos_in_item, struct tree_balance *tb,
 		} else {
 			/*      printk ("print_tb: h=%d, PATH_H_PATH_OFFSET=%d, path_length=%d\n",
 			   h, PATH_H_PATH_OFFSET (tb->tb_path, h), tb->tb_path->path_length); */
-			tbSh = 0;
-			tbFh = 0;
+			tbSh = NULL;
+			tbFh = NULL;
 		}
 		printf
 		    ("* %u * %3lu(%2lu) * %3lu(%2lu) * %3lu(%2lu) * %5lu * %5lu * %5lu * %5lu * %5lu *\n",

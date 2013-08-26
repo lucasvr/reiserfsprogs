@@ -17,7 +17,7 @@
 int what_fs_version()
 {
 	size_t n = 0;
-	char *answer = 0;
+	char *answer = NULL;
 	int version;
 	printf("\nwhat the version of ReiserFS do you use[1-4]\n"
 	       "\t(1)   3.6.x\n"
@@ -171,8 +171,8 @@ int check_sb (reiserfs_filsys_t *fs) {
 void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 {
 	int version = 0;
-	struct reiserfs_super_block *ondisk_sb = 0;
-	struct reiserfs_super_block *sb = 0;
+	struct reiserfs_super_block *ondisk_sb = NULL;
+	struct reiserfs_super_block *sb = NULL;
 	struct reiserfs_journal_header *j_head;
 
 	int magic_was_found = 0;
@@ -182,11 +182,11 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 	__u32 p_jp_journal_1st_block = 0;
 	__u32 p_jp_dev_size = 0;
 	int standard_journal = -1;
-	char *journal_dev_name = 0;
+	char *journal_dev_name = NULL;
 	char *tmp;
 	int sb_size;
 
-	char *answer = 0;
+	char *answer = NULL;
 	size_t n = 0;
 	struct stat stat_buf;
 	int retval, exit_code = EXIT_OK;
@@ -525,7 +525,7 @@ void rebuild_sb(reiserfs_filsys_t *fs, char *filename, struct fsck_data *data)
 		set_sb_tree_height(sb, 0);
 	}
 
-	if (get_sb_hash_code(sb) && code2name(get_sb_hash_code(sb)) == 0) {
+	if (get_sb_hash_code(sb) && code2name(get_sb_hash_code(sb)) == NULL) {
 		fsck_log("rebuild-sb: wrong hash occured (%lu), zeroed\n",
 			 get_sb_hash_code(sb));
 

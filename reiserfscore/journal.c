@@ -786,9 +786,9 @@ void reiserfs_free_journal(reiserfs_filsys_t *fs)
 	if (!reiserfs_journal_opened(fs))
 		return;
 	brelse(fs->fs_jh_bh);
-	fs->fs_jh_bh = 0;
+	fs->fs_jh_bh = NULL;
 	free(fs->fs_j_file_name);
-	fs->fs_j_file_name = 0;
+	fs->fs_j_file_name = NULL;
 }
 
 void reiserfs_close_journal(reiserfs_filsys_t *fs)

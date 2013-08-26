@@ -37,7 +37,7 @@ static unsigned long indirect_to_direct(struct reiserfs_path *path, __u64 len,
 	struct buffer_head *bh = PATH_PLAST_BUFFER(path);
 	struct item_head *ih = tp_item_head(path);
 	__u32 unfm_ptr;
-	struct buffer_head *unfm_bh = 0;
+	struct buffer_head *unfm_bh = NULL;
 	struct item_head ins_ih;
 	char *buf;
 	char bad_drct[fs->fs_blocksize];

@@ -283,7 +283,7 @@ start_again:
 			one_more_corruption(fs, FIXABLE);
 			fsck_log("\n");
 			if (retval == DIRECTORY_NOT_FOUND)
-				return 0;
+				return NULL;
 		}
 	}
 
@@ -461,7 +461,7 @@ static int check_semantic_pass(struct reiserfs_key *key,
 
 		retval =
 		    check_check_regular_file(&path, sd,
-					     /* relocate ? new_ih : */ 0);
+					     /* relocate ? new_ih : */ NULL);
 		pathrelse(&path);
 		return retval;
 	}
@@ -538,11 +538,11 @@ static int check_semantic_pass(struct reiserfs_key *key,
 	dir_size = 0;
 	while ((dir_item =
 		get_next_directory_item(&next_item_key, parent, &tmp_ih,
-					&pos_in_item, dir_format)) != 0) {
+					&pos_in_item, dir_format)) != NULL) {
 		/* dir_item is copy of the item in separately allocated memory,
 		   item_key is a key of next item in the tree */
 		int i;
-		char *name = 0;
+		char *name = NULL;
 		int namelen, entry_len;
 		struct reiserfs_de_head *deh =
 		    (struct reiserfs_de_head *)dir_item + pos_in_item;
@@ -554,7 +554,7 @@ static int check_semantic_pass(struct reiserfs_key *key,
 
 			if (name) {
 				free(name);
-				name = 0;
+				name = NULL;
 			}
 
 			namelen = name_in_entry_length(&tmp_ih, deh, i);
@@ -701,7 +701,7 @@ static int check_semantic_pass(struct reiserfs_key *key,
 
 		freemem(dir_item);
 		free(name);
-		name = 0;
+		name = NULL;
 
 		if (not_of_one_file(&next_item_key, key))
 			/* next key is not of this directory */
@@ -895,7 +895,7 @@ void semantic_check(void)
 
 	check_safe_links();
 
-	if (check_semantic_pass(&root_dir_key, &parent_root_dir_key, 0, 0) !=
+	if (check_semantic_pass(&root_dir_key, &parent_root_dir_key, 0, NULL) !=
 	    OK) {
 		fsck_log("check_semantic_tree: No root directory found");
 		one_more_corruption(fs, FATAL);

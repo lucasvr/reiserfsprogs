@@ -52,7 +52,7 @@ static void leaf_copy_dir_entries(struct buffer_info *dest_bi,
 		    get_deh_location(&deh[from + copy_count - 1]);
 	} else {
 		copy_records_len = 0;
-		records = 0;
+		records = NULL;
 	}
 
 	/* when copy last to first, dest buffer can contain 0 items */
@@ -570,7 +570,7 @@ int leaf_shift_left(struct tree_balance *tb, int shift_num, int shift_bytes)
 	int i;
 
 	/* move shift_num (and shift_bytes bytes) items from S[0] to left neighbor L[0] */
-	i = leaf_move_items(LEAF_FROM_S_TO_L, tb, shift_num, shift_bytes, 0);
+	i = leaf_move_items(LEAF_FROM_S_TO_L, tb, shift_num, shift_bytes, NULL);
 
 	if (shift_num) {
 		if (B_NR_ITEMS(S0) == 0) {
@@ -597,7 +597,7 @@ int leaf_shift_right(struct tree_balance *tb, int shift_num, int shift_bytes)
 
 	/* move shift_num (and shift_bytes) items from S[0] to right neighbor R[0] */
 	ret_value =
-	    leaf_move_items(LEAF_FROM_S_TO_R, tb, shift_num, shift_bytes, 0);
+	    leaf_move_items(LEAF_FROM_S_TO_R, tb, shift_num, shift_bytes, NULL);
 
 	/* replace rkey in CFR[0] by the 0-th key from R[0] */
 	if (shift_num) {

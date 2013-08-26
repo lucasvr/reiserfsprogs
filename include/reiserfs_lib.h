@@ -280,7 +280,7 @@ typedef int (*check_unfm_func_t) (reiserfs_filsys_t *, __u32);
 int is_it_bad_item(reiserfs_filsys_t *, struct item_head *, char *,
 		   check_unfm_func_t, int bad_dir);
 
-#define hash_func_is_unknown(fs) ((fs)->fs_hash_function == 0)
+#define hash_func_is_unknown(fs) ((fs)->fs_hash_function == NULL)
 #define reiserfs_hash(fs) ((fs)->fs_hash_function)
 
 int known_hashes(void);

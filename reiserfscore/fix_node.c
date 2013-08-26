@@ -918,7 +918,7 @@ static struct buffer_head *get_left_neighbor(reiserfs_filsys_t *s,
 	search_by_key(s, &key, &path_to_left_neighbor, DISK_LEAF_NODE_LEVEL);
 	if (PATH_LAST_POSITION(&path_to_left_neighbor) == 0) {
 		pathrelse(&path_to_left_neighbor);
-		return 0;
+		return NULL;
 	}
 	bh = PATH_PLAST_BUFFER(&path_to_left_neighbor);
 	bh->b_count++;
@@ -946,7 +946,7 @@ static struct buffer_head *get_right_neighbor(reiserfs_filsys_t *s,
 	if (PATH_PLAST_BUFFER(&path_to_right_neighbor) ==
 	    PATH_PLAST_BUFFER(path)) {
 		pathrelse(&path_to_right_neighbor);
-		return 0;
+		return NULL;
 	}
 	bh = PATH_PLAST_BUFFER(&path_to_right_neighbor);
 	bh->b_count++;
@@ -963,7 +963,7 @@ int is_left_mergeable(reiserfs_filsys_t *s, struct reiserfs_path *path)
 	right = item_head(PATH_PLAST_BUFFER(path), 0);
 
 	bh = get_left_neighbor(s, path);
-	if (bh == 0) {
+	if (bh == NULL) {
 		return 0;
 	}
 	retval =
@@ -984,7 +984,7 @@ int is_right_mergeable(reiserfs_filsys_t *s, struct reiserfs_path *path)
 			   B_NR_ITEMS(PATH_PLAST_BUFFER(path)) - 1);
 
 	bh = get_right_neighbor(s, path);
-	if (bh == 0) {
+	if (bh == NULL) {
 		return 0;
 	}
 	retval = are_items_mergeable(left, item_head(bh, 0), bh->b_size);
@@ -1221,7 +1221,8 @@ static int get_lfree(struct tree_balance *tb, int h)
 	struct buffer_head *l, *f;
 	int order;
 
-	if ((f = PATH_H_PPARENT(tb->tb_path, h)) == 0 || (l = tb->FL[h]) == 0)
+	if ((f = PATH_H_PPARENT(tb->tb_path, h)) == NULL ||
+	    (l = tb->FL[h]) == NULL)
 		return 0;
 
 	if (f == l)
@@ -1247,7 +1248,8 @@ static int get_rfree(struct tree_balance *tb, int h)
 	struct buffer_head *r, *f;
 	int order;
 
-	if ((f = PATH_H_PPARENT(tb->tb_path, h)) == 0 || (r = tb->FR[h]) == 0)
+	if ((f = PATH_H_PPARENT(tb->tb_path, h)) == NULL ||
+	    (r = tb->FR[h]) == NULL)
 		return 0;
 
 	if (f == r)

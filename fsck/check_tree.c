@@ -1030,7 +1030,7 @@ static struct reiserfs_key *lkey(struct buffer_head **path, int h)
 			return internal_key(path[h - 1], pos - 1);
 		h--;
 	}
-	return 0;
+	return NULL;
 }
 
 /* path[h] - leaf node */
@@ -1044,7 +1044,7 @@ static struct reiserfs_key *rkey(struct buffer_head **path, int h)
 			return internal_key(path[h - 1], pos);
 		h--;
 	}
-	return 0;
+	return NULL;
 }
 
 /* are all delimiting keys correct */

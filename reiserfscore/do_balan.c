@@ -143,9 +143,9 @@ static int balance_leaf_when_delete(	/*struct reiserfs_transaction_handle *th, *
 					return 0;
 				}
 				/* all contents of all the 3 buffers will be in R[0] */
-				leaf_move_items(LEAF_FROM_S_TO_R, tb, n, -1, 0);
+				leaf_move_items(LEAF_FROM_S_TO_R, tb, n, -1, NULL);
 				leaf_move_items(LEAF_FROM_L_TO_R, tb,
-						B_NR_ITEMS(tb->L[0]), -1, 0);
+						B_NR_ITEMS(tb->L[0]), -1, NULL);
 
 				/* right_delimiting_key is correct in R[0] */
 				replace_key(tb->tb_fs, tb->CFR[0], tb->rkey[0],
@@ -1402,7 +1402,7 @@ struct buffer_head *get_FEB(struct tree_balance *tb)
 	struct buffer_info bi;
 
 	for (i = 0; i < MAX_FEB_SIZE; i++)
-		if (tb->FEB[i] != 0)
+		if (tb->FEB[i] != NULL)
 			break;
 
 	if (i == MAX_FEB_SIZE)
@@ -1413,7 +1413,7 @@ struct buffer_head *get_FEB(struct tree_balance *tb)
 	make_empty_node(&bi);
 	misc_set_bit(BH_Uptodate, &first_b->b_state);
 
-	tb->FEB[i] = 0;
+	tb->FEB[i] = NULL;
 	tb->used[i] = first_b;
 
 	return (first_b);

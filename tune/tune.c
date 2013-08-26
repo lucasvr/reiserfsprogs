@@ -409,36 +409,36 @@ int main(int argc, char **argv)
 	if (argc < 2)
 		print_usage_and_exit();
 
-	device_name = 0;
-	jdevice_name = 0;
-	j_new_device_name = 0;
+	device_name = NULL;
+	jdevice_name = NULL;
+	j_new_device_name = NULL;
 
 	memset(UUID, 0, 16);
 
 	while (1) {
 		static struct option options[] = {
-			{"help", no_argument, 0, 'h'},
-			{"journal-device", required_argument, 0, 'j'},
+			{"help", no_argument, NULL, 'h'},
+			{"journal-device", required_argument, NULL, 'j'},
 			{"journal-new-device", required_argument, &flag,
 			 OPT_NEW_J},
-			{"journal-new-size", required_argument, 0, 's'},
-			{"trans-max-size", required_argument, 0, 't'},
-			{"journal-new-offset", required_argument, 0, 'o'},
+			{"journal-new-size", required_argument, NULL, 's'},
+			{"trans-max-size", required_argument, NULL, 't'},
+			{"journal-new-offset", required_argument, NULL, 'o'},
 			{"no-journal-available", no_argument, &flag,
 			 OPT_SKIP_J},
-			/*{"keep-old-journal-param", no_argument, 0, 'p'}, */
-			{"uuid", required_argument, 0, 'u'},
-			{"label", required_argument, 0, 'l'},
-			{"add-badblocks", required_argument, 0, 'b'},
-			{"badblocks", required_argument, 0, 'B'},
-			{"force", no_argument, 0, 'f'},
+			/*{"keep-old-journal-param", no_argument, NULL, 'p'}, */
+			{"uuid", required_argument, NULL, 'u'},
+			{"label", required_argument, NULL, 'l'},
+			{"add-badblocks", required_argument, NULL, 'b'},
+			{"badblocks", required_argument, NULL, 'B'},
+			{"force", no_argument, NULL, 'f'},
 			{"make-journal-standard", no_argument, &flag,
 			 OPT_STANDARD},
-			{"check-interval", required_argument, 0, 'c'},
-			{"time-last-checked", required_argument, 0, 'C'},
-			{"max-mount-count", required_argument, 0, 'm'},
-			{"mount-count", required_argument, 0, 'M'},
-			{0, 0, 0, 0}
+			{"check-interval", required_argument, NULL, 'c'},
+			{"time-last-checked", required_argument, NULL, 'C'},
+			{"max-mount-count", required_argument, NULL, 'm'},
+			{"mount-count", required_argument, NULL, 'M'},
+			{}
 		};
 		int option_index;
 
@@ -560,7 +560,7 @@ int main(int argc, char **argv)
 	/* device to be formatted */
 	device_name = argv[optind];
 
-	fs = reiserfs_open(device_name, O_RDONLY, 0, NULL, 1);
+	fs = reiserfs_open(device_name, O_RDONLY, NULL, NULL, 1);
 	if (no_reiserfs_found(fs)) {
 		message("Cannot open reiserfs on %s", device_name);
 		return 1;

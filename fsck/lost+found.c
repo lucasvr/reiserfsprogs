@@ -213,7 +213,7 @@ static __u64 _look_for_lost(reiserfs_filsys_t *fs, int link_lost_dirs)
 					rebuild_semantic_pass(&obj_key,
 							      &lost_found_dir_key,
 							      /*dot_dot */ 0,
-							      /*reloc_ih */ 0);
+							      /*reloc_ih */ NULL);
 					erase_name(strlen(lost_name));
 					/*fsck_progress ("finished\n"); */
 
@@ -233,7 +233,7 @@ static __u64 _look_for_lost(reiserfs_filsys_t *fs, int link_lost_dirs)
 					rebuild_check_regular_file(&path,
 								   tp_item_body
 								   (&path),
-								   0
+								   NULL
 								   /*reloc_ih */
 								   );
 					pathrelse(&path);
@@ -355,7 +355,7 @@ void after_lost_found(reiserfs_filsys_t *fs)
 	save_lost_found_result(fs);
 
 	id_map_free(proper_id_map(fs));
-	proper_id_map(fs) = 0;
+	proper_id_map(fs) = NULL;
 
 	fs->fs_dirt = 1;
 	reiserfs_close(fs);

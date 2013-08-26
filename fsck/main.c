@@ -100,39 +100,39 @@ static char *parse_options(struct fsck_data *data, int argc, char *argv[])
 			{"clean-attributes", no_argument, &mode,
 			 FSCK_CLEAN_ATTRIBUTES},
 			/* options */
-			{"logfile", required_argument, 0, 'l'},
-			{"badblocks", required_argument, 0, 'B'},
-			{"interactive", no_argument, 0, 'i'},
-			{"adjust-size", no_argument, 0, 'z'},
-			{"quiet", no_argument, 0, 'q'},
-			{"yes", no_argument, 0, 'y'},
-			{"force", no_argument, 0, 'f'},
-			{"nolog", no_argument, 0, 'n'},
+			{"logfile", required_argument, NULL, 'l'},
+			{"badblocks", required_argument, NULL, 'B'},
+			{"interactive", no_argument, NULL, 'i'},
+			{"adjust-size", no_argument, NULL, 'z'},
+			{"quiet", no_argument, NULL, 'q'},
+			{"yes", no_argument, NULL, 'y'},
+			{"force", no_argument, NULL, 'f'},
+			{"nolog", no_argument, NULL, 'n'},
 
 			/* if file exists ad reiserfs can be load of it - only
 			   blocks marked used in that bitmap will be read */
-			{"scan-marked-in-bitmap", required_argument, 0, 'b'},
+			{"scan-marked-in-bitmap", required_argument, NULL, 'b'},
 
-			{"create-passes-dump", required_argument, 0, 'd'},
+			{"create-passes-dump", required_argument, NULL, 'd'},
 
 			/* all blocks will be read */
-			{"scan-whole-partition", no_argument, 0, 'S'},
+			{"scan-whole-partition", no_argument, NULL, 'S'},
 			/* useful for -S */
-			{"hash", required_argument, 0, 'h'},
+			{"hash", required_argument, NULL, 'h'},
 
 			/* preparing rollback data */
-			{"rollback-data", required_argument, 0, 'R'},
+			{"rollback-data", required_argument, NULL, 'R'},
 
-			{"journal", required_argument, 0, 'j'},
+			{"journal", required_argument, NULL, 'j'},
 			{"no-journal-available", no_argument, &flag,
 			 OPT_SKIP_JOURNAL},
 
-			{"bad-block-file", required_argument, 0, 'B'},
+			{"bad-block-file", required_argument, NULL, 'B'},
 
 			/* start reiserfsck in background and exit */
-			{"background", no_argument, 0, 'g'},
+			{"background", no_argument, NULL, 'g'},
 
-			{0, 0, 0, 0}
+			{}
 		};
 		int option_index;
 
@@ -209,7 +209,7 @@ static char *parse_options(struct fsck_data *data, int argc, char *argv[])
 
 		case 'h':	/* --hash: suppose that this hash was used on a filesystem */
 			asprintf(&data->rebuild.defined_hash, "%s", optarg);
-			if (name2func(data->rebuild.defined_hash) == 0)
+			if (name2func(data->rebuild.defined_hash) == NULL)
 				reiserfs_panic
 				    ("reiserfsck: Unknown hash is specified: %s",
 				     data->rebuild.defined_hash);
@@ -630,7 +630,7 @@ static void reset_super_block(reiserfs_filsys_t *fs)
 static int where_to_start_from(reiserfs_filsys_t *fs)
 {
 	int ret;
-	FILE *fp = 0;
+	FILE *fp = NULL;
 	int last_run_state;
 
 	last_run_state = get_sb_fs_state(fs->fs_ondisk_sb);
@@ -640,7 +640,7 @@ static int where_to_start_from(reiserfs_filsys_t *fs)
 	/* We are able to perform the next step only if there is a file with the previous
 	 * step results. */
 	fp = open_file(state_dump_file(fs), "r");
-	if (fp == 0) {
+	if (fp == NULL) {
 		set_sb_fs_state(fs->fs_ondisk_sb, 0);
 		return START_FROM_THE_BEGINNING;
 	}
@@ -1300,7 +1300,7 @@ static void fsck_rollback(reiserfs_filsys_t *fs)
 
 	close(fs->fs_journal_dev);
 	free(fs->fs_file_name);
-	fs->fs_file_name = 0;
+	fs->fs_file_name = NULL;
 	close(fs->fs_dev);
 	freemem(fs);
 

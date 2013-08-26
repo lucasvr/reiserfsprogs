@@ -99,7 +99,7 @@ static void edit_super_block(reiserfs_filsys_t *fs)
 	size_t n;
 	int num;
 
-	str = 0;
+	str = NULL;
 	n = 0;
 
 	/* bs_block_count */
@@ -239,7 +239,7 @@ static void corrupt_clobber_hash(char *name, struct item_head *ih,
 void do_corrupt_one_block(reiserfs_filsys_t *fs, char *fline)
 {
 	struct buffer_head *bh;
-	char *line = 0;
+	char *line = NULL;
 	size_t n = 0;
 	unsigned long block;
 
@@ -319,7 +319,7 @@ void do_corrupt_one_block(reiserfs_filsys_t *fs, char *fline)
 		while (getline(&line, &n, stdin) != -1) {
 			if (line[0] == '\n') {
 				free(line);
-				line = 0;
+				line = NULL;
 				n = 0;
 				break;
 			}
@@ -330,7 +330,7 @@ void do_corrupt_one_block(reiserfs_filsys_t *fs, char *fline)
 			}
 
 			free(line);
-			line = 0;
+			line = NULL;
 			n = 0;
 		}
 	}
@@ -772,7 +772,7 @@ void do_leaves_corruption(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 	unsigned long nr_leaves = 0;
 	unsigned int i, should_be_corrupted;
 
-	srand(time(0));
+	srand(time(NULL));
 	printf("%lu leaves will be corrupted\n", nr_leaves_cr);
 	if ((data(fs)->log_file_name) && (data(fs)->log)) {
 		fprintf(data(fs)->log,
@@ -898,7 +898,7 @@ void do_ih_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 	unsigned long nr_leaves = 0;
 	unsigned int should_be_corrupted = 0;
 
-	srand(time(0));
+	srand(time(NULL));
 
 	printf("item headers in %lu leaves will be corrupted\n", nr_leaves_cr);
 	if ((data(fs)->log_file_name) && (data(fs)->log)) {
@@ -1010,7 +1010,7 @@ void do_dir_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 	unsigned long nr_leaves = 0;
 	unsigned int should_be_corrupted = 0;
 
-	srand(time(0));
+	srand(time(NULL));
 
 	printf("DIR items in %lu leaves will be corrupted\n", nr_leaves_cr);
 	if ((data(fs)->log_file_name) && (data(fs)->log)) {
@@ -1095,7 +1095,7 @@ void do_sd_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 	unsigned long nr_leaves = 0;
 	unsigned int should_be_corrupted = 0;
 
-	srand(time(0));
+	srand(time(NULL));
 
 	printf("SD items in %lu leaves will be corrupted\n", nr_leaves_cr);
 	if ((data(fs)->log_file_name) && (data(fs)->log)) {
@@ -1180,7 +1180,7 @@ void do_ind_random_corrupt(reiserfs_filsys_t *fs, unsigned long nr_leaves_cr)
 	unsigned long nr_leaves = 0;
 	unsigned int should_be_corrupted = 0;
 
-	srand(time(0));
+	srand(time(NULL));
 
 	printf("IND items in %lu leaves will be corrupted\n", nr_leaves_cr);
 	if ((data(fs)->log_file_name) && (data(fs)->log)) {
@@ -1336,7 +1336,7 @@ void what_to_corrupt(reiserfs_filsys_t *fs, char *corruption_command)
 
 void do_fs_random_corrupt(reiserfs_filsys_t *fs)
 {
-	char *line = 0;
+	char *line = NULL;
 	size_t n = 0;
 
 	printf("Corrupting fs. Please insert one of the following command\n"
@@ -1352,7 +1352,7 @@ void do_fs_random_corrupt(reiserfs_filsys_t *fs)
 	while (getline(&line, &n, stdin) != -1) {
 		if (line[0] == '\n') {
 			free(line);
-			line = 0;
+			line = NULL;
 			n = 0;
 			break;
 		}
@@ -1365,7 +1365,7 @@ void do_fs_random_corrupt(reiserfs_filsys_t *fs)
 		what_to_corrupt(fs, line);
 
 		free(line);
-		line = 0;
+		line = NULL;
 		n = 0;
 	}
 }

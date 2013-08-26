@@ -332,7 +332,7 @@ void relocate_dir(struct item_head *ih, int change_ih)
 	key = ih->ih_key;
 	set_type_and_offset(KEY_FORMAT_1, &key, SD_OFFSET, TYPE_STAT_DATA);
 
-	si = 0;
+	si = NULL;
 	while (1) {
 		reiserfs_search_by_key_4(fs, &key, &path);
 
@@ -582,7 +582,7 @@ static char *get_next_directory_item(struct reiserfs_key *key,	/* on return this
 			    ("get_next_directory_item: The entry \"..\" cannot be found in %k\n",
 			     &ih->ih_key);
 			pathrelse(&path);
-			return 0;
+			return NULL;
 		}
 	}
 
@@ -796,7 +796,7 @@ start_again:			/* when directory was relocated */
 	if (not_a_directory(sd)) {
 		retval =
 		    rebuild_check_regular_file(&path, sd,
-					       relocate ? new_ih : 0);
+					       relocate ? new_ih : NULL);
 		pathrelse(&path);
 		return retval;
 	}
@@ -901,11 +901,11 @@ start_again:			/* when directory was relocated */
 	dir_size = 0;
 	while ((dir_item =
 		get_next_directory_item(&item_key, parent, &tmp_ih,
-					&pos_in_item)) != 0) {
+					&pos_in_item)) != NULL) {
 		/* dir_item is copy of the item in separately allocated memory,
 		   item_key is a key of next item in the tree */
 		int i;
-		char *name = 0;
+		char *name = NULL;
 		int namelen, entry_len;
 		struct reiserfs_de_head *deh =
 		    (struct reiserfs_de_head *)dir_item + pos_in_item;
@@ -916,7 +916,7 @@ start_again:			/* when directory was relocated */
 
 			if (name) {
 				free(name);
-				name = 0;
+				name = NULL;
 			}
 
 			namelen = name_in_entry_length(&tmp_ih, deh, i);
@@ -1030,7 +1030,7 @@ start_again:			/* when directory was relocated */
 
 		freemem(dir_item);
 		free(name);
-		name = 0;
+		name = NULL;
 
 		if (not_of_one_file(&item_key, key))
 			/* next key is not of this directory */
@@ -1302,7 +1302,7 @@ static void after_pass_3(reiserfs_filsys_t *fs)
 	save_rebuild_semantic_result(fs);
 
 	id_map_free(proper_id_map(fs));
-	proper_id_map(fs) = 0;
+	proper_id_map(fs) = NULL;
 
 	fs->fs_dirt = 1;
 	reiserfs_close(fs);
@@ -1333,7 +1333,7 @@ void pass_3_semantic(reiserfs_filsys_t *fs)
 	link_relocated_files();
 
 	rebuild_semantic_pass(&root_dir_key, &parent_root_dir_key,
-			      0 /*!dot_dot */ , 0 /*reloc_ih */ );
+			      0 /*!dot_dot */ , NULL /*reloc_ih */ );
 
 	add_badblock_list(fs, 1);
 

@@ -568,17 +568,17 @@ int main(int argc, char **argv)
 
 	while (1) {
 		static struct option options[] = {
-			{"block-size", required_argument, 0, 'b'},
-			{"journal-device", required_argument, 0, 'j'},
-			{"journal-size", required_argument, 0, 's'},
-			{"transaction-max-size", required_argument, 0, 't'},
-			{"journal-offset", required_argument, 0, 'o'},
-			{"badblocks", required_argument, 0, 'B'},
-			{"hash", required_argument, 0, 'h'},
-			{"uuid", required_argument, 0, 'u'},
-			{"label", required_argument, 0, 'l'},
+			{"block-size", required_argument, NULL, 'b'},
+			{"journal-device", required_argument, NULL, 'j'},
+			{"journal-size", required_argument, NULL, 's'},
+			{"transaction-max-size", required_argument, NULL, 't'},
+			{"journal-offset", required_argument, NULL, 'o'},
+			{"badblocks", required_argument, NULL, 'B'},
+			{"hash", required_argument, NULL, 'h'},
+			{"uuid", required_argument, NULL, 'u'},
+			{"label", required_argument, NULL, 'l'},
 			{"format", required_argument, &flag, 1},
-			{0, 0, 0, 0}
+			{}
 		};
 		int option_index;
 

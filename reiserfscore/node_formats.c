@@ -520,7 +520,7 @@ static const struct {
 	hashf_t func;
 	char *name;
 } hashes[] = { {
-0, "not set"}, {
+NULL, "not set"}, {
 keyed_hash, "\"tea\""}, {
 yura_hash, "\"rupasov\""}, {
 r5_hash, "\"r5\""}};
@@ -563,7 +563,7 @@ int is_properly_hashed(reiserfs_filsys_t *fs,
 					fprintf(stderr,
 						"Detecting hash code: could not detect hash with name \"%.*s\"\n",
 						namelen, name);
-					reiserfs_hash(fs) = 0;
+					reiserfs_hash(fs) = NULL;
 					return 1;
 				}
 
@@ -611,7 +611,7 @@ int find_hash_in_use(char *name, int namelen, __u32 offset,
 char *code2name(unsigned int code)
 {
 	if (code >= HASH_AMOUNT || code < 0)
-		return 0;
+		return NULL;
 	return hashes[code].name;
 }
 
@@ -645,7 +645,7 @@ hashf_t name2func(char *hash)
 	for (i = 0; i < HASH_AMOUNT; i++)
 		if (!strcmp(hash, hashes[i].name))
 			return hashes[i].func;
-	return 0;
+	return NULL;
 }
 
 int dir_entry_bad_location(struct reiserfs_de_head *deh, struct item_head *ih,

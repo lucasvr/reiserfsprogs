@@ -17,14 +17,14 @@ reiserfs_bitmap_t *reiserfs_create_bitmap(unsigned int bit_count)
 
 	bm = getmem(sizeof(*bm));
 	if (!bm)
-		return 0;
+		return NULL;
 	bm->bm_bit_size = bit_count;
 	bm->bm_byte_size = ((unsigned long long)bit_count + 7) / 8;
 	bm->bm_set_bits = 0;
 	bm->bm_map = getmem(bm->bm_byte_size);
 	if (!bm->bm_map) {
 		freemem(bm);
-		return 0;
+		return NULL;
 	}
 
 	return bm;
@@ -420,7 +420,7 @@ FILE *open_file(char *filename, char *option)
 	if (!fp) {
 		reiserfs_warning(stderr, "open_file: could not open file %s\n",
 				 filename);
-		return 0;
+		return NULL;
 	}
 	reiserfs_warning(stderr, "Temp file opened by fsck: \"%s\" .. \n",
 			 filename);
@@ -622,7 +622,7 @@ reiserfs_bitmap_t *reiserfs_bitmap_load(FILE * fp)
 		reiserfs_warning(stderr, "reiserfs_bitmap_load: "
 				 "no bitmap start magic found");
 //      fclose (fp);
-		return 0;
+		return NULL;
 	}
 
 	/* read bit size of bitmap */
@@ -633,7 +633,7 @@ reiserfs_bitmap_t *reiserfs_bitmap_load(FILE * fp)
 		reiserfs_warning(stderr,
 				 "reiserfs_bitmap_load: creation failed");
 //      fclose (fp);
-		return 0;
+		return NULL;
 	}
 
 	/*printf ("LOAD: bit_size - %d\n", v); */
@@ -665,7 +665,7 @@ reiserfs_bitmap_t *reiserfs_bitmap_load(FILE * fp)
 	if (v != BITMAP_END_MAGIC) {
 		reiserfs_warning(stderr, "reiserfs_bitmap_load: "
 				 "no bitmap end magic found");
-		return 0;
+		return NULL;
 	}
 
 	/*    reiserfs_warning (stderr, "%d bits set - done\n", reiserfs_bitmap_ones (bm)); */
@@ -692,7 +692,7 @@ void reiserfs_free_ondisk_bitmap(reiserfs_filsys_t *fs)
 {
 	if (fs->fs_bitmap2) {
 		reiserfs_delete_bitmap(fs->fs_bitmap2);
-		fs->fs_bitmap2 = 0;
+		fs->fs_bitmap2 = NULL;
 	}
 }
 

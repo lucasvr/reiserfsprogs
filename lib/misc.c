@@ -269,7 +269,7 @@ static int misc_root_mounted(char *device)
 
 static int misc_file_ro(char *file)
 {
-	if (utime(file, 0) == -1) {
+	if (utime(file, NULL) == -1) {
 		if (errno == EROFS)
 			return 1;
 	}
@@ -584,7 +584,7 @@ __u64 mask64(int from, int count)
 
 __u32 get_random(void)
 {
-	srandom(time(0));
+	srandom(time(NULL));
 	return random();
 }
 
@@ -815,7 +815,7 @@ void clean_after_dma_check(int fd, dma_info_t *dma_info)
 
 int user_confirmed(FILE * fp, char *q, char *yes)
 {
-	char *answer = 0;
+	char *answer = NULL;
 	size_t n = 0;
 
 	fprintf(fp, "%s", q);

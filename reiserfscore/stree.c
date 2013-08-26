@@ -372,7 +372,7 @@ int search_by_key(reiserfs_filsys_t *fs, struct reiserfs_key *p_s_key,	/* Key to
 		/* make sure, that the node contents look like a node of
 		   certain level */
 		if (!is_tree_node(p_s_bh, expected_level)) {
-			print_block(stderr, 0, p_s_bh, 3, -1, -1);
+			print_block(stderr, NULL, p_s_bh, 3, -1, -1);
 			reiserfs_panic("search_by_key: expected level %d",
 				       expected_level);
 		}

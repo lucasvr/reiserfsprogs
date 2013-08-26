@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
 
 	devname = argv[optind];
 
-	fs = reiserfs_open(devname, O_RDONLY, &error, 0, 1);
+	fs = reiserfs_open(devname, O_RDONLY, &error, NULL, 1);
 	if (!fs) {
 		if (error) {
 			reiserfs_exit(1, "cannot open '%s': %s",
@@ -319,7 +319,7 @@ int main(int argc, char *argv[])
 		reiserfs_exit(1, "the file system isn't in valid state.");
 
 	/* Needed to keep idiot compiler from issuing false warning */
-	sb_old = 0;
+	sb_old = NULL;
 
 	/* save SB for reporting */
 	if (opt_verbose) {

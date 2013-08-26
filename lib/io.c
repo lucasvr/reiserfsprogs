@@ -143,13 +143,13 @@ static void insert_into_hash_queue(struct buffer_head *bh)
 
 static void remove_from_hash_queue(struct buffer_head *bh)
 {
-	if (bh->b_hash_next == 0 && bh->b_hash_prev == 0
+	if (bh->b_hash_next == NULL && bh->b_hash_prev == NULL
 	    && bh != g_a_hash_queues[bh->b_blocknr % NR_HASH_QUEUES])
 		/* (b_dev == -1) ? */
 		return;
 
 	if (bh == g_a_hash_queues[bh->b_blocknr % NR_HASH_QUEUES]) {
-		if (bh->b_hash_prev != 0)
+		if (bh->b_hash_prev)
 			die("remove_from_hash_queue: hash queue corrupted");
 		g_a_hash_queues[bh->b_blocknr % NR_HASH_QUEUES] =
 		    bh->b_hash_next;
@@ -160,18 +160,18 @@ static void remove_from_hash_queue(struct buffer_head *bh)
 	if (bh->b_hash_prev)
 		bh->b_hash_prev->b_hash_next = bh->b_hash_next;
 
-	bh->b_hash_prev = bh->b_hash_next = 0;
+	bh->b_hash_prev = bh->b_hash_next = NULL;
 }
 
 static void put_buffer_list_end(struct buffer_head **list,
 				struct buffer_head *bh)
 {
-	struct buffer_head *last = 0;
+	struct buffer_head *last = NULL;
 
 	if (bh->b_prev || bh->b_next)
 		die("put_buffer_list_end: buffer list corrupted");
 
-	if (*list == 0) {
+	if (*list == NULL) {
 		bh->b_next = bh;
 		bh->b_prev = bh;
 		*list = bh;
@@ -189,7 +189,7 @@ static void remove_from_buffer_list(struct buffer_head **list,
 				    struct buffer_head *bh)
 {
 	if (bh == bh->b_next) {
-		*list = 0;
+		*list = NULL;
 	} else {
 		bh->b_prev->b_next = bh->b_next;
 		bh->b_next->b_prev = bh->b_prev;
@@ -197,7 +197,7 @@ static void remove_from_buffer_list(struct buffer_head **list,
 			*list = bh->b_next;
 	}
 
-	bh->b_next = bh->b_prev = 0;
+	bh->b_next = bh->b_prev = NULL;
 }
 
 static void put_buffer_list_head(struct buffer_head **list,
@@ -255,13 +255,13 @@ static int grow_buffers(int size)
 	bh = (struct buffer_head *)getmem(GROW_BUFFERS__NEW_BUFERS_PER_CALL *
 					  sizeof(struct buffer_head) +
 					  sizeof(struct buffer_head *));
-	if (g_buffer_heads == 0)
+	if (!g_buffer_heads)
 		g_buffer_heads = bh;
 	else {
 		/* link new array to the end of array list */
 		tmp = g_buffer_heads;
 		while (*(struct buffer_head **)
-		       (tmp + GROW_BUFFERS__NEW_BUFERS_PER_CALL) != 0)
+		       (tmp + GROW_BUFFERS__NEW_BUFERS_PER_CALL) != NULL)
 			tmp =
 			    *(struct buffer_head **)(tmp +
 						     GROW_BUFFERS__NEW_BUFERS_PER_CALL);
@@ -275,7 +275,7 @@ static int grow_buffers(int size)
 		tmp = bh + i;
 		memset(tmp, 0, sizeof(struct buffer_head));
 		tmp->b_data = getmem(size);
-		if (tmp->b_data == 0)
+		if (!tmp->b_data)
 			die("grow_buffers: no memory for new buffer data");
 		tmp->b_dev = -1;
 		tmp->b_size = size;
@@ -313,7 +313,7 @@ static struct buffer_head *get_free_buffer(struct buffer_head **list,
 
 	next = *list;
 	if (!next)
-		return 0;
+		return NULL;
 
 	for (;;) {
 		if (!next)
@@ -328,7 +328,7 @@ static struct buffer_head *get_free_buffer(struct buffer_head **list,
 		if (next == *list)
 			break;
 	}
-	return 0;
+	return NULL;
 }
 
 /* to_write == 0 when all blocks have to be flushed. Otherwise - write only
@@ -441,7 +441,7 @@ struct buffer_head *getblk(int dev, unsigned long block, int size)
 
 void brelse(struct buffer_head *bh)
 {
-	if (bh == 0)
+	if (!bh)
 		return;
 
 	if (bh->b_count == 0)
@@ -486,7 +486,7 @@ struct buffer_head *bread(int dev, unsigned long block, size_t size)
 	int ret;
 
 	if (is_bad_block(block))
-		return 0;
+		return NULL;
 
 	bh = getblk(dev, block, size);
 
@@ -524,7 +524,7 @@ struct buffer_head *bread(int dev, unsigned long block, size_t size)
 
 static struct block_handler *rollback_blocks_array;
 static __u32 rollback_blocks_number = 0;
-static FILE *s_rollback_file = 0;
+static FILE *s_rollback_file = NULL;
 static FILE *log_file;
 static int do_rollback = 0;
 
@@ -609,7 +609,7 @@ int open_rollback_file(char *rollback_file, FILE * log)
 			"Specified file (%s) does not look like a rollback file\n",
 			rollback_file);
 		fclose(s_rollback_file);
-		s_rollback_file = 0;
+		s_rollback_file = NULL;
 		return -1;
 	}
 
@@ -632,7 +632,7 @@ int open_rollback_file(char *rollback_file, FILE * log)
 
 void close_rollback_file()
 {
-	if (s_rollback_file == 0)
+	if (!s_rollback_file)
 		return;
 
 	if (!do_rollback) {
@@ -641,7 +641,7 @@ void close_rollback_file()
 			return;
 		fwrite(&rollback_blocks_number, sizeof(rollback_blocksize), 1,
 		       s_rollback_file);
-		if (log_file != 0)
+		if (log_file)
 			fprintf(log_file, "rollback: %u blocks backed up\n",
 				rollback_blocks_number);
 	}
@@ -774,7 +774,7 @@ void do_fsck_rollback(int fd_device, int fd_journal_device, FILE * progress)
 	}
 
 	printf("\n");
-	if (log_file != 0)
+	if (log_file)
 		fprintf(log_file, "rollback: (%u) blocks restored\n",
 			count_rollbacked);
 }

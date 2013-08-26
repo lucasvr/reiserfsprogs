@@ -15,7 +15,7 @@ time_t parse_time(char *str)
 	struct tm ts;
 
 	if (strcmp(str, "now") == 0) {
-		return (time(0));
+		return (time(NULL));
 	}
 	memset(&ts, 0, sizeof(ts));
 #ifdef HAVE_STRPTIME

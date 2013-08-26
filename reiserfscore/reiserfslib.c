@@ -76,7 +76,7 @@ reiserfs_filsys_t *reiserfs_open(const char *filename, int flags,
 	if (fd == -1) {
 		if (error)
 			*error = errno;
-		return 0;
+		return NULL;
 	}
 
 	fs = getmem(sizeof(*fs));
@@ -160,7 +160,7 @@ found:
 					 "reiserfs_open: bread failed reading block %d, size %d\n",
 					 i, fs->fs_blocksize);
 			freemem(fs);
-			return 0;
+			return NULL;
 		}
 		sb = (struct reiserfs_super_block *)bh->b_data;
 	}
@@ -199,7 +199,7 @@ reiserfs_filsys_t *reiserfs_create(char *filename,
 	if (count_blocks(filename, block_size) < block_count) {
 		reiserfs_warning(stderr,
 				 "reiserfs_create: no enough blocks on device\n");
-		return 0;
+		return NULL;
 	}
 
 	if (!is_block_count_correct(REISERFS_DISK_OFFSET_IN_BYTES / block_size,
@@ -207,13 +207,13 @@ reiserfs_filsys_t *reiserfs_create(char *filename,
 		reiserfs_warning(stderr,
 				 "reiserfs_create: can not create that small "
 				 "(%u blocks) filesystem\n", block_count);
-		return 0;
+		return NULL;
 	}
 
 	fs = getmem(sizeof(*fs));
 	if (!fs) {
 		reiserfs_warning(stderr, "reiserfs_create: getmem failed\n");
-		return 0;
+		return NULL;
 	}
 
 	fs->fs_dev = open(filename, O_RDWR | O_EXCL
@@ -226,7 +226,7 @@ reiserfs_filsys_t *reiserfs_create(char *filename,
 				 "reiserfs_create: could not open %s: %s\n",
 				 filename, strerror(errno));
 		freemem(fs);
-		return 0;
+		return NULL;
 	}
 
 	fs->fs_blocksize = block_size;
@@ -244,7 +244,7 @@ reiserfs_filsys_t *reiserfs_create(char *filename,
 
 	if (!fs->fs_super_bh) {
 		reiserfs_warning(stderr, "reiserfs_create: getblk failed\n");
-		return 0;
+		return NULL;
 	}
 
 	mark_buffer_uptodate(fs->fs_super_bh, 1);
@@ -407,12 +407,12 @@ void reiserfs_free(reiserfs_filsys_t *fs)
 
 	/* release super block and memory used by filesystem handler */
 	brelse(fs->fs_super_bh);
-	fs->fs_super_bh = 0;
+	fs->fs_super_bh = NULL;
 
 	free_buffers();
 
 	free(fs->fs_file_name);
-	fs->fs_file_name = 0;
+	fs->fs_file_name = NULL;
 	freemem(fs);
 }
 
@@ -464,7 +464,7 @@ static int reiserfs_search_by_key_x(reiserfs_filsys_t *fs,
 		curr = PATH_OFFSET_PELEMENT(path, ++path->path_length);
 		bh = curr->pe_buffer =
 		    bread(fs->fs_dev, block, fs->fs_blocksize);
-		if (bh == 0) {
+		if (bh == NULL) {
 			path->path_length--;
 			pathrelse(path);
 			return ITEM_NOT_FOUND;
@@ -553,7 +553,7 @@ int reiserfs_search_by_position(reiserfs_filsys_t *s, struct reiserfs_key *key,
 			next_key = leaf_key(bh, PATH_LAST_POSITION(path));
 		else
 			next_key = uget_rkey(path);
-		if (next_key == 0 || not_of_one_file(next_key, key)) {
+		if (next_key == NULL || not_of_one_file(next_key, key)) {
 			/* there is no any part of such file in the tree */
 			path->pos_in_item = 0;
 			return FILE_NOT_FOUND;
@@ -642,7 +642,7 @@ struct reiserfs_key *uget_lkey(struct reiserfs_path *path)
 	}
 
 	/* there is no left delimiting key */
-	return 0;
+	return NULL;
 }
 
 struct reiserfs_key *uget_rkey(struct reiserfs_path *path)
@@ -679,7 +679,7 @@ struct reiserfs_key *uget_rkey(struct reiserfs_path *path)
 	}
 
 	/* there is no right delimiting key */
-	return 0;
+	return NULL;
 }
 
 struct reiserfs_key *reiserfs_next_key(struct reiserfs_path *path)
@@ -756,7 +756,8 @@ int reiserfs_search_by_entry_key(reiserfs_filsys_t *fs,
 			/* next item is in right neighboring node */
 			struct reiserfs_key *next_key = uget_rkey(path);
 
-			if (next_key == 0 || not_of_one_file(next_key, key)) {
+			if (next_key == NULL ||
+			    not_of_one_file(next_key, key)) {
 				/* there are no items of that directory */
 				path->pos_in_item = 0;
 				return DIRECTORY_NOT_FOUND;
@@ -821,22 +822,22 @@ int reiserfs_remove_entry(reiserfs_filsys_t *fs, struct reiserfs_key *key)
 	if (get_ih_entry_count(ih) == 1) {
 		init_tb_struct(&tb, fs, &path,
 			       -(IH_SIZE + get_ih_item_len(ih)));
-		if (fix_nodes(M_DELETE, &tb, 0) != CARRY_ON) {
+		if (fix_nodes(M_DELETE, &tb, NULL) != CARRY_ON) {
 			unfix_nodes(&tb);
 			return 1;
 		}
-		do_balance(&tb, 0, 0, M_DELETE, 0);
+		do_balance(&tb, NULL, NULL, M_DELETE, 0);
 		return 0;
 	}
 
 	deh = B_I_DEH(get_bh(&path), ih) + path.pos_in_item;
 	init_tb_struct(&tb, fs, &path,
 		       -(DEH_SIZE + entry_length(ih, deh, path.pos_in_item)));
-	if (fix_nodes(M_CUT, &tb, 0) != CARRY_ON) {
+	if (fix_nodes(M_CUT, &tb, NULL) != CARRY_ON) {
 		unfix_nodes(&tb);
 		return 1;
 	}
-	do_balance(&tb, 0, 0, M_CUT, 0);
+	do_balance(&tb, NULL, NULL, M_CUT, 0);
 	return 0;
 }
 
@@ -848,10 +849,10 @@ void reiserfs_paste_into_item(reiserfs_filsys_t *fs,
 
 	init_tb_struct(&tb, fs, path, size);
 
-	if (fix_nodes(M_PASTE, &tb, 0 /*ih */ ) != CARRY_ON)
+	if (fix_nodes(M_PASTE, &tb, NULL) != CARRY_ON)
 		reiserfs_panic("reiserfs_paste_into_item: fix_nodes failed");
 
-	do_balance(&tb, 0, body, M_PASTE, 0 /*zero num */ );
+	do_balance(&tb, NULL, body, M_PASTE, 0 /* zero num */ );
 }
 
 void reiserfs_insert_item(reiserfs_filsys_t *fs, struct reiserfs_path *path,
@@ -1081,7 +1082,7 @@ int reiserfs_add_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
 	int item_len;
 	__u32 hash;
 
-	if (reiserfs_find_entry(fs, dir, name, &gen_counter, 0))
+	if (reiserfs_find_entry(fs, dir, name, &gen_counter, NULL))
 		/* entry is in the directory already or directory was not found */
 		return 0;
 
@@ -1117,7 +1118,7 @@ int reiserfs_add_entry(reiserfs_filsys_t *fs, struct reiserfs_key *dir,
 	/* fsck may need to insert item which was not reached yet */
 	set_ih_flags(&entry_ih, fsck_need);
 
-	entry = make_entry(0, name, key, get_offset(&(entry_ih.ih_key)));
+	entry = make_entry(NULL, name, key, get_offset(&(entry_ih.ih_key)));
 
 	retval = reiserfs_search_by_entry_key(fs, &(entry_ih.ih_key), &path);
 	switch (retval) {
@@ -1401,11 +1402,10 @@ static void callback_badblock_rm(reiserfs_filsys_t *fs,
 		       -(IH_SIZE +
 			 get_ih_item_len(tp_item_head(badblock_path))));
 
-	if (fix_nodes(M_DELETE, &tb, 0) != CARRY_ON)
+	if (fix_nodes(M_DELETE, &tb, NULL) != CARRY_ON)
 		die("%s: fix_nodes failed", __FUNCTION__);
 
-	do_balance( /*tb.transaction_handle, */ &tb, 0, 0, M_DELETE,
-		   0 /*zero num */ );
+	do_balance(&tb, NULL, NULL, M_DELETE, 0 /* zero num */);
 }
 
 void mark_badblock(reiserfs_filsys_t *fs,
@@ -1490,10 +1490,10 @@ void add_badblock_list(reiserfs_filsys_t *fs, int replace)
 
 			init_tb_struct(&tb, fs, &badblock_path, UNFM_P_SIZE);
 
-			if (fix_nodes(M_PASTE, &tb, 0) != CARRY_ON)
+			if (fix_nodes(M_PASTE, &tb, NULL) != CARRY_ON)
 				die("reiserfsck_paste_into_item: fix_nodes failed");
 
-			do_balance(&tb, 0, (const char *)&ni, M_PASTE, 0);
+			do_balance(&tb, NULL, (const char *)&ni, M_PASTE, 0);
 			break;
 		}
 

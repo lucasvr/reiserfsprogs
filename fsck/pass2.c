@@ -143,7 +143,7 @@ void save_item(struct si **head, struct item_head *ih, char *item,
 	memcpy(&(si->si_ih), ih, IH_SIZE);
 	memcpy(si->si_dnm_data, item, get_ih_item_len(ih));
 
-	if (*head == 0)
+	if (*head == NULL)
 		*head = si;
 	else {
 		cur = *head;
@@ -503,7 +503,7 @@ static void do_pass_2(reiserfs_filsys_t *fs)
 		       reiserfs_bitmap_find_zero_bit(fsck_uninsertables(fs),
 						     &j) == 0) {
 			bh = bread(fs->fs_dev, j, fs->fs_blocksize);
-			if (bh == 0) {
+			if (bh == NULL) {
 				fsck_log
 				    ("pass_2: Reading of the block (%lu) failed on the device 0x%x\n",
 				     j, fs->fs_dev);
@@ -606,7 +606,7 @@ static void after_pass_2(reiserfs_filsys_t *fs)
 		save_pass_2_result(fs);
 
 	id_map_free(proper_id_map(fs));
-	proper_id_map(fs) = 0;
+	proper_id_map(fs) = NULL;
 
 	reiserfs_delete_bitmap(fsck_new_bitmap(fs));
 	reiserfs_delete_bitmap(fsck_allocable_bitmap(fs));

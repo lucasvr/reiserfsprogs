@@ -115,7 +115,8 @@ static void indirect_in_tree(struct buffer_head *bh, struct item_head *ih)
 
 static void leaf_is_in_tree_now(struct buffer_head *bh)
 {
-	item_action_t actions[] = { stat_data_in_tree, indirect_in_tree, 0, 0 };
+	item_action_t actions[] = { stat_data_in_tree, indirect_in_tree,
+				    NULL, NULL };
 
 	mark_block_used((bh)->b_blocknr, 1);
 
@@ -136,7 +137,7 @@ static void insert_pointer(struct buffer_head *bh, struct reiserfs_path *path)
 	init_tb_struct(&tb, fs, path, 0x7fff);
 
 	/* fix_nodes & do_balance must work for internal nodes only */
-	ih = 0;
+	ih = NULL;
 
 	retval = fix_nodes( /*tb.transaction_handle, */ M_INTERNAL, &tb, ih);
 	if (retval != CARRY_ON)
@@ -149,12 +150,12 @@ static void insert_pointer(struct buffer_head *bh, struct reiserfs_path *path)
 	if (PATH_LAST_POSITION(path) == 0 && path->pos_in_item == 0)
 		PATH_H_B_ITEM_ORDER(path, 0) = -1;
 	else {
-		if (PATH_H_PPARENT(path, 0) == 0)
+		if (PATH_H_PPARENT(path, 0) == NULL)
 			PATH_H_B_ITEM_ORDER(path, 0) = 0;
 /*    PATH_H_B_ITEM_ORDER (path, 0) = PATH_H_PPARENT (path, 0) ? PATH_H_B_ITEM_ORDER (path, 0) : 0;*/
 	}
 
-	ih = 0;
+	ih = NULL;
 	body = (char *)bh;
 	//memmode = 0;
 
@@ -192,7 +193,7 @@ int balance_condition_2_fails(struct buffer_head *new,
 	/* new node can not be joined with its left neighbor */
 
 	right_dkey = uget_rkey(path);
-	if (right_dkey == 0)
+	if (right_dkey == NULL)
 		/* there is no right neighbor */
 		return 0;
 
@@ -293,7 +294,8 @@ static void try_to_insert_pointer_to_leaf(struct buffer_head *new_bh)
 		if (balance_condition_fails(new_bh, bh))
 			goto cannot_insert;
 
-		if (uget_lkey(&path) != 0 || PATH_LAST_POSITION(&path) != 0)
+		if (uget_lkey(&path) != NULL ||
+		    PATH_LAST_POSITION(&path) != 0)
 			die("try_to_insert_pointer_to_leaf: bad search result");
 
 		path.pos_in_item = 0;
@@ -808,7 +810,7 @@ static void after_pass_1(reiserfs_filsys_t *fs)
 	if (proper_id_map(fs)) {
 		/* when we run pass 1 only - we do not have proper_id_map */
 		id_map_free(proper_id_map(fs));
-		proper_id_map(fs) = 0;
+		proper_id_map(fs) = NULL;
 	}
 
 	time(&t);
