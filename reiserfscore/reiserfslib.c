@@ -13,8 +13,9 @@ struct reiserfs_key root_dir_key = { 0, 0, {{0, 0},} };
 struct reiserfs_key parent_root_dir_key = { 0, 0, {{0, 0},} };
 struct reiserfs_key lost_found_dir_key = { 0, 0, {{0, 0},} };
 static struct reiserfs_key badblock_key =
-    { cpu_to_le32(BADBLOCK_DIRID), cpu_to_le32(BADBLOCK_OBJID),
-      {{cpu_to_le32(0), cpu_to_le32(0)},} };
+    { constant_cpu_to_le32(BADBLOCK_DIRID),
+      constant_cpu_to_le32(BADBLOCK_OBJID),
+      {{constant_cpu_to_le32(0), constant_cpu_to_le32(0)},} };
 
 __u16 root_dir_format = 0;
 __u16 lost_found_dir_format = 0;
