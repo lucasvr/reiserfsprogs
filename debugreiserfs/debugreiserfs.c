@@ -686,6 +686,7 @@ int main(int argc, char *argv[])
 	char *file_name;
 	int error;
 	struct debugreiserfs_data *data;
+	FILE *log;
 
 	data = getmem(sizeof(struct debugreiserfs_data));
 	file_name = parse_options(data, argc, argv);
@@ -777,9 +778,9 @@ int main(int argc, char *argv[])
 		break;
 	}
 
+	log = data(fs)->log;
 	reiserfs_close(fs);
-	if (data(fs)->log) {
-		fclose(data(fs)->log);
-	}
+	if (log)
+		fclose(log);
 	return 0;
 }
