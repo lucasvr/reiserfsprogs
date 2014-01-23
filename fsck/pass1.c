@@ -24,18 +24,6 @@ struct buffer_head *make_buffer(int dev, unsigned long blocknr, int size,
 	return bh;
 }
 
-static int find_not_of_one_file(struct reiserfs_key *to_find,
-				struct reiserfs_key *key)
-{
-	if ((get_key_objectid(to_find) != ~(__u32) 0) &&
-	    (get_key_objectid(to_find) != get_key_objectid(key)))
-		return 1;
-	if ((get_key_dirid(to_find) != ~(__u32) 0) &&
-	    (get_key_dirid(to_find) != get_key_dirid(key)))
-		return 1;
-	return 0;
-}
-
 int is_item_reachable(struct item_head *ih)
 {
 	return ih_reachable(ih) ? 1 : 0;

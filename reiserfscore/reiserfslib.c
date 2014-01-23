@@ -322,11 +322,6 @@ int no_reiserfs_found(reiserfs_filsys_t fs)
 	return (fs == NULL || fs->fs_blocksize == 0) ? 1 : 0;
 }
 
-static int new_format(reiserfs_filsys_t fs)
-{
-	return fs->fs_super_bh->b_blocknr != 2;
-}
-
 int spread_bitmaps(reiserfs_filsys_t fs)
 {
 	return fs->fs_super_bh->b_blocknr != 2;

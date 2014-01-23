@@ -409,31 +409,3 @@ int search_by_key(reiserfs_filsys_t fs, struct reiserfs_key *p_s_key,	/* Key to 
 					  p_s_last_element->pe_position));
 	}
 }
-
-static int bin_search_in_dir_item(struct item_head *ih,
-				  struct reiserfs_de_head *deh,
-				  struct reiserfs_key *key, int *pos_in_item)
-{
-	int rbound, lbound, j;
-
-	lbound = 0;
-	rbound = get_ih_entry_count(ih) - 1;
-
-	for (j = (rbound + lbound) / 2; lbound <= rbound;
-	     j = (rbound + lbound) / 2) {
-		if (get_offset(key) < get_deh_offset(deh + j)) {
-			rbound = j - 1;
-			continue;
-		}
-		if (get_offset(key) > get_deh_offset(deh + j)) {
-			lbound = j + 1;
-			continue;
-		}
-		/* key found */
-		*pos_in_item = j;
-		return POSITION_FOUND;
-	}
-
-	*pos_in_item = lbound;
-	return POSITION_NOT_FOUND;
-}

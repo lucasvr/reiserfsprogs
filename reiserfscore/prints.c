@@ -211,67 +211,6 @@ void reiserfs_warning(FILE * fp, const char *fmt, ...)
 	va_end(args);
 }
 
-static char *vi_type(struct virtual_item *vi)
-{
-	static char *types[] =
-	    { "directory", "direct", "indirect", "stat data" };
-
-	if (vi->vi_type & VI_TYPE_STAT_DATA)
-		return types[3];
-	if (vi->vi_type & VI_TYPE_INDIRECT)
-		return types[2];
-	if (vi->vi_type & VI_TYPE_DIRECT)
-		return types[1];
-	if (vi->vi_type & VI_TYPE_DIRECTORY)
-		return types[0];
-
-	reiserfs_panic("vi_type: 6000: unknown type (0x%x)", vi->vi_type);
-	return NULL;
-}
-
-static void print_virtual_node(struct virtual_node *vn)
-{
-	int i, j;
-
-	printf
-	    ("VIRTUAL NODE CONTAINS %d items, has size %d,%s,%s, ITEM_POS=%d POS_IN_ITEM=%d MODE=\'%c\'\n",
-	     vn->vn_nr_item, vn->vn_size,
-	     (vn->vn_vi[0].
-	      vi_type & VI_TYPE_LEFT_MERGEABLE) ? "left mergeable" : "",
-	     (vn->vn_vi[vn->vn_nr_item - 1].
-	      vi_type & VI_TYPE_RIGHT_MERGEABLE) ? "right mergeable" : "",
-	     vn->vn_affected_item_num, vn->vn_pos_in_item, vn->vn_mode);
-
-	for (i = 0; i < vn->vn_nr_item; i++) {
-		printf("%s %d %d", vi_type(&vn->vn_vi[i]), i,
-		       vn->vn_vi[i].vi_item_len);
-		if (vn->vn_vi[i].vi_entry_sizes) {
-			printf("It is directory with %d entries: ",
-			       vn->vn_vi[i].vi_entry_count);
-			for (j = 0; j < vn->vn_vi[i].vi_entry_count; j++)
-				printf("%d ", vn->vn_vi[i].vi_entry_sizes[j]);
-		}
-		printf("\n");
-	}
-}
-
-static void print_path(struct tree_balance *tb, struct reiserfs_path *path)
-{
-	int offset = path->path_length;
-	struct buffer_head *bh;
-
-	printf("Offset    Bh     (b_blocknr, b_count) Position Nr_item\n");
-	while (offset > ILLEGAL_PATH_ELEMENT_OFFSET) {
-		bh = PATH_OFFSET_PBUFFER(path, offset);
-		printf("%6d %10p (%9lu, %7d) %8d %7d\n", offset,
-		       bh, bh ? bh->b_blocknr : 0, bh ? bh->b_count : 0,
-		       PATH_OFFSET_POSITION(path, offset),
-		       bh ? B_NR_ITEMS(bh) : -1);
-
-		offset--;
-	}
-}
-
 static void print_directory_item(FILE *fp, reiserfs_filsys_t fs,
 				 struct buffer_head *bh, struct item_head *ih)
 {

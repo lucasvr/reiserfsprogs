@@ -238,7 +238,6 @@ static void print_one_block(reiserfs_filsys_t fs, unsigned long block)
    "bitmap" saved in that file and build the tree of blocks marked used in
    that "bitmap"
 */
-static char *where_to_save;
 static char *badblocks_file;
 static char *corruption_list_file;
 static char *program_name;
