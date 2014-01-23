@@ -164,7 +164,7 @@ static void unpack_stat_data(struct packed_item *pi, struct buffer_head *bh,
 		struct stat_data_v1 *sd;
 
 		sd = (struct stat_data_v1 *)ih_item_body(bh, ih);
-		memset(sd, 0, sizeof(sd));
+		memset(sd, 0, sizeof(*sd));
 
 		fread16(&sd->sd_mode);
 		fread16(&sd->sd_nlink);
@@ -186,7 +186,7 @@ static void unpack_stat_data(struct packed_item *pi, struct buffer_head *bh,
 		struct stat_data *sd;
 
 		sd = (struct stat_data *)ih_item_body(bh, ih);
-		memset(sd, 0, sizeof(sd));
+		memset(sd, 0, sizeof(*sd));
 
 		fread16(&sd->sd_mode);
 
