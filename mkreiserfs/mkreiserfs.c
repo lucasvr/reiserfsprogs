@@ -543,6 +543,30 @@ static int select_format(void)
 	return REISERFS_FORMAT_3_5;
 }
 
+static int block_size_ok(int blocksize, int force)
+{
+	int pagesize = getpagesize();
+	if (blocksize > 4096) {
+		reiserfs_warning(stderr, "Block sizes larger than 4k are not "
+				 "supported on all architectures.\n");
+		if (blocksize > pagesize)
+			reiserfs_warning(stderr,
+					 "The newly created filesystem will not "
+					 "be mountable on this system.\n");
+		else
+			reiserfs_warning(stderr,
+					 "The newly created filesystem may not "
+					 "be mountable on other systems.\n");
+		check_forcing_ask_confirmation(force);
+	} else if (blocksize < 4096) {
+		reiserfs_warning(stderr, "Block sizes smaller than 4k "
+				 "are not supported.\n");
+		return 0;
+	}
+
+	return 1;
+}
+
 int main(int argc, char **argv)
 {
 	reiserfs_filsys_t fs;

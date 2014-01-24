@@ -1227,30 +1227,6 @@ void make_sure_root_dir_exists(reiserfs_filsys_t fs,
 			   &parent_root_dir_key, ih_flags);
 }
 
-int block_size_ok(int blocksize, int force)
-{
-	int pagesize = getpagesize();
-	if (blocksize > 4096) {
-		reiserfs_warning(stderr, "Block sizes larger than 4k are not "
-				 "supported on all architectures.\n");
-		if (blocksize > pagesize)
-			reiserfs_warning(stderr,
-					 "The newly created filesystem will not "
-					 "be mountable on this system.\n");
-		else
-			reiserfs_warning(stderr,
-					 "The newly created filesystem may not "
-					 "be mountable on other systems.\n");
-		check_forcing_ask_confirmation(force);
-	} else if (blocksize < 4096) {
-		reiserfs_warning(stderr, "Block sizes smaller than 4k "
-				 "are not supported.\n");
-		return 0;
-	}
-
-	return 1;
-}
-
 /* we only can use a file for filesystem or journal if it is either not
    mounted block device or regular file and we are forced to use it */
 int can_we_format_it(char *device_name, int force)

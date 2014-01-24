@@ -91,7 +91,6 @@ void reiserfs_read_bitmap_blocks (reiserfs_filsys_t );
 void reiserfs_free_bitmap_blocks (reiserfs_filsys_t );
 */
 int no_reiserfs_found(reiserfs_filsys_t );
-int block_size_ok(int blocksize, int force);
 int is_block_count_correct(unsigned long block_of_super_block,
 			   unsigned int block_size, unsigned long block_count,
 			   unsigned long journal_size);
