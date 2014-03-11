@@ -1402,6 +1402,32 @@ struct buffer_info {
 #define MAX_DIRECT_ITEM_LEN(size) ((size) - BLKH_SIZE - 2*IH_SIZE - SD_SIZE - UNFM_P_SIZE)
 #define MAX_INDIRECT_ITEM_LEN(size) MAX_ITEM_LEN(size)
 
+/* Extended attributes */
+/* Magic value in header */
+#define REISERFS_XATTR_MAGIC 0x52465841 /* "RFXA" */
+
+struct reiserfs_xattr_header {
+	__le32 h_magic;
+	__le32 h_hash;
+};
+
+/* ACLs */
+#define REISERFS_ACL_VERSION 0x0001
+struct reiserfs_acl_entry {
+	__le16	e_tag;
+	__le16	e_perm;
+	__le32	e_id;
+};
+
+struct reiserfs_acl_entry_short {
+	__le16	e_tag;
+	__le16	e_perm;
+};
+
+struct reiserfs_acl_header {
+	__le32	a_version;
+};
+
 /***************************************************************************/
 /*                    FUNCTION DECLARATIONS                                */
 /***************************************************************************/

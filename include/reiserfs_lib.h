@@ -431,5 +431,8 @@ int can_we_format_it(char *device_name, int force);
 		return 0;\
 	}\
 
-
+/* xattr.c */
+__u32 reiserfs_xattr_hash(const char *msg, int len);
+int reiserfs_check_xattr(const void *body, int len);
+int reiserfs_acl_count(size_t size);
 #endif /* REISERFSPROGS_LIB_H */
