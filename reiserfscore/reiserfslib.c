@@ -444,7 +444,7 @@ int reiserfs_free_block(reiserfs_filsys_t fs, unsigned long block)
 }
 
 static int reiserfs_search_by_key_x(reiserfs_filsys_t fs,
-				    struct reiserfs_key *key,
+				    const struct reiserfs_key *key,
 				    struct reiserfs_path *path, int key_length)
 {
 	struct buffer_head *bh;
@@ -492,13 +492,13 @@ static int reiserfs_search_by_key_x(reiserfs_filsys_t fs,
 	return ITEM_NOT_FOUND;
 }
 
-int reiserfs_search_by_key_3(reiserfs_filsys_t fs, struct reiserfs_key *key,
+int reiserfs_search_by_key_3(reiserfs_filsys_t fs, const struct reiserfs_key *key,
 			     struct reiserfs_path *path)
 {
 	return reiserfs_search_by_key_x(fs, key, path, 3);
 }
 
-int reiserfs_search_by_key_4(reiserfs_filsys_t fs, struct reiserfs_key *key,
+int reiserfs_search_by_key_4(reiserfs_filsys_t fs, const struct reiserfs_key *key,
 			     struct reiserfs_path *path)
 {
 	return reiserfs_search_by_key_x(fs, key, path, 4);
@@ -689,7 +689,7 @@ struct reiserfs_key *reiserfs_next_key(struct reiserfs_path *path)
 
 /* NOTE: this only should be used to look for keys who exists */
 int reiserfs_search_by_entry_key(reiserfs_filsys_t fs,
-				 struct reiserfs_key *key,
+				 const struct reiserfs_key *key,
 				 struct reiserfs_path *path)
 {
 	struct buffer_head *bh;
@@ -1472,4 +1472,178 @@ void add_badblock_list(reiserfs_filsys_t fs, int replace)
 
 		j++;
 	}
+}
+
+int reiserfs_iterate_file_data(reiserfs_filsys_t fs,
+			       const struct reiserfs_key const *short_key,
+			       reiserfs_file_iterate_indirect_fn indirect_fn,
+			       reiserfs_file_iterate_direct_fn direct_fn,
+			       void *data)
+{
+	INITIALIZE_REISERFS_PATH(path);
+	struct reiserfs_key key = {
+		.k2_dir_id = short_key->k2_dir_id,
+		.k2_objectid = short_key->k2_objectid,
+	};
+	struct item_head *ih;
+	__u64 size;
+	__u64 position = 0;
+	int ret;
+
+	set_key_type_v2(&key, TYPE_STAT_DATA);
+	set_key_offset_v2(&key, 0);
+
+	ret = reiserfs_search_by_key_3(fs, &key, &path);
+	if (ret != ITEM_FOUND) {
+		ret = -ENOENT;
+		goto fail;
+	}
+
+	ih = tp_item_head(&path);
+	if (!is_stat_data_ih(ih)) {
+		ret = -EINVAL;
+		goto fail;
+	}
+
+	if (get_ih_key_format(ih) == KEY_FORMAT_1) {
+		struct stat_data_v1 *sd = tp_item_body(&path);
+		size = sd_v1_size(sd);
+	} else {
+		struct stat_data *sd = tp_item_body(&path);
+		size = sd_v2_size(sd);
+	}
+
+	pathrelse(&path);
+
+	set_key_offset_v2(&key, 1);
+	set_key_type_v2(&key, TYPE_DIRECT);
+
+	while (position < size) {
+		struct item_head *ih = tp_item_head(&path);
+		__u64 offset;
+		ret = reiserfs_search_by_position(fs, &key, 0, &path);
+		ih = tp_item_head(&path);
+		if (ret != POSITION_FOUND) {
+			reiserfs_warning(stderr,
+				"found %k instead of %k [%d] (%lu, %lu)\n",
+				&ih->ih_key, &key, ret, position, size);
+			if (ret != ITEM_NOT_FOUND)
+				ret = -EIO;
+			goto fail;
+		}
+
+		offset = get_offset(&ih->ih_key);
+
+		position = offset - 1;
+
+		if (is_indirect_key(&ih->ih_key)) {
+			int num_ptrs = get_ih_item_len(ih) / 4;
+			__u32 *ptrs = tp_item_body(&path);
+			if (!num_ptrs) {
+				reiserfs_warning(stderr,
+					 "indirect item %k contained 0 block pointers\n",
+					 &ih->ih_key);
+				ret = -EIO;
+				goto fail;
+			}
+			ret = indirect_fn(fs, position, size, num_ptrs,
+					  ptrs, data);
+			if (ret)
+				goto fail;
+			position += num_ptrs * fs->fs_blocksize;
+		} else if (is_direct_key(&ih->ih_key)) {
+			int len = get_ih_item_len(ih);
+			ret = direct_fn(fs, position, size, tp_item_body(&path),
+					len, data);
+			if (ret)
+				goto fail;
+			position += len;
+		} else
+			break;
+		pathrelse(&path);
+		set_key_offset_v2(&key, position + 1);
+	}
+
+	ret = 0;
+
+fail:
+	pathrelse(&path);
+	return ret;
+}
+
+int reiserfs_iterate_dir(reiserfs_filsys_t fs,
+			 const struct reiserfs_key const *dir_short_key,
+			 const reiserfs_iterate_dir_fn callback, void *data)
+{
+	INITIALIZE_REISERFS_PATH(path);
+	struct reiserfs_key *next_key;
+	struct reiserfs_key min_key = {};
+	struct reiserfs_de_head *deh;
+	struct reiserfs_key next_item_key;
+	int ret;
+	__u64 next_pos = DOT_OFFSET;
+
+	set_key_dirid(&next_item_key, get_key_dirid(dir_short_key));
+	set_key_objectid(&next_item_key, get_key_objectid(dir_short_key));
+	set_key_offset_v1(&next_item_key, DOT_OFFSET);
+	set_key_uniqueness(&next_item_key, DIRENTRY_UNIQUENESS);
+
+	while (1) {
+		__u32 pos;
+		int i;
+		struct item_head *ih;
+		ret = reiserfs_search_by_entry_key(fs, &next_item_key, &path);
+		if (ret != POSITION_FOUND) {
+			reiserfs_warning(stderr,
+				"search by entry key for %k: %d\n",
+				&next_item_key, ret);
+			break;
+	       }
+
+		ret = 0;
+
+		ih = tp_item_head(&path);
+		deh = tp_item_body(&path);
+		pos = path.pos_in_item;
+
+		deh += pos;
+		for (i = pos; i < get_ih_entry_count(ih); i++, deh++) {
+			const char *name;
+			size_t name_len;
+			if (get_deh_offset(deh) == DOT_OFFSET ||
+			    get_deh_offset(deh) == DOT_DOT_OFFSET)
+				continue;
+
+			name = tp_item_body(&path) + get_deh_location(deh);
+			name_len = entry_length(ih, deh, i);
+			if (!name[name_len - 1])
+				name_len = strlen(name);
+
+			ret = callback(fs, dir_short_key, name, name_len,
+				       get_deh_dirid(deh),
+				       get_deh_objectid(deh), data);
+			if (ret)
+				goto fail;
+
+			next_pos = get_deh_offset(deh) + 1;
+		}
+
+		next_key = uget_rkey(&path);
+		if (!next_key)
+			break;
+		if (!comp_keys(next_key, &min_key)) {
+			set_key_offset_v2(&next_item_key, next_pos);
+			pathrelse(&path);
+			continue;
+		}
+
+		if (comp_short_keys(next_key, &next_item_key))
+			break;
+
+		next_item_key = *next_key;
+		pathrelse(&path);
+	}
+fail:
+	pathrelse(&path);
+	return ret;
 }

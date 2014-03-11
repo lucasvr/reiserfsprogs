@@ -234,7 +234,7 @@ __u16 mask16(int from, int count);
 __u32 mask32(int from, int count);
 __u64 mask64(int from, int count);
 
-int reiserfs_bin_search(void *key, void *base, __u32 num, int width,
+int reiserfs_bin_search(const void *key, void *base, __u32 num, int width,
 			__u32 * ppos, __compar_fn_t comp_func);
 
 struct block_handler {

@@ -590,7 +590,7 @@ __u32 get_random(void)
 
 /* this implements binary search in the array 'base' among 'num' elements each
    of those is 'width' bytes long. 'comp_func' is used to compare keys */
-int reiserfs_bin_search(void *key, void *base, __u32 num, int width,
+int reiserfs_bin_search(const void *key, void *base, __u32 num, int width,
 			__u32 * ppos, comparison_fn_t comp_func)
 {
 	__u32 rbound, lbound, j;

@@ -122,11 +122,12 @@ int reiserfs_add_entry(reiserfs_filsys_t , struct reiserfs_key *dir,
 
 struct reiserfs_key *uget_lkey(struct reiserfs_path *path);
 struct reiserfs_key *uget_rkey(struct reiserfs_path *path);
-int reiserfs_search_by_key_3(reiserfs_filsys_t , struct reiserfs_key *key,
+int reiserfs_search_by_key_3(reiserfs_filsys_t , const struct reiserfs_key *key,
 			     struct reiserfs_path *path);
-int reiserfs_search_by_key_4(reiserfs_filsys_t , struct reiserfs_key *key,
+int reiserfs_search_by_key_4(reiserfs_filsys_t , const struct reiserfs_key *key,
 			     struct reiserfs_path *path);
-int reiserfs_search_by_entry_key(reiserfs_filsys_t , struct reiserfs_key *key,
+int reiserfs_search_by_entry_key(reiserfs_filsys_t,
+				 const struct reiserfs_key *key,
 				 struct reiserfs_path *path);
 int reiserfs_search_by_position(reiserfs_filsys_t , struct reiserfs_key *key,
 				int version, struct reiserfs_path *path);
@@ -159,6 +160,29 @@ void badblock_list(reiserfs_filsys_t fs, badblock_func_t action, void *data);
 #define reiserfs_fs_bmap_nr(fs) reiserfs_bmap_nr(get_sb_block_count(fs->fs_ondisk_sb), fs->fs_blocksize)
 #define reiserfs_bmap_nr(count, blk_size) ((count - 1) / (blk_size * 8) + 1)
 #define reiserfs_bmap_over(nr) (nr > ((1LL << 16) - 1))
+
+typedef int (*reiserfs_file_iterate_indirect_fn)(reiserfs_filsys_t fs,
+						 __u64 position, __u64 size,
+						 int num_blocks, __u32 *blocks,
+						 void *data);
+typedef int (*reiserfs_file_iterate_direct_fn)(reiserfs_filsys_t fs,
+					       __u64 position, __u64 size,
+					       const char *body, size_t len,
+					       void *data);
+int reiserfs_iterate_file_data(reiserfs_filsys_t fs,
+			       const struct reiserfs_key const *short_key,
+			       reiserfs_file_iterate_indirect_fn indirect_fn,
+			       reiserfs_file_iterate_direct_fn direct_fn,
+			       void *data);
+
+typedef int (*reiserfs_iterate_dir_fn)(reiserfs_filsys_t fs,
+		       const struct reiserfs_key const *dir_short_key,
+		       const char *name, size_t len,
+		       __u32 deh_dirid, __u32 deh_objectid, void *data);
+int reiserfs_iterate_dir(reiserfs_filsys_t fs,
+			 const struct reiserfs_key const *dir_short_key,
+			 const reiserfs_iterate_dir_fn callback, void *data);
+
 
 extern struct reiserfs_key root_dir_key;
 extern struct reiserfs_key parent_root_dir_key;
