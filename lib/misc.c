@@ -28,7 +28,7 @@
 /* End Debian mods */
 
 #define STAT_FIELD(Field, Type)						\
-inline Type misc_device_##Field(char *device) {				\
+inline Type misc_device_##Field(const char *device) {			\
 	struct stat st;							\
 									\
 	if (stat(device, &st) == 0)					\
@@ -43,7 +43,7 @@ STAT_FIELD(rdev, dev_t);
 STAT_FIELD(size, off_t);
 STAT_FIELD(blocks, blkcnt_t);
 
-void die(char *fmt, ...)
+void die(const char *fmt, ...)
 {
 	static char buf[1024];
 	va_list args;
@@ -61,18 +61,18 @@ void die(char *fmt, ...)
 #define MEM_FREED "__free_"
 #define CONTROL_SIZE (strlen (MEM_BEGIN) + 1 + sizeof (int) + strlen (MEM_END) + 1)
 
-unsigned int get_mem_size(char *p)
+unsigned int get_mem_size(const char *p)
 {
-	char *begin;
+	const char *begin;
 
 	begin = p - strlen(MEM_BEGIN) - 1 - sizeof(int);
 	return *(int *)(begin + strlen(MEM_BEGIN) + 1);
 }
 
-void checkmem(char *p, int size)
+void checkmem(const char *p, int size)
 {
-	char *begin;
-	char *end;
+	const char *begin;
+	const char *end;
 
 	begin = p - strlen(MEM_BEGIN) - 1 - sizeof(int);
 	if (strcmp(begin, MEM_BEGIN))
@@ -170,14 +170,15 @@ void freemem(void *vp)
 	free(p);
 }
 
-typedef int (*func_t) (char *);
+typedef int (*func_t) (const char *);
 
 /* Lookup the @file in the @mntfile. @file is mntent.mnt_fsname if @fsname
    is set; mntent.mnt_dir otherwise. Return the mnt entry from the @mntfile.
 
    Warning: if the root fs is mounted RO, the content of /etc/mtab may be
    not correct. */
-static struct mntent *misc_mntent_lookup(char *mntfile, char *file, int path)
+static struct mntent *misc_mntent_lookup(const char *mntfile, const char *file,
+					 int path)
 {
 	struct mntent *mnt;
 	int name_match = 0;
@@ -249,7 +250,7 @@ static struct mntent *misc_mntent_lookup(char *mntfile, char *file, int path)
 	return mnt;
 }
 
-static int misc_root_mounted(char *device)
+static int misc_root_mounted(const char *device)
 {
 	struct stat rootst, devst;
 
@@ -267,7 +268,7 @@ static int misc_root_mounted(char *device)
 	return 1;
 }
 
-static int misc_file_ro(char *file)
+static int misc_file_ro(const char *file)
 {
 	if (utime(file, NULL) == -1) {
 		if (errno == EROFS)
@@ -277,7 +278,7 @@ static int misc_file_ro(char *file)
 	return 0;
 }
 
-struct mntent *misc_mntent(char *device)
+struct mntent *misc_mntent(const char *device)
 {
 	int proc = 0, path = 0, root = 0;
 
@@ -340,7 +341,7 @@ struct mntent *misc_mntent(char *device)
 	return (!proc && !path) ? INVAL_PTR : NULL;
 }
 
-int misc_device_mounted(char *device)
+int misc_device_mounted(const char *device)
 {
 	struct mntent *mnt;
 
@@ -404,7 +405,7 @@ void print_how_fast(unsigned long passed, unsigned long total,
 	fflush(stderr);
 }
 
-static char *strs[] =
+static const char *strs[] =
     { "0%", ".", ".", ".", ".", "20%", ".", ".", ".", ".", "40%", ".", ".", ".",
 ".", "60%", ".", ".", ".", ".", "80%", ".", ".", ".", ".", "100%" };
 
@@ -488,7 +489,7 @@ int valid_offset(int fd, loff_t offset)
 
 /* calculates number of blocks in a file. Returns 0 for "sparse"
    regular files and files other than regular files and block devices */
-unsigned long count_blocks(char *filename, int blocksize)
+unsigned long count_blocks(const char *filename, int blocksize)
 {
 	loff_t high, low;
 	unsigned long sz;
@@ -814,7 +815,7 @@ void clean_after_dma_check(int fd, dma_info_t *dma_info)
 		close(dma_info->fd);
 }
 
-int user_confirmed(FILE * fp, char *q, char *yes)
+int user_confirmed(FILE * fp, const char *q, const char *yes)
 {
 	char *answer = NULL;
 	size_t n = 0;

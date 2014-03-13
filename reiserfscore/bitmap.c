@@ -414,7 +414,7 @@ void reiserfs_bitmap_fill(reiserfs_bitmap_t *bm)
 #define BITMAP_START_MAGIC 374031
 #define BITMAP_END_MAGIC 7786472
 
-FILE *open_file(char *filename, char *option)
+FILE *open_file(const char *filename, char *const option)
 {
 	FILE *fp = fopen(filename, option);
 	if (!fp) {

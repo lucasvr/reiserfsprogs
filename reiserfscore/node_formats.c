@@ -5,9 +5,9 @@
 
 #include "includes.h"
 
-int leaf_count_ih(char *buf, int blocksize)
+int leaf_count_ih(const char *buf, int blocksize)
 {
-	struct item_head *ih;
+	const struct item_head *ih;
 	int prev_location;
 	int nr;
 
@@ -30,10 +30,10 @@ int leaf_count_ih(char *buf, int blocksize)
 	return nr;
 }
 
-int leaf_free_space_estimate(char *buf, int blocksize)
+int leaf_free_space_estimate(const char *buf, int blocksize)
 {
-	struct block_head *blkh;
-	struct item_head *ih;
+	const struct block_head *blkh;
+	const struct item_head *ih;
 	int nr;
 
 	blkh = (struct block_head *)buf;
@@ -44,7 +44,7 @@ int leaf_free_space_estimate(char *buf, int blocksize)
 	    IH_SIZE * nr;
 }
 
-static int leaf_blkh_correct(char *buf, int blocksize)
+static int leaf_blkh_correct(const char *buf, int blocksize)
 {
 	struct block_head *blkh;
 	unsigned int nr;
@@ -62,9 +62,9 @@ static int leaf_blkh_correct(char *buf, int blocksize)
 					blocksize) == get_blkh_free_space(blkh);
 }
 
-int is_a_leaf(char *buf, int blocksize)
+int is_a_leaf(const char *buf, int blocksize)
 {
-	struct block_head *blkh;
+	const struct block_head *blkh;
 	int counted;
 
 	blkh = (struct block_head *)buf;
@@ -84,7 +84,7 @@ int is_a_leaf(char *buf, int blocksize)
 
 int leaf_item_number_estimate(struct buffer_head *bh)
 {
-	struct block_head *blkh;
+	const struct block_head *blkh;
 	int nr;
 
 	nr = leaf_count_ih(bh->b_data, bh->b_size);
@@ -174,9 +174,9 @@ static int does_node_have_ih_array(char *buf, int blocksize)
 #endif
 
 /* returns 1 if buf looks like an internal node, 0 otherwise */
-static int is_correct_internal(char *buf, int blocksize)
+static int is_correct_internal(const char *buf, int blocksize)
 {
-	struct block_head *blkh;
+	const struct block_head *blkh;
 	unsigned int nr;
 	int used_space;
 
@@ -210,9 +210,9 @@ int is_tree_node(struct buffer_head *bh, int level)
 	return is_correct_internal(bh->b_data, bh->b_size);
 }
 
-static int is_desc_block(char *buf, unsigned long buf_size)
+static int is_desc_block(const char *buf, unsigned long buf_size)
 {
-	struct reiserfs_journal_desc *desc =
+	const struct reiserfs_journal_desc *desc =
 	    (struct reiserfs_journal_desc *)buf;
 	if (!memcmp(buf + buf_size - 12, JOURNAL_DESC_MAGIC, 8)
 	    && le32_to_cpu(desc->j2_len) > 0)
@@ -299,7 +299,7 @@ int does_look_like_super_block(struct reiserfs_super_block *sb)
 
 /* returns code of reiserfs metadata block (leaf, internal, super
    block, journal descriptor), unformatted */
-int who_is_this(char *buf, int blocksize)
+int who_is_this(const char *buf, int blocksize)
 {
 	int res;
 
@@ -492,7 +492,7 @@ static int does_ih_look_correct(struct item_head *ih)
 /* check item length, ih_free_space for pure 3.5 format, unformatted node
    pointers */
 static int is_bad_indirect(reiserfs_filsys_t fs, struct item_head *ih,
-			   char *item, check_unfm_func_t check_unfm_func)
+			   const char *item, check_unfm_func_t check_unfm_func)
 {
 	unsigned int i;
 	__le32 *ind = (__le32 *) item;
@@ -537,7 +537,7 @@ int known_hashes(void)
 
 /* this also sets hash function */
 int is_properly_hashed(reiserfs_filsys_t fs,
-		       char *name, int namelen, __u32 offset)
+		       const char *name, int namelen, __u32 offset)
 {
 	unsigned int i;
 
@@ -583,7 +583,7 @@ int is_properly_hashed(reiserfs_filsys_t fs,
 	return 0;
 }
 
-int find_hash_in_use(char *name, int namelen, __u32 offset,
+int find_hash_in_use(const char *name, int namelen, __u32 offset,
 		     unsigned int code_to_try_first)
 {
 	unsigned int i;
@@ -638,7 +638,7 @@ hashf_t code2func(unsigned int code)
 	return hashes[code].func;
 }
 
-hashf_t name2func(char *hash)
+hashf_t name2func(const char *hash)
 {
 	unsigned int i;
 
@@ -666,7 +666,7 @@ int dir_entry_bad_location(struct reiserfs_de_head *deh, struct item_head *ih,
 /* the only corruption which is not considered fatal - is hash mismatching. If
    bad_dir is set - directory item having such names is considered bad */
 static int is_bad_directory(reiserfs_filsys_t fs, struct item_head *ih,
-			    char *item, int bad_dir)
+			    const char *item, int bad_dir)
 {
 	int i;
 	int namelen;
@@ -702,7 +702,7 @@ static int is_bad_directory(reiserfs_filsys_t fs, struct item_head *ih,
 }
 
 /* used by debugreisrefs -p only yet */
-int is_it_bad_item(reiserfs_filsys_t fs, struct item_head *ih, char *item,
+int is_it_bad_item(reiserfs_filsys_t fs, struct item_head *ih, const char *item,
 		   check_unfm_func_t check_unfm, int bad_dir)
 {
 	int retval;
@@ -1018,7 +1018,7 @@ int name_in_entry_length(struct item_head *ih,
 	return i;
 }
 
-int name_length(char *name, int key_format)
+int name_length(const char *name, int key_format)
 {
 	if (key_format == KEY_FORMAT_2)
 		return ROUND_UP(strlen(name));

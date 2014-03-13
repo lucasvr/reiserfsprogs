@@ -545,7 +545,7 @@ void print_journal_params(FILE * fp, struct journal_params *jp)
 }
 
 /* return 1 if this is not super block */
-int print_super_block(FILE * fp, reiserfs_filsys_t fs, char *file_name,
+int print_super_block(FILE * fp, reiserfs_filsys_t fs, const char *file_name,
 		      struct buffer_head *bh, int short_print)
 {
 	struct reiserfs_super_block *sb =
@@ -696,7 +696,7 @@ void print_block(FILE * fp, reiserfs_filsys_t fs, struct buffer_head *bh, ...)	/
 {
 	va_list args;
 	int mode, first, last;
-	char *file_name;
+	const char *file_name;
 
 	va_start(args, bh);
 
@@ -719,7 +719,7 @@ void print_block(FILE * fp, reiserfs_filsys_t fs, struct buffer_head *bh, ...)	/
 }
 
 void print_tb(int mode, int item_pos, int pos_in_item, struct tree_balance *tb,
-	      char *mes)
+	      const char *mes)
 {
 	unsigned int h = 0;
 	struct buffer_head *tbSh, *tbFh;
@@ -806,8 +806,9 @@ void print_tb(int mode, int item_pos, int pos_in_item, struct tree_balance *tb,
 	    ("********************** END OF PRINT_TB *******************\n\n");
 }
 
-static void print_bmap_block(FILE * fp, int i, unsigned long block, char *map,
-			     int blocks, int silent, int blocksize)
+static void print_bmap_block(FILE * fp, int i, unsigned long block,
+			     const char *map, int blocks, int silent,
+			     int blocksize)
 {
 	int j, k;
 	int bits = blocksize * 8;

@@ -35,13 +35,13 @@
 #define INVAL_PTR	(void *)-1
 
 void check_memory_msg(void);
-void die(char *fmt, ...) __attribute__ ((format(printf, 1, 2)));
+void die(const char *fmt, ...) __attribute__ ((format(printf, 1, 2)));
 void *getmem(int size);
 void *mem_alloc(int size);
 void freemem(void *p);
-void checkmem(char *p, int size);
+void checkmem(const char *p, int size);
 void *expandmem(void *p, int size, int by);
-unsigned int get_mem_size(char *p);
+unsigned int get_mem_size(const char *p);
 void check_and_free_mem(void);
 char *kdevname(int dev);
 
@@ -57,8 +57,8 @@ typedef struct mount_hint {
 	__u32 flags;		/* Mount flags. */
 } mount_hint_t;
 
-struct mntent *misc_mntent(char *device);
-int misc_device_mounted(char *device);
+struct mntent *misc_mntent(const char *device);
+int misc_device_mounted(const char *device);
 
 typedef struct dma_info {
 	int fd;
@@ -73,7 +73,7 @@ int get_dma_info(dma_info_t *dma_info);
 void clean_after_dma_check(int fd, dma_info_t *dma_info);
 
 int valid_offset(int fd, loff_t offset);
-unsigned long count_blocks(char *filename, int blocksize);
+unsigned long count_blocks(const char *filename, int blocksize);
 
 void print_how_far(FILE * fp, unsigned long *passed, unsigned long total,
 		   unsigned int inc, int quiet);
@@ -81,7 +81,7 @@ void print_how_fast(unsigned long total, unsigned long passed, int cursor_pos,
 		    int reset_time);
 __u32 get_random(void);
 
-int user_confirmed(FILE * fp, char *q, char *yes);
+int user_confirmed(FILE * fp, const char *q, const char *yes);
 
 /* Only le bitops operations are used. */
 static inline int misc_set_bit(unsigned long long nr, void *addr)
@@ -223,7 +223,7 @@ static inline unsigned long long misc_find_next_set_bit(const void *vaddr,
 }
 
 #define STAT_FIELD_H(Field, Type)	\
-inline Type misc_device_##Field(char *device);
+inline Type misc_device_##Field(const char *device);
 
 STAT_FIELD_H(mode, mode_t);
 STAT_FIELD_H(rdev, dev_t);

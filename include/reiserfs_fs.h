@@ -1468,7 +1468,7 @@ void init_path (struct reiserfs_path *);
                                 	   data items and indirect items */
 #define PRINT_DIRECT_ITEMS 	0x8 	/* print contents of direct items */
 
-void print_tb (int mode, int item_pos, int pos_in_item, struct tree_balance * tb, char * mes);
+void print_tb (int mode, int item_pos, int pos_in_item, struct tree_balance * tb, const char * mes);
 
 
 void print_bmap (FILE * fp, reiserfs_filsys_t fs, int silent);

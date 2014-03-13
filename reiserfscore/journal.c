@@ -471,7 +471,8 @@ int reiserfs_journal_params_check(reiserfs_filsys_t fs)
 
 /* read journal header and make sure that it matches with the filesystem
    opened */
-int reiserfs_open_journal(reiserfs_filsys_t fs, char *j_filename, int flags)
+int reiserfs_open_journal(reiserfs_filsys_t fs, const char *j_filename,
+			  int flags)
 {
 	struct reiserfs_super_block *sb;
 	__u64 count;
@@ -551,7 +552,7 @@ int reiserfs_open_journal(reiserfs_filsys_t fs, char *j_filename, int flags)
 
 /* initialize super block's journal related fields and journal header fields.
  * If len is 0 - make journal of default size */
-int reiserfs_create_journal(reiserfs_filsys_t fs, char *j_device,	/* journal device name */
+int reiserfs_create_journal(reiserfs_filsys_t fs, const char *j_device,	/* journal device name */
 			    unsigned long offset,	/* journal offset on the j_device */
 			    unsigned long len,	/* including journal header */
 			    int transaction_max_size, int force)

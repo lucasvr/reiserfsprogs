@@ -185,7 +185,7 @@ found:
 
 /* creates buffer for super block and fills it up with fields which are
    constant for given size and version of a filesystem */
-reiserfs_filsys_t reiserfs_create(char *filename,
+reiserfs_filsys_t reiserfs_create(const char *filename,
 				   int version,
 				   unsigned long block_count,
 				   int block_size,
@@ -866,7 +866,7 @@ void reiserfs_insert_item(reiserfs_filsys_t fs, struct reiserfs_path *path,
 
 /*===========================================================================*/
 
-__u32 hash_value(hashf_t func, char *name, int namelen)
+__u32 hash_value(hashf_t func, const char *name, int namelen)
 {
 	__u32 res;
 
@@ -881,7 +881,7 @@ __u32 hash_value(hashf_t func, char *name, int namelen)
 /* if name is found in a directory - return 1 and set path to the name,
    otherwise return 0 and pathrelse path */
 int reiserfs_locate_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
-			  char *name, struct reiserfs_path *path)
+			  const char *name, struct reiserfs_path *path)
 {
 	struct reiserfs_key entry_key;
 	struct item_head *ih;
@@ -944,7 +944,7 @@ int reiserfs_locate_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
    generation counter in 'min_gen_counter'. dies if found object is not a
    directory. */
 int reiserfs_find_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
-			char *name, unsigned int *min_gen_counter,
+			const char *name, unsigned int *min_gen_counter,
 			struct reiserfs_key *key)
 {
 	struct reiserfs_key entry_key;
@@ -1040,7 +1040,7 @@ int reiserfs_find_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
 }
 
 /* compose directory entry: dir entry head and name itself */
-static char *make_entry(char *entry, char *name, struct reiserfs_key *key,
+static char *make_entry(char *entry, const char *name, struct reiserfs_key *key,
 			__u32 offset)
 {
 	struct reiserfs_de_head *deh;
@@ -1068,8 +1068,8 @@ static char *make_entry(char *entry, char *name, struct reiserfs_key *key,
 /* add new name into a directory. If it exists in a directory - do
    nothing */
 int reiserfs_add_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
-		       char *name, int name_len, struct reiserfs_key *key,
-		       __u16 fsck_need)
+		       const char *name, int name_len,
+		       struct reiserfs_key *key, __u16 fsck_need)
 {
 	struct item_head entry_ih = { {0,}, };
 	char *entry;
@@ -1229,7 +1229,7 @@ void make_sure_root_dir_exists(reiserfs_filsys_t fs,
 
 /* we only can use a file for filesystem or journal if it is either not
    mounted block device or regular file and we are forced to use it */
-int can_we_format_it(char *device_name, int force)
+int can_we_format_it(const char *device_name, int force)
 {
 	mode_t mode;
 	dev_t rdev;
@@ -1262,7 +1262,7 @@ int can_we_format_it(char *device_name, int force)
 	return 1;
 }
 
-int create_badblock_bitmap(reiserfs_filsys_t fs, char *badblocks_file)
+int create_badblock_bitmap(reiserfs_filsys_t fs, const char *badblocks_file)
 {
 	FILE *fd;
 	char buf[128];
