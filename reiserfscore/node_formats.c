@@ -82,13 +82,13 @@ int is_a_leaf(const char *buf, int blocksize)
 	return counted ? HAS_IH_ARRAY : 0;
 }
 
-int leaf_item_number_estimate(struct buffer_head *bh)
+int leaf_item_number_estimate(const struct buffer_head *bh)
 {
 	const struct block_head *blkh;
 	int nr;
 
 	nr = leaf_count_ih(bh->b_data, bh->b_size);
-	blkh = (struct block_head *)bh->b_data;
+	blkh = (const struct block_head *)bh->b_data;
 
 	return nr >= get_blkh_nr_items(blkh) ? get_blkh_nr_items(blkh) : nr;
 }
@@ -938,7 +938,7 @@ char *key_of_what(const struct reiserfs_key *key)
 	}
 }
 
-int type_unknown(struct reiserfs_key *key)
+int type_unknown(const struct reiserfs_key *key)
 {
 	int type = get_type(key);
 
@@ -988,7 +988,7 @@ void set_type_and_offset(int format, struct reiserfs_key *key, loff_t offset,
    following entry in the calculation.  See picture above.*/
 
 // NOTE: this is not name length. This is length of whole entry
-int entry_length(struct item_head *ih, struct reiserfs_de_head *deh,
+int entry_length(const struct item_head *ih, const struct reiserfs_de_head *deh,
 		 int pos_in_item)
 {
 	if (pos_in_item)
@@ -996,13 +996,13 @@ int entry_length(struct item_head *ih, struct reiserfs_de_head *deh,
 	return (get_ih_item_len(ih) - get_deh_location(deh));
 }
 
-char *name_in_entry(struct reiserfs_de_head *deh, int pos_in_item)
+char *name_in_entry(const struct reiserfs_de_head *deh, int pos_in_item)
 {
 	return ((char *)(deh - pos_in_item) + get_deh_location(deh));
 }
 
-int name_in_entry_length(struct item_head *ih,
-			 struct reiserfs_de_head *deh, int pos_in_item)
+int name_in_entry_length(const struct item_head *ih,
+			 const struct reiserfs_de_head *deh, int pos_in_item)
 {
 	int len, i;
 	char *name;

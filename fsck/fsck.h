@@ -129,8 +129,8 @@ void link_relocated_files(void);
 int should_relocate(struct item_head *ih);
 void relocate_dir(struct item_head *ih, int change_ih);
 
-extern __u32 objectid_for_relocation(struct reiserfs_key *key);
-extern void linked_already(struct reiserfs_key *new_key);
+extern __u32 objectid_for_relocation(const struct reiserfs_key *key);
+extern void linked_already(const struct reiserfs_key *new_key);
 
 /* file.c */
 struct si {
@@ -178,7 +178,8 @@ int is_dot(char *name, int namelen);
   struct reiserfs_path *path, struct reiserfs_key *key);*/
 int rebuild_check_regular_file(struct reiserfs_path *path, void *sd,
 			       struct item_head *new_ih);
-int rebuild_semantic_pass(struct reiserfs_key *key, struct reiserfs_key *parent,
+int rebuild_semantic_pass(struct reiserfs_key *key,
+			  const struct reiserfs_key *parent,
 			  int is_dot_dot, struct item_head *new_ih);
 
 /* lost+found.c */

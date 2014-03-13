@@ -597,7 +597,7 @@ static __inline__ int does_it_fit_into_dev(__u64 offset, __u64 fs_size)
 		fs_size) ? 1 : 0;
 }
 
-static int is_wrong_short_key(struct reiserfs_key *key)
+static int is_wrong_short_key(const struct reiserfs_key *key)
 {
 	if (get_key_dirid(key) == 0 || get_key_objectid(key) == 0
 	    || get_key_objectid(key) == 1 || get_key_dirid(key) == ~(__u32) 0

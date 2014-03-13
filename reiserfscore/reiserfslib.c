@@ -604,10 +604,10 @@ static int comp_dir_entries(const void *p1, const void *p2)
 	return 0;
 }
 
-struct reiserfs_key *uget_lkey(struct reiserfs_path *path)
+struct reiserfs_key *uget_lkey(const struct reiserfs_path *path)
 {
 	int pos, offset = path->path_length;
-	struct buffer_head *bh;
+	const struct buffer_head *bh;
 
 	if (offset < FIRST_PATH_ELEMENT_OFFSET)
 		die("uget_lkey: illegal offset in the path (%d)", offset);
@@ -642,7 +642,7 @@ struct reiserfs_key *uget_lkey(struct reiserfs_path *path)
 	return NULL;
 }
 
-struct reiserfs_key *uget_rkey(struct reiserfs_path *path)
+struct reiserfs_key *uget_rkey(const struct reiserfs_path *path)
 {
 	int pos, offset = path->path_length;
 	struct buffer_head *bh;
@@ -679,7 +679,7 @@ struct reiserfs_key *uget_rkey(struct reiserfs_path *path)
 	return NULL;
 }
 
-struct reiserfs_key *reiserfs_next_key(struct reiserfs_path *path)
+struct reiserfs_key *reiserfs_next_key(const struct reiserfs_path *path)
 {
 	if (get_item_pos(path) < B_NR_ITEMS(get_bh(path)) - 1)
 		return leaf_key(get_bh(path), get_item_pos(path) + 1);
@@ -803,7 +803,7 @@ void init_tb_struct(struct tree_balance *tb, reiserfs_filsys_t fs,
 	tb->insert_size[0] = size;
 }
 
-int reiserfs_remove_entry(reiserfs_filsys_t fs, struct reiserfs_key *key)
+int reiserfs_remove_entry(reiserfs_filsys_t fs, const struct reiserfs_key *key)
 {
 	struct reiserfs_path path;
 	struct tree_balance tb;
@@ -943,7 +943,7 @@ int reiserfs_locate_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
    found. Stores key found in the entry in 'key'. Returns minimal not used
    generation counter in 'min_gen_counter'. dies if found object is not a
    directory. */
-int reiserfs_find_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
+int reiserfs_find_entry(reiserfs_filsys_t fs, const struct reiserfs_key *dir,
 			const char *name, unsigned int *min_gen_counter,
 			struct reiserfs_key *key)
 {
@@ -1040,8 +1040,8 @@ int reiserfs_find_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
 }
 
 /* compose directory entry: dir entry head and name itself */
-static char *make_entry(char *entry, const char *name, struct reiserfs_key *key,
-			__u32 offset)
+static char *make_entry(char *entry, const char *name,
+			const struct reiserfs_key *key, __u32 offset)
 {
 	struct reiserfs_de_head *deh;
 	__u16 state;
@@ -1067,9 +1067,9 @@ static char *make_entry(char *entry, const char *name, struct reiserfs_key *key,
 
 /* add new name into a directory. If it exists in a directory - do
    nothing */
-int reiserfs_add_entry(reiserfs_filsys_t fs, struct reiserfs_key *dir,
+int reiserfs_add_entry(reiserfs_filsys_t fs, const struct reiserfs_key *dir,
 		       const char *name, int name_len,
-		       struct reiserfs_key *key, __u16 fsck_need)
+		       const struct reiserfs_key *key, __u16 fsck_need)
 {
 	struct item_head entry_ih = { {0,}, };
 	char *entry;
@@ -1151,7 +1151,7 @@ void copy_short_key(void *to, const void *from)
 
 /* inserts new or old stat data of a directory (unreachable, nlinks == 0) */
 int create_dir_sd(reiserfs_filsys_t fs,
-		  struct reiserfs_path *path, struct reiserfs_key *key,
+		  struct reiserfs_path *path, const struct reiserfs_key *key,
 		  void (*modify_item) (struct item_head *, void *))
 {
 	struct item_head ih;

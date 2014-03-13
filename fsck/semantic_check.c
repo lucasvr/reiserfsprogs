@@ -7,13 +7,14 @@
 static struct reiserfs_key *trunc_links = NULL;
 static __u32 links_num = 0;
 
-int wrong_mode(struct reiserfs_key *key, __u16 * mode, __u64 real_size,
+int wrong_mode(const struct reiserfs_key *key, __u16 * mode, __u64 real_size,
 	       int symlink);
-int wrong_st_blocks(struct reiserfs_key *key, __u32 * blocks, __u32 sd_blocks,
-		    __u16 mode, int new_format);
-int wrong_st_size(struct reiserfs_key *key, unsigned long long max_file_size,
-		  int blocksize, __u64 * size, __u64 sd_size, int type);
-int wrong_first_direct_byte(struct reiserfs_key *key, int blocksize,
+int wrong_st_blocks(const struct reiserfs_key *key, __u32 * blocks,
+		    __u32 sd_blocks, __u16 mode, int new_format);
+int wrong_st_size(const struct reiserfs_key *key,
+		  unsigned long long max_file_size, int blocksize,
+		  __u64 * size, __u64 sd_size, int type);
+int wrong_first_direct_byte(const struct reiserfs_key *key, int blocksize,
 			    __u32 * first_direct_byte,
 			    __u32 sd_first_direct_byte, __u32 size);
 void get_object_key(struct reiserfs_de_head *deh, struct reiserfs_key *key,
@@ -32,7 +33,7 @@ struct reiserfs_path_key {
 static struct reiserfs_path_key *head_key = NULL;
 static struct reiserfs_path_key *tail_key = NULL;
 
-static int check_path_key(struct reiserfs_key *key)
+static int check_path_key(const struct reiserfs_key *key)
 {
 	struct reiserfs_path_key *cur = head_key;
 
@@ -48,7 +49,7 @@ static int check_path_key(struct reiserfs_key *key)
 	return 0;
 }
 
-static int add_path_key(struct reiserfs_key *key)
+static int add_path_key(const struct reiserfs_key *key)
 {
 	if (check_path_key(key))
 		return LOOP_FOUND;
@@ -228,7 +229,7 @@ static int check_check_regular_file(struct reiserfs_path *path, void *sd,
 
 /* returns buffer, containing found directory item.*/
 static char *get_next_directory_item(struct reiserfs_key *key,	/* on return this will contain key of next item in the tree */
-				     struct reiserfs_key *parent,
+				     const struct reiserfs_key *parent,
 				     struct item_head *ih, __u32 * pos_in_item,
 				     int dir_format)
 {
@@ -382,7 +383,7 @@ start_again:
 
 /* semantic pass of --check */
 static int check_semantic_pass(struct reiserfs_key *key,
-			       struct reiserfs_key *parent, int dot_dot,
+			       const struct reiserfs_key *parent, int dot_dot,
 			       struct item_head *new_ih)
 {
 	struct reiserfs_path path;

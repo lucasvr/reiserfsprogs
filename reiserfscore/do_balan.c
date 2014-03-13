@@ -1452,7 +1452,7 @@ void reiserfs_invalidate_buffer(struct tree_balance *tb, struct buffer_head *bh)
 	reiserfs_free_block(tb->tb_fs, bh->b_blocknr);
 }
 
-int get_left_neighbor_position(struct tree_balance *tb, int h)
+int get_left_neighbor_position(const struct tree_balance *tb, int h)
 {
 	int Sh_position = PATH_H_POSITION(tb->tb_path, h + 1);
 
@@ -1462,7 +1462,7 @@ int get_left_neighbor_position(struct tree_balance *tb, int h)
 		return Sh_position - 1;
 }
 
-int get_right_neighbor_position(struct tree_balance *tb, int h)
+int get_right_neighbor_position(const struct tree_balance *tb, int h)
 {
 	int Sh_position = PATH_H_POSITION(tb->tb_path, h + 1);
 

@@ -1008,7 +1008,7 @@ static int bad_node(reiserfs_filsys_t fs, struct buffer_head **path, int h)
 }
 
 /* internal node bh must point to block */
-static int get_pos(struct buffer_head *bh, unsigned long block)
+static int get_pos(const struct buffer_head *bh, unsigned long block)
 {
 	int i;
 
@@ -1052,7 +1052,7 @@ static struct reiserfs_key *rkey(struct buffer_head **path, int h)
 static int bad_path(reiserfs_filsys_t fs, struct buffer_head **path, int h1)
 {
 	int h = 0;
-	struct reiserfs_key *dk;
+	const struct reiserfs_key *dk;
 	int pos = 0;
 
 	while (path[h])

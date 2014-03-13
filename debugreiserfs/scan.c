@@ -47,8 +47,8 @@ struct saved_name {
 };
 
 /* attach item to every name in the list */
-static void store_item(struct saved_name *name, struct buffer_head *bh,
-		       struct item_head *ih, int pos)
+static void store_item(struct saved_name *name, const struct buffer_head *bh,
+		       const struct item_head *ih, int pos)
 {
 	struct saved_item *new;
 	void *vp;
@@ -248,7 +248,7 @@ static void scan_for_name(struct buffer_head *bh)
 	return;
 }
 
-static struct saved_name *scan_for_key(struct reiserfs_key *key)
+static struct saved_name *scan_for_key(const struct reiserfs_key *key)
 {
 	char *name;
 	struct saved_name *new, *name_in;
@@ -293,8 +293,9 @@ static struct saved_name *scan_for_key(struct reiserfs_key *key)
 	return new;
 }
 
-static int comp_token_key(struct buffer_head *bh, struct item_head *ih,
-			  struct reiserfs_key *key)
+static int comp_token_key(const struct buffer_head *bh,
+			  const struct item_head *ih,
+			  const struct reiserfs_key *key)
 {
 	struct reiserfs_de_head *deh;
 	int j, ih_entry_count = 0;
@@ -333,7 +334,7 @@ static int comp_token_key(struct buffer_head *bh, struct item_head *ih,
 
 /* take every item, look for its key in the key index, if it is found - store
    item in the sorted list of items of a file */
-static void scan_items(struct buffer_head *bh, struct reiserfs_key *key)
+static void scan_items(const struct buffer_head *bh, const struct reiserfs_key *key)
 {
 	int i, i_num, pos;
 	struct item_head *ih;
@@ -582,8 +583,8 @@ static void map_one_item(struct saved_item *item)
 
 // flush map which is in variable map
 static void flush_map(reiserfs_filsys_t fs,
-		      struct reiserfs_key *dir,
-		      char *name, struct reiserfs_key *key)
+		      const struct reiserfs_key *dir,
+		      const char *name, const struct reiserfs_key *key)
 {
 	int i;
 	FILE *fp;

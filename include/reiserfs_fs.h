@@ -1436,11 +1436,11 @@ struct reiserfs_acl_header {
 
 /* stree.c */
 void padd_item (char * item, int total_length, int length);
-int B_IS_IN_TREE(struct buffer_head *);
+int B_IS_IN_TREE(const struct buffer_head *);
 const struct reiserfs_key *get_rkey(const struct reiserfs_path *p_s_chk_path,
 				    const reiserfs_filsys_t );
-int bin_search (void * p_v_key, void * p_v_base, int p_n_num, int p_n_width, unsigned int * p_n_pos);
-int search_by_key (reiserfs_filsys_t , struct reiserfs_key *, struct reiserfs_path *, int);
+int bin_search (const void * p_v_key, const void * p_v_base, int p_n_num, int p_n_width, unsigned int * p_n_pos);
+int search_by_key (reiserfs_filsys_t , const struct reiserfs_key *, struct reiserfs_path *, int);
 int search_by_entry_key (reiserfs_filsys_t , struct reiserfs_key *, struct reiserfs_path *);
 int search_for_position_by_key (reiserfs_filsys_t , struct reiserfs_key *, struct reiserfs_path *);
 int search_by_objectid (reiserfs_filsys_t , struct reiserfs_key *, struct reiserfs_path *, int *);
@@ -1507,8 +1507,8 @@ int balance_internal (struct tree_balance * , int, int, struct item_head * ,
 void do_balance (struct tree_balance * tb,
                  struct item_head * ih, const char * body, int flag, int zeros_num);
 void reiserfs_invalidate_buffer (struct tree_balance * tb, struct buffer_head * bh);
-int get_left_neighbor_position (struct tree_balance * tb, int h);
-int get_right_neighbor_position (struct tree_balance * tb, int h);
+int get_left_neighbor_position (const struct tree_balance * tb, int h);
+int get_right_neighbor_position (const struct tree_balance * tb, int h);
 void replace_key (reiserfs_filsys_t , struct buffer_head *, int, struct buffer_head *, int);
 void replace_lkey (struct tree_balance *, int, struct item_head *);
 void replace_rkey (struct tree_balance *, int, struct item_head *);
@@ -1535,7 +1535,7 @@ extern unsigned int get_journal_new_start_must (reiserfs_filsys_t fs);
 extern unsigned int get_journal_start_must (reiserfs_filsys_t fs);
 /*extern hashf_t hashes [];*/
 
-static inline void buffer_info_init_left(struct tree_balance *tb,
+static inline void buffer_info_init_left(const struct tree_balance *tb,
 					 struct buffer_info *bi, int h)
 {
 	bi->bi_fs	= tb->tb_fs;
@@ -1544,7 +1544,7 @@ static inline void buffer_info_init_left(struct tree_balance *tb,
 	bi->bi_position = get_left_neighbor_position(tb, h);
 }
 
-static inline void buffer_info_init_right(struct tree_balance *tb,
+static inline void buffer_info_init_right(const struct tree_balance *tb,
 					  struct buffer_info *bi, int h)
 {
 	bi->bi_fs	= tb->tb_fs;
@@ -1553,7 +1553,7 @@ static inline void buffer_info_init_right(struct tree_balance *tb,
 	bi->bi_position = get_right_neighbor_position(tb, h);
 }
 
-static inline void buffer_info_init_last(struct tree_balance *tb,
+static inline void buffer_info_init_last(const struct tree_balance *tb,
 					 struct buffer_info *bi)
 {
 	bi->bi_fs	= tb->tb_fs;
@@ -1562,7 +1562,7 @@ static inline void buffer_info_init_last(struct tree_balance *tb,
 	bi->bi_position	= PATH_H_B_ITEM_ORDER(tb->tb_path, 0);
 }
 
-static inline void buffer_info_init_tbSh(struct tree_balance *tb,
+static inline void buffer_info_init_tbSh(const struct tree_balance *tb,
 					 struct buffer_info *bi, int h)
 {
 	bi->bi_fs	= tb->tb_fs;
@@ -1571,13 +1571,13 @@ static inline void buffer_info_init_tbSh(struct tree_balance *tb,
 	bi->bi_position = PATH_H_POSITION(tb->tb_path, h + 1);
 }
 
-static inline void buffer_info_init_tbS0(struct tree_balance *tb,
+static inline void buffer_info_init_tbS0(const struct tree_balance *tb,
 					 struct buffer_info *bi)
 {
 	buffer_info_init_tbSh(tb, bi, 0);
 }
 
-static inline void buffer_info_init_bh(struct tree_balance *tb,
+static inline void buffer_info_init_bh(const struct tree_balance *tb,
 				       struct buffer_info *bi,
 				       struct buffer_head *bh)
 {

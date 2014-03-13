@@ -33,7 +33,7 @@ struct relocated {
    beginning of semantic pass */
 static struct relocated *relocated_list = NULL;
 
-static __u32 get_relocated_objectid_from_list(struct reiserfs_key *key)
+static __u32 get_relocated_objectid_from_list(const struct reiserfs_key *key)
 {
 	struct relocated *cur = relocated_list;
 
@@ -48,7 +48,7 @@ static __u32 get_relocated_objectid_from_list(struct reiserfs_key *key)
 }
 
 /* return objectid the object has to be remapped with */
-__u32 objectid_for_relocation(struct reiserfs_key * key)
+__u32 objectid_for_relocation(const struct reiserfs_key * key)
 {
 	struct relocated *cur;
 	__u32 cur_id;
@@ -89,7 +89,7 @@ static __u64 link_one(struct relocated *file)
 	return len;
 }
 
-void linked_already(struct reiserfs_key *new_key /*, link_func_t link_func */ )
+void linked_already(const struct reiserfs_key *new_key /*, link_func_t link_func */ )
 {
 	struct relocated *cur = relocated_list;
 	struct relocated *prev = NULL;
@@ -170,7 +170,7 @@ struct si *save_and_delete_file_item(struct si *si, struct reiserfs_path *path)
 int should_relocate(struct item_head *ih)
 {
 	struct reiserfs_key key;
-	struct reiserfs_key *rkey;
+	const struct reiserfs_key *rkey;
 	struct reiserfs_path path;
 	struct item_head *path_ih;
 

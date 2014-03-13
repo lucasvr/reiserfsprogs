@@ -97,7 +97,8 @@ void erase_name(int len)
 }
 
 /* *size is "real" file size, sd_size - size from stat data */
-int wrong_st_size(struct reiserfs_key *key, unsigned long long max_file_size,
+int wrong_st_size(const struct reiserfs_key *key,
+		  unsigned long long max_file_size,
 		  int blocksize, __u64 * size, __u64 sd_size, int type)
 {
 	if (sd_size <= max_file_size) {
@@ -175,8 +176,8 @@ int wrong_st_size(struct reiserfs_key *key, unsigned long long max_file_size,
 |   file, dir, link  |  blocks |    generation      |   blocks     |
 |------------------------------------------------------------------|
 */
-int wrong_st_blocks(struct reiserfs_key *key, __u32 * blocks, __u32 sd_blocks,
-		    __u16 mode, int new_format)
+int wrong_st_blocks(const struct reiserfs_key *key, __u32 * blocks,
+		    __u32 sd_blocks, __u16 mode, int new_format)
 {
 	int ret = 0;
 
@@ -231,7 +232,7 @@ int wrong_st_rdev (struct reiserfs_key *key, __u32 * sd_rdev, __u16 mode, int ne
 */
 /* only regular files and symlinks may have items but stat
    data. Symlink should have body */
-int wrong_mode(struct reiserfs_key *key, __u16 * mode, __u64 real_size,
+int wrong_mode(const struct reiserfs_key *key, __u16 * mode, __u64 real_size,
 	       int symlink)
 {
 	int retval = 0;
@@ -269,7 +270,7 @@ int wrong_mode(struct reiserfs_key *key, __u16 * mode, __u64 real_size,
 }
 
 /* key is a key of last file item */
-int wrong_first_direct_byte(struct reiserfs_key *key, int blocksize,
+int wrong_first_direct_byte(const struct reiserfs_key *key, int blocksize,
 			    __u32 * first_direct_byte,
 			    __u32 sd_first_direct_byte, __u32 size)
 {
@@ -539,7 +540,7 @@ int rebuild_check_regular_file(struct reiserfs_path *path, void *sd,
 	return retval;
 }
 
-static int is_rootdir_key(struct reiserfs_key *key)
+static int is_rootdir_key(const struct reiserfs_key *key)
 {
 	if (comp_keys(key, &root_dir_key))
 		return 0;
@@ -550,7 +551,8 @@ static int is_rootdir_key(struct reiserfs_key *key)
 static char *get_next_directory_item(struct reiserfs_key *key,	/* on return this will
 								   contain key of next item
 								   in the tree */
-				     struct reiserfs_key *parent, struct item_head *ih,	/*not in tree */
+				     const struct reiserfs_key *parent,
+				     struct item_head *ih,	/*not in tree */
 				     __u32 * pos_in_item)
 {
 	INITIALIZE_REISERFS_PATH(path);
@@ -724,7 +726,8 @@ int fix_obviously_wrong_sd_mode(struct reiserfs_path *path)
    object, STAT_DATA_NOT_FOUND if stat data was not found or RELOCATED when
    file was relocated because its objectid was already marked as used by
    another file */
-int rebuild_semantic_pass(struct reiserfs_key *key, struct reiserfs_key *parent,
+int rebuild_semantic_pass(struct reiserfs_key *key,
+			  const struct reiserfs_key *parent,
 			  int dot_dot, struct item_head *new_ih)
 {
 	struct reiserfs_path path;

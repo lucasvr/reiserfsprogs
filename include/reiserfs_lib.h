@@ -113,15 +113,15 @@ void reiserfs_insert_item(reiserfs_filsys_t , struct reiserfs_path *path,
 
 int reiserfs_locate_entry(reiserfs_filsys_t , struct reiserfs_key *dir,
 			  const char *name, struct reiserfs_path *path);
-int reiserfs_find_entry(reiserfs_filsys_t , struct reiserfs_key *dir,
+int reiserfs_find_entry(reiserfs_filsys_t , const struct reiserfs_key *dir,
 			const char *name, unsigned int *min_gen_counter,
 			struct reiserfs_key *key);
-int reiserfs_add_entry(reiserfs_filsys_t , struct reiserfs_key *dir,
-		       const char *name, int name_len, struct reiserfs_key *key,
-		       __u16 fsck_need);
+int reiserfs_add_entry(reiserfs_filsys_t , const struct reiserfs_key *dir,
+		       const char *name, int name_len,
+		       const struct reiserfs_key *key, __u16 fsck_need);
 
-struct reiserfs_key *uget_lkey(struct reiserfs_path *path);
-struct reiserfs_key *uget_rkey(struct reiserfs_path *path);
+struct reiserfs_key *uget_lkey(const struct reiserfs_path *path);
+struct reiserfs_key *uget_rkey(const struct reiserfs_path *path);
 int reiserfs_search_by_key_3(reiserfs_filsys_t , const struct reiserfs_key *key,
 			     struct reiserfs_path *path);
 int reiserfs_search_by_key_4(reiserfs_filsys_t , const struct reiserfs_key *key,
@@ -131,7 +131,7 @@ int reiserfs_search_by_entry_key(reiserfs_filsys_t,
 				 struct reiserfs_path *path);
 int reiserfs_search_by_position(reiserfs_filsys_t , struct reiserfs_key *key,
 				int version, struct reiserfs_path *path);
-struct reiserfs_key *reiserfs_next_key(struct reiserfs_path *path);
+struct reiserfs_key *reiserfs_next_key(const struct reiserfs_path *path);
 void copy_key(void *to, const void *from);
 void copy_short_key(void *to, const void *from);
 int comp_keys(const void *k1, const void *k2);
@@ -142,7 +142,7 @@ int comp_items(struct item_head *p_s_ih, struct reiserfs_path *p_s_path);
 __u32 hash_value(hashf_t func, const char *name, int namelen);
 
 int create_dir_sd(reiserfs_filsys_t fs,
-		  struct reiserfs_path *path, struct reiserfs_key *key,
+		  struct reiserfs_path *path, const struct reiserfs_key *key,
 		  void (*modify_item) (struct item_head *, void *));
 void make_sure_root_dir_exists(reiserfs_filsys_t fs,
 			       void (*modyfy_item) (struct item_head *, void *),
@@ -234,7 +234,7 @@ int is_stage_magic_correct(FILE * fp);
 reiserfs_bitmap_t *reiserfs_bitmap_load(FILE * fp);
 void reiserfs_bitmap_invert(reiserfs_bitmap_t *bm);
 
-int reiserfs_remove_entry(reiserfs_filsys_t , struct reiserfs_key *key);
+int reiserfs_remove_entry(reiserfs_filsys_t, const struct reiserfs_key *key);
 
 /* node_formats.c */
 
@@ -260,7 +260,7 @@ int who_is_this(const char *buf, int blocksize);
 int leaf_count_ih(const char *buf, int blocksize);
 int leaf_free_space_estimate(const char *buf, int blocksize);
 int is_a_leaf(const char *buf, int blocksize);
-int leaf_item_number_estimate(struct buffer_head *bh);
+int leaf_item_number_estimate(const struct buffer_head *bh);
 
 char *which_block(int code);
 int get_journal_size(reiserfs_filsys_t );
@@ -293,7 +293,7 @@ int uniqueness2type(__u32 uniqueness);
 __u32 type2uniqueness(int type);
 int get_type(const struct reiserfs_key *key);
 char *key_of_what(const struct reiserfs_key *key);
-int type_unknown(struct reiserfs_key *key);
+int type_unknown(const struct reiserfs_key *key);
 void set_type(int format, struct reiserfs_key *key, int type);
 void set_offset(int format, struct reiserfs_key *key, loff_t offset);
 void set_type_and_offset(int format, struct reiserfs_key *key, loff_t offset,
@@ -314,11 +314,11 @@ hashf_t name2func(const char *hash);
 int find_hash_in_use(const char *name, int namelen, __u32 deh_offset,
 		     unsigned int code_to_try_first);
 
-int entry_length(struct item_head *ih, struct reiserfs_de_head *deh,
+int entry_length(const struct item_head *ih, const struct reiserfs_de_head *deh,
 		 int pos_in_item);
-char *name_in_entry(struct reiserfs_de_head *deh, int pos_in_item);
-int name_in_entry_length(struct item_head *ih,
-			 struct reiserfs_de_head *deh, int pos_in_item);
+char *name_in_entry(const struct reiserfs_de_head *deh, int pos_in_item);
+int name_in_entry_length(const struct item_head *ih,
+			 const struct reiserfs_de_head *deh, int pos_in_item);
 int name_length(const char *name, int key_format);
 
 /*  access to stat data fields */

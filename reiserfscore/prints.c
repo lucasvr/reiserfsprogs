@@ -402,7 +402,7 @@ void reiserfs_print_item(FILE * fp, struct buffer_head *bh,
 /* this prints internal nodes (4 keys/items in line) (dc_number,
    dc_size)[k_dirid, k_objectid, k_offset, k_uniqueness](dc_number,
    dc_size)...*/
-static int print_internal(FILE * fp, struct buffer_head *bh, int first,
+static int print_internal(FILE * fp, const struct buffer_head *bh, int first,
 			  int last)
 {
 	struct reiserfs_key *key;

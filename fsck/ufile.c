@@ -5,13 +5,13 @@
 
 #include "fsck.h"
 
-static int do_items_have_the_same_type(struct item_head *ih,
-				       struct reiserfs_key *key)
+static int do_items_have_the_same_type(const struct item_head *ih,
+				       const struct reiserfs_key *key)
 {
 	return (get_type(&ih->ih_key) == get_type(key)) ? 1 : 0;
 }
 
-static int are_items_in_the_same_node(struct reiserfs_path *path)
+static int are_items_in_the_same_node(const struct reiserfs_path *path)
 {
 	return (PATH_LAST_POSITION(path) <
 		B_NR_ITEMS(PATH_PLAST_BUFFER(path)) - 1) ? 1 : 0;
