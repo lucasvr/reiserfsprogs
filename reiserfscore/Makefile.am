@@ -10,6 +10,7 @@ reiserfs_err.h: reiserfs_err.c
 
 BUILT_SOURCES = reiserfs_err.h reiserfs_err.c
 CLEANFILES = reiserfs_err.h reiserfs_err.c
+EXTRA_DIST = reiserfs_err.et
 
 libreiserfscore_la_SOURCES = do_balan.c fix_node.c hashes.c ibalance.c \
 			     lbalance.c prints.c stree.c node_formats.c \
