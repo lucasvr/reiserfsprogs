@@ -88,7 +88,7 @@ be adjusted.
 \fB-B\fR | \fB--badblocks \fIfile
 \fIFile\fR is the file name of the file that contains the list of blocks to be 
 marked as bad on the filesystem. This list can be created by
-\fB/sbin/badblocks -b block-size device\fR.
+\fB/sbin/badblocks \-b block-size device\fR.
 .TP
 \fB-f\fR
 Forces \fBmkreiserfs\fR to continue even when the device is the whole disk, 

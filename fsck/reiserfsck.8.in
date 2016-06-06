@@ -59,10 +59,10 @@ for directories, and deleting invalid directory entries.
 .B --rebuild-tree
 This option rebuilds the entire filesystem tree using leaf nodes 
 found on the device.  Normally you only need this option if the 
-\fBreiserfsck --check\fR reports "Running with \fB--rebuild-tree\fR
+\fBreiserfsck \-\-check\fR reports "Running with \fB\-\-rebuild-tree\fR
 is required". You are strongly encouraged to make a backup copy 
 of the whole partition before attempting the \fB--rebuild-tree\fR 
-option. Once \fBreiserfsck --rebuild-tree\fR is started it must
+option. Once \fBreiserfsck \-\-rebuild-tree\fR is started it must
 finish its work (and you should not interrupt it), otherwise the
 filesystem will be left in the unmountable state to avoid subsequent
 data corruptions.
@@ -95,7 +95,7 @@ byte are corrected by \fB--fix-fixable\fR.
 This option sets the badblock list to be the list of blocks specified in 
 the given `file`. The filesystem badblock list is cleared before the new 
 list is added. It can be used with \fB--fix-fixable\fR to fix the list of 
-badblocks (see \fBdebugreiserfs -B\fR). If the device has bad blocks, every
+badblocks (see \fBdebugreiserfs \-B\fR). If the device has bad blocks, every
 time it must be given with the \fB--rebuild-tree\fR option.
 .TP
 \fB--logfile \fIfile\fR, \fB-l \fI file\fR
@@ -114,7 +114,7 @@ telling you what it is going to do. It will assuem you confirm. For safety,
 it does not work with the \fB--rebuild-tree\fR option.
 .TP
 \fB-a\fR, \fB-p\fR
-These options are usually passed by fsck -A during the automatic checking 
+These options are usually passed by fsck \-A during the automatic checking 
 of those partitions listed in /etc/fstab. These options cause \fBreiserfsck\fR 
 to print some information about the specified filesystem, to check if error 
 flags in the superblock are set and to do some light-weight checks. If these 
@@ -149,23 +149,23 @@ the used space on the partition.
 1. You think something may be wrong with a reiserfs partition on /dev/hda1 
 or you would just like to perform a periodic disk check.
 
-2. Run \fBreiserfsck --check --logfile check.log /dev/hda1\fR. If \fBreiserfsck 
---check\fR exits with status 0 it means no errors were discovered. 
+2. Run \fBreiserfsck \-\-check \-\-logfile check.log /dev/hda1\fR. If \fBreiserfsck 
+\-\-check\fR exits with status 0 it means no errors were discovered. 
 
-3. If \fBreiserfsck --check\fR exits with status 1 (and reports about fixable 
-corruptions) it means that you should run \fBreiserfsck --fix-fixable --logfile 
+3. If \fBreiserfsck \-\-check\fR exits with status 1 (and reports about fixable 
+corruptions) it means that you should run \fBreiserfsck \-\-fix-fixable \-\-logfile 
 fixable.log /dev/hda1\fR.
 
-4. If \fBreiserfsck --check\fR exits with status 2 (and reports about fatal 
-corruptions) it means that you need to run \fBreiserfsck --rebuild-tree\fR.  
-If \fBreiserfsck --check\fR fails in some way you should also run \fBreiserfsck 
---rebuild-tree\fR, but we also encourage you to submit this as a bug report.
+4. If \fBreiserfsck \-\-check\fR exits with status 2 (and reports about fatal 
+corruptions) it means that you need to run \fBreiserfsck \-\-rebuild\-tree\fR.  
+If \fBreiserfsck \-\-check\fR fails in some way you should also run \fBreiserfsck 
+\-\-rebuild-tree\fR, but we also encourage you to submit this as a bug report.
 
-5. Before running \fBreiserfsck --rebuild-tree\fR, please make a backup of 
-the whole partition before proceeding. Then run \fBreiserfsck --rebuild-tree 
---logfile rebuild.log /dev/hda1\fR.
+5. Before running \fBreiserfsck \-\-rebuild-tree\fR, please make a backup of 
+the whole partition before proceeding. Then run \fBreiserfsck \-\-rebuild-tree 
+\-\-logfile rebuild.log /dev/hda1\fR.
 
-6. If the \fBreiserfsck --rebuild-tree\fR step fails or does not recover what 
+6. If the \fBreiserfsck \-\-rebuild-tree\fR step fails or does not recover what 
 you expected, please submit this as a bug report. Try to provide as much 
 information as possible including your platform and Linux kernel version. We 
 will try to help solve the problem.
@@ -180,11 +180,11 @@ will try to help solve the problem.
 .br
 \   \fI4\fR \-\ File system fatal errors left uncorrected,
 .br
-\	  \fBreiserfsck --rebuild-tree\fR needs to be launched.
+\	  \fBreiserfsck \-\-rebuild-tree\fR needs to be launched.
 .br
 \   \fI6\fR \-\ File system fixable errors left uncorrected,
 .br
-\	  \fBreiserfsck --fix-fixable\fR needs to be launched.
+\	  \fBreiserfsck \-\-fix-fixable\fR needs to be launched.
 .br
 \   \fI8\fR \-\ Operational error.
 .br

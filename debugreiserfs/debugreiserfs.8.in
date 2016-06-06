@@ -31,7 +31,7 @@ an IDE disk partition or /dev/sdXX for a SCSI disk partition).
 .SH OPTIONS
 .TP
 \fB-j\fR \fIdevice\fR
-prints the contents of the journal. The option -p allows it to pack the journal 
+prints the contents of the journal. The option \-p allows it to pack the journal 
 with other metadata into the archive.
 .TP
 \fB-J\fR
@@ -61,22 +61,22 @@ prints the specified block of the filesystem.
 .\" formatted nodes found. Can be used to find specific key in the filesystem.
 .\" .TP
 .B -p
-extracts the filesystem's metadata with \fBdebugreiserfs\fR -p /dev/xxx | gzip -c > 
+extracts the filesystem's metadata with \fBdebugreiserfs\fR \-p /dev/xxx | gzip \-c > 
 xxx.gz. None of your data are packed unless a filesystem corruption presents when 
 the whole block having this corruption is packed. You send us the output, and we use 
-it to create a filesystem with the same strucure as yours using \fBdebugreiserfs -u\fR.
+it to create a filesystem with the same strucure as yours using \fBdebugreiserfs \-u\fR.
 When the data file is not too large, this usually allows us to quickly reproduce 
 and debug the problem.
 .TP
 .B -u
-builds the ReiserFS filesystem image with gunzip -c xxx.gz | \fBdebugreiserfs\fR 
--u /dev/image of the previously packed metadata with \fBdebugreiserfs -p\fR. The
+builds the ReiserFS filesystem image with gunzip \-c xxx.gz | \fBdebugreiserfs\fR 
+\-u /dev/image of the previously packed metadata with \fBdebugreiserfs \-p\fR. The
 result image is not the same as the original filesystem, because mostly only metadata
-were packed with \fBdebugreiserfs -p\fR, but the filesystem structure is completely 
+were packed with \fBdebugreiserfs \-p\fR, but the filesystem structure is completely 
 recreated.
 .TP
 .B -S 
-When -S is not specified -p 
+When \-S is not specified \-p 
 .\" and -s 
 deals with blocks marked used in the filesystem bitmap only. With this option 
 set \fBdebugreiserfs\fR will work with the entire device.
@@ -84,7 +84,7 @@ set \fBdebugreiserfs\fR will work with the entire device.
 .B -q
 When 
 .\" -s or 
--p is in use, suppress showing the speed of progress.
+\-p is in use, suppress showing the speed of progress.
 .SH AUTHOR
 This version of \fBdebugreiserfs\fR has been written by Vitaly Fertman 
 <vitaly@namesys.com>.

@@ -197,14 +197,14 @@ it working with its journal on the device /dev/journal
 .nf
 .IP
 boot kernel patched with special "relocatable journal support" patch
-reiserfstune /dev/hda1 --journal-new-device /dev/journal -f
+reiserfstune /dev/hda1 \-\-journal\-new\-device /dev/journal \-f
 mount /dev/hda1 and use.
 You would like to change max transaction size to 512 blocks
-reiserfstune -t 512 /dev/hda1
+reiserfstune \-t 512 /dev/hda1
 You would like to use your file system on another kernel that doesn't 
 contain relocatable journal support.
 umount /dev/hda1
-reiserfstune /dev/hda1 -j /dev/journal --journal-new-device /dev/hda1 --make-journal-standard
+reiserfstune /dev/hda1 \-j /dev/journal \-\-journal\-new\-device /dev/hda1 \-\-make\-journal\-standard
 mount /dev/hda1 and use.
 .LP
 2. You would like to have ReiserFS on /dev/hda1 and to be able to
@@ -215,13 +215,13 @@ device containing the filesystem.
 boot kernel patched with special "relocatable journal support" patch
 mkreiserfs /dev/hda1
 you got solid state disk (perhaps /dev/sda, they typically look like scsi disks)
-reiserfstune --journal-new-device /dev/sda1 -f /dev/hda1
+reiserfstune \-\-journal\-new\-device /dev/sda1 \-f /dev/hda1
 Your scsi device dies, it is three in the morning, you have an extra IDE device
 lying around
-reiserfsck --no-journal-available /dev/hda1
+reiserfsck \-\-no\-journal\-available /dev/hda1
 or
-reiserfsck --rebuild-tree --no-journal-available /dev/hda1
-reiserfstune --no-journal-available --journal-new-device /dev/hda1 /dev/hda1
+reiserfsck \-\-rebuild-tree \-\-no\-journal\-available /dev/hda1
+reiserfstune \-\-no\-journal\-available \-\-journal\-new\-device /dev/hda1 /dev/hda1
 using /dev/hda1 under patched kernel
 .SH AUTHOR
 This version of \fBreiserfstune\fR has been written by Vladimir

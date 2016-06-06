@@ -102,7 +102,7 @@ with a
 .br
 \	umount /mnt
 .br
-\	resize_reiserfs -s -1G /dev/hda8
+\	resize_reiserfs \-s \-1G /dev/hda8
 .br
 \	mount /dev/hda8 /mnt
 .br
