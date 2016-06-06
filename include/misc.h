@@ -222,13 +222,22 @@ static inline unsigned long long misc_find_next_set_bit(const void *vaddr,
 	return res + (p - addr) * 8;
 }
 
-#define STAT_FIELD_H(Field, Type)	\
-inline Type misc_device_##Field(const char *device);
+#define STAT_FIELD(Field, Type)						\
+static inline Type misc_device_##Field(const char *device)		\
+{									\
+	struct stat st;							\
+									\
+	if (stat(device, &st) == 0)					\
+		return st.st_##Field;					\
+									\
+	fprintf(stderr, "Stat of the device '%s' failed.", device);	\
+	exit(8);							\
+}
 
-STAT_FIELD_H(mode, mode_t);
-STAT_FIELD_H(rdev, dev_t);
-STAT_FIELD_H(size, off_t);
-STAT_FIELD_H(blocks, blkcnt_t);
+STAT_FIELD(mode, mode_t);
+STAT_FIELD(rdev, dev_t);
+STAT_FIELD(size, off_t);
+STAT_FIELD(blocks, blkcnt_t);
 
 __u16 mask16(int from, int count);
 __u32 mask32(int from, int count);

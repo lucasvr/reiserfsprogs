@@ -106,13 +106,35 @@ struct packed_item {
 	__u32 type_2_mask_18_len_12;
 };
 
-/* defined as inlines in both pack.c and unpack.c */
-inline void set_pi_type(struct packed_item *pi, __u32 val);
-inline __u32 get_pi_type(const struct packed_item *pi);
-inline void set_pi_mask(struct packed_item *pi, __u32 val);
-inline __u32 get_pi_mask(const struct packed_item *pi);
-inline void set_pi_item_len(struct packed_item *pi, __u32 val);
-inline __u32 get_pi_item_len(const struct packed_item *pi);
+static inline void set_pi_type(struct packed_item *pi, __u32 val)
+{
+	set_bit_field_XX(32, pi, val, 0, 2);
+}
+
+static inline __u32 get_pi_type(const struct packed_item *pi)
+{
+	get_bit_field_XX(32, pi, 0, 2);
+}
+
+static inline void set_pi_mask(struct packed_item *pi, __u32 val)
+{
+	set_bit_field_XX(32, pi, val, 2, 18);
+}
+
+static inline __u32 get_pi_mask(const struct packed_item *pi)
+{
+	get_bit_field_XX(32, pi, 2, 18);
+}
+
+static inline void set_pi_item_len(struct packed_item *pi, __u32 val)
+{
+	set_bit_field_XX(32, pi, val, 20, 12);
+}
+
+static inline __u32 get_pi_item_len(const struct packed_item *pi)
+{
+	get_bit_field_XX(32, pi, 20, 12);
+}
 
 #define HAS_DIR_ID      0x01
 #define HAS_GEN_COUNTER 0x02

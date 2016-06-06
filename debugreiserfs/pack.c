@@ -16,36 +16,6 @@ reiserfs_bitmap_t *what_to_pack;
 unsigned long sent_bytes;	/* how many bytes sent to stdout */
 unsigned long had_to_be_sent;	/* how many bytes were to be sent */
 
-inline void set_pi_type(struct packed_item *pi, __u32 val)
-{
-	set_bit_field_XX(32, pi, val, 0, 2);
-}
-
-inline __u32 get_pi_type(const struct packed_item *pi)
-{
-	get_bit_field_XX(32, pi, 0, 2);
-}
-
-inline void set_pi_mask(struct packed_item *pi, __u32 val)
-{
-	set_bit_field_XX(32, pi, val, 2, 18);
-}
-
-__u32 get_pi_mask(const struct packed_item *pi)
-{
-	get_bit_field_XX(32, pi, 2, 18);
-}
-
-inline void set_pi_item_len(struct packed_item *pi, __u32 val)
-{
-	set_bit_field_XX(32, pi, val, 20, 12);
-}
-
-inline __u32 get_pi_item_len(const struct packed_item *pi)
-{
-	get_bit_field_XX(32, pi, 20, 12);
-}
-
 static void pack_ih(struct packed_item *pi, struct item_head *ih)
 {
 	__u32 v32;

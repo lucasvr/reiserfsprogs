@@ -387,7 +387,7 @@ static int bad_direct_item(reiserfs_filsys_t fs,
 	return 0;
 }
 
-inline void handle_one_pointer(reiserfs_filsys_t fs,
+static inline void handle_one_pointer(reiserfs_filsys_t fs,
 			       struct buffer_head *bh, __le32 * item,
 			       int offset)
 {

@@ -27,22 +27,6 @@
 #include <sys/mount.h>
 /* End Debian mods */
 
-#define STAT_FIELD(Field, Type)						\
-inline Type misc_device_##Field(const char *device) {			\
-	struct stat st;							\
-									\
-	if (stat(device, &st) == 0)					\
-		return st.st_##Field;					\
-									\
-	fprintf(stderr, "Stat of the device '%s' failed.", device);	\
-	exit(8);							\
-}
-
-STAT_FIELD(mode, mode_t);
-STAT_FIELD(rdev, dev_t);
-STAT_FIELD(size, off_t);
-STAT_FIELD(blocks, blkcnt_t);
-
 void die(const char *fmt, ...)
 {
 	static char buf[1024];
