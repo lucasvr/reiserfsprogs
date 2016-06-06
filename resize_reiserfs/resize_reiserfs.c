@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
 	struct reiserfs_super_block *sb;
 
 	int c;
-	int error;
+	long error;
 
 	struct reiserfs_super_block *sb_old;
 
@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
 	if (!fs) {
 		if (error) {
 			reiserfs_exit(1, "cannot open '%s': %s",
-				      devname, strerror(error));
+				      devname, error_message(error));
 		} else {
 			exit(1);
 		}

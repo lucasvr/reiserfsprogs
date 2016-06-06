@@ -29,6 +29,10 @@ AC_CHECK_LIB(uuid, uuid_generate, , AC_MSG_WARN(libuuid could not be found))
 UUID_LIBS="$LIBS"
 AC_SUBST(UUID_LIBS)
 
+AC_CHECK_LIB(com_err, _et_list, , AC_MSG_WARN(libcom_err could not be found))
+COM_ERR_LIBS="$LIBS"
+AC_SUBST(COM_ERR_LIBS)
+
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS(fcntl.h limits.h malloc.h sys/ioctl.h unistd.h uuid/uuid.h)

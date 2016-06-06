@@ -11,6 +11,7 @@
 
 typedef struct reiserfs_filsys * reiserfs_filsys_t;
 
+#include <com_err.h>
 #include "reiserfs_fs.h"
 
 struct _bitmap {
@@ -75,11 +76,12 @@ typedef struct _transaction reiserfs_trans_t;
 void init_tb_struct(struct tree_balance *tb, reiserfs_filsys_t ,
 		    struct reiserfs_path *path, int size);
 
-reiserfs_filsys_t reiserfs_open(const char *filename, int flags, int *error,
+reiserfs_filsys_t reiserfs_open(const char *filename, int flags, long *error,
 				 void *vp, int skip_check);
 reiserfs_filsys_t reiserfs_create(const char *filename, int version,
 				   unsigned long block_count, int block_size,
-				   int default_journal, int new_format);
+				   int default_journal, int new_format,
+				   long *error);
 void reiserfs_flush(reiserfs_filsys_t );
 void reiserfs_free(reiserfs_filsys_t );
 void reiserfs_close(reiserfs_filsys_t );

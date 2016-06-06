@@ -576,6 +576,7 @@ int main(int argc, char **argv)
 	__u64 fs_size = 0;
 	int c;
 	static int flag;
+	long error;
 
 	program_name = strrchr(argv[0], '/');
 
@@ -751,9 +752,11 @@ int main(int argc, char **argv)
 			return 1;
 
 	fs = reiserfs_create(device_name, select_format(), fs_size, Block_size,
-			     Create_default_journal, 1);
+			     Create_default_journal, 1, &error);
 
 	if (!fs) {
+		reiserfs_warning(stderr, "reiserfs_create failed: %s %ld\n",
+				 error_message(error), error);
 		return 1;
 	}
 

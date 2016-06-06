@@ -190,6 +190,7 @@ void rebuild_sb(reiserfs_filsys_t fs, char *filename, struct fsck_data *data)
 	size_t n = 0;
 	struct stat stat_buf;
 	int retval, exit_code = EXIT_OK;
+	long error;
 
 	if (!no_reiserfs_found(fs)) {
 		sb = getmem(sizeof(*sb));
@@ -381,24 +382,31 @@ void rebuild_sb(reiserfs_filsys_t fs, char *filename, struct fsck_data *data)
 		switch (version) {
 		case 1:
 			fs = reiserfs_create(filename, REISERFS_FORMAT_3_6,
-					     block_count, retval, 1, 1);
+					     block_count, retval, 1, 1,
+					     &error);
 			break;
 		case 2:
 			fs = reiserfs_create(filename, REISERFS_FORMAT_3_5,
-					     block_count, retval, 1, 1);
+					     block_count, retval, 1, 1,
+					     &error);
 			break;
 		case 3:
 			fs = reiserfs_create(filename, REISERFS_FORMAT_3_6,
-					     block_count, retval, 1, 0);
+					     block_count, retval, 1, 0,
+					     &error);
 			break;
 		case 4:
 			fs = reiserfs_create(filename, REISERFS_FORMAT_3_5,
-					     block_count, retval, 1, 0);
+					     block_count, retval, 1, 0,
+					     &error);
 			break;
 		}
 
-		if (fs == NULL)
+		if (fs == NULL) {
+			fprintf(stderr, "reiserfs_create failed: %s\n",
+				error_message(error));
 			return;
+		}
 
 		sb = fs->fs_ondisk_sb;
 		fs->fs_vp = data;

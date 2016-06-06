@@ -10,6 +10,7 @@
 #include "io.h"
 #include "misc.h"
 #include "reiserfs_lib.h"
+#include "reiserfs_err.h"
 
 #include <string.h>
 #include <stdlib.h>

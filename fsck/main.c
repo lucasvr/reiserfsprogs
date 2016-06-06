@@ -1318,7 +1318,7 @@ int main(int argc, char *argv[])
 	struct rlimit rlim = { RLIM_INFINITY, RLIM_INFINITY };
 	char *width;
 	int retval;
-	int error;
+	long error;
 
 	width = getenv("COLUMNS");
 	if (width)
@@ -1391,7 +1391,7 @@ int main(int argc, char *argv[])
 		if (error) {
 			reiserfs_exit(EXIT_OPER, "Failed to open the device "
 				      "'%s': %s\n\n", file_name,
-				      strerror(error));
+				      error_message(error));
 		}
 
 		if (data->mode != FSCK_SB) {

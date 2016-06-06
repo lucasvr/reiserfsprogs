@@ -398,6 +398,7 @@ int main(int argc, char **argv)
 	struct reiserfs_journal_header *j_head;
 	reiserfs_trans_t old, new;
 	int Is_journal_or_maxtrans_size_specified = 0;
+	long error;
 
 	program_name = strrchr(argv[0], '/');
 
@@ -560,9 +561,10 @@ int main(int argc, char **argv)
 	/* device to be formatted */
 	device_name = argv[optind];
 
-	fs = reiserfs_open(device_name, O_RDONLY, NULL, NULL, 1);
+	fs = reiserfs_open(device_name, O_RDONLY, &error, NULL, 1);
 	if (no_reiserfs_found(fs)) {
-		message("Cannot open reiserfs on %s", device_name);
+		message("Cannot open reiserfs on %s: %s", device_name,
+			error_message(error));
 		return 1;
 	}
 

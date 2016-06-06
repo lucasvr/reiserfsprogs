@@ -4,6 +4,7 @@
  */
 
 #include "debugreiserfs.h"
+#include <com_err.h>
 
 reiserfs_filsys_t fs;
 
@@ -683,7 +684,7 @@ static void debugreiserfs_zero_reiserfs(reiserfs_filsys_t fs)
 int main(int argc, char *argv[])
 {
 	char *file_name;
-	int error;
+	long error;
 	struct debugreiserfs_data *data;
 	FILE *log;
 
@@ -701,7 +702,7 @@ int main(int argc, char *argv[])
 	if (no_reiserfs_found(fs)) {
 		reiserfs_exit(1, "\n\ndebugreiserfs: can not open reiserfs on "
 			      "\"%s\": %s\n\n", file_name,
-			      error ? strerror(error)
+			      error ? error_message(error)
 			      : "no filesystem found");
 		exit(1);
 	}

@@ -56,7 +56,7 @@ int is_block_count_correct(unsigned long journal_offset,
    is refused. Journal and bitmap are to be opened separately.
    skip_check is set to 1 if checks of openned SB should be omitted.*/
 reiserfs_filsys_t reiserfs_open(const char *filename, int flags,
-				 int *error, void *vp, int check)
+				 long *error, void *vp, int check)
 {
 	reiserfs_filsys_t fs;
 	struct buffer_head *bh;
@@ -67,8 +67,7 @@ reiserfs_filsys_t reiserfs_open(const char *filename, int flags,
 	/* convert root dir key and parent root dir key to little endian format */
 	make_const_keys();
 
-	if (error)
-		*error = 0;
+	*error = 0;
 
 	fd = open(filename, flags
 #if defined(O_LARGEFILE)
@@ -76,8 +75,7 @@ reiserfs_filsys_t reiserfs_open(const char *filename, int flags,
 #endif
 	    );
 	if (fd == -1) {
-		if (error)
-			*error = errno;
+		*error = errno;
 		return NULL;
 	}
 
@@ -91,9 +89,7 @@ reiserfs_filsys_t reiserfs_open(const char *filename, int flags,
 	for (i = 2; i < 17; i += 14) {
 		bh = bread(fd, i, 4096);
 		if (!bh) {
-			reiserfs_warning(stderr,
-					 "reiserfs_open: bread failed reading block %d\n",
-					 i);
+			*error = REISERFS_ET_BREAD_FAILED;
 		} else {
 			sb = (struct reiserfs_super_block *)bh->b_data;
 
@@ -105,9 +101,7 @@ reiserfs_filsys_t reiserfs_open(const char *filename, int flags,
 		}
 	}
 
-	reiserfs_warning(stderr,
-			 "\nreiserfs_open: the reiserfs superblock cannot be found on %s.\n",
-			 filename);
+	*error = REISERFS_ET_BAD_MAGIC;
 
 	freemem(fs);
 	close(fd);
@@ -117,9 +111,7 @@ reiserfs_filsys_t reiserfs_open(const char *filename, int flags,
 found:
 
 	if (!is_blocksize_correct(get_sb_block_size(sb))) {
-		reiserfs_warning(stderr,
-				 "reiserfs_open: a superblock with wrong parameters "
-				 "was found in the block (%d).\n", i);
+		*error = REISERFS_ET_BAD_SUPER;
 		freemem(fs);
 		close(fd);
 		brelse(bh);
@@ -135,12 +127,7 @@ found:
 			  get_sb_block_size(sb));
 
 		if (!tmp_bh) {
-			reiserfs_warning(stderr,
-					 "\n%s: Your partition is not big enough to contain the \n"
-					 "filesystem of (%lu) blocks as was specified in the found super block.\n",
-					 __FUNCTION__,
-					 get_sb_block_count(sb) - 1);
-
+			*error = REISERFS_ET_SMALL_PARTITION;
 			freemem(fs);
 			close(fd);
 			brelse(bh);
@@ -158,9 +145,7 @@ found:
 		brelse(bh);
 		bh = bread(fd, i, fs->fs_blocksize);
 		if (!bh) {
-			reiserfs_warning(stderr,
-					 "reiserfs_open: bread failed reading block %d, size %d\n",
-					 i, fs->fs_blocksize);
+			*error = REISERFS_ET_BREAD_FAILED;
 			freemem(fs);
 			return NULL;
 		}
@@ -189,32 +174,32 @@ reiserfs_filsys_t reiserfs_create(const char *filename,
 				   int version,
 				   unsigned long block_count,
 				   int block_size,
-				   int default_journal, int new_format)
+				   int default_journal, int new_format,
+				   long *error)
 {
 	reiserfs_filsys_t fs;
 	time_t now;
 	unsigned int bmap_nr = reiserfs_bmap_nr(block_count, block_size);;
 
+	*error = 0;
+
 	/* convert root dir key and parent root dir key to little endian format */
 	make_const_keys();
 
 	if (count_blocks(filename, block_size) < block_count) {
-		reiserfs_warning(stderr,
-				 "reiserfs_create: no enough blocks on device\n");
+		*error = REISERFS_ET_NOT_ENOUGH_BLOCKS;
 		return NULL;
 	}
 
 	if (!is_block_count_correct(REISERFS_DISK_OFFSET_IN_BYTES / block_size,
 				    block_size, block_count, 0)) {
-		reiserfs_warning(stderr,
-				 "reiserfs_create: can not create that small "
-				 "(%u blocks) filesystem\n", block_count);
+		*error = REISERFS_ET_TOO_SMALL;
 		return NULL;
 	}
 
 	fs = getmem(sizeof(*fs));
 	if (!fs) {
-		reiserfs_warning(stderr, "reiserfs_create: getmem failed\n");
+		*error = errno;
 		return NULL;
 	}
 
@@ -224,9 +209,7 @@ reiserfs_filsys_t reiserfs_create(const char *filename,
 #endif
 	    );
 	if (fs->fs_dev == -1) {
-		reiserfs_warning(stderr,
-				 "reiserfs_create: could not open %s: %s\n",
-				 filename, strerror(errno));
+		*error = errno;
 		freemem(fs);
 		return NULL;
 	}
@@ -245,7 +228,7 @@ reiserfs_filsys_t reiserfs_create(const char *filename,
 					 block_size, block_size);
 
 	if (!fs->fs_super_bh) {
-		reiserfs_warning(stderr, "reiserfs_create: getblk failed\n");
+		*error = REISERFS_ET_GETBLK_FAILED;
 		return NULL;
 	}
 
@@ -1646,4 +1629,9 @@ int reiserfs_iterate_dir(reiserfs_filsys_t fs,
 fail:
 	pathrelse(&path);
 	return ret;
+}
+
+void __attribute__ ((constructor)) init(void)
+{
+	initialize_reiserfs_error_table();
 }
