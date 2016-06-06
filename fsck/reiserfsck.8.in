@@ -129,7 +129,8 @@ Force checking even if the file system seems clean.
 .B -V
 This option prints the reiserfsprogs version and then exit.
 .TP
-\fB-r\fR This option does nothing at all; it is provided only for
+.B -r
+This option does nothing at all; it is provided only for
 backwards compatibility.
 .SH EXPERT OPTIONS
 DO NOT USE THESE OPTIONS UNLESS YOU KNOW WHAT YOU ARE DOING. 
